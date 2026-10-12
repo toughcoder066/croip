@@ -37,6 +37,7 @@ export const StandardRoles = {
   SUPPORT_OFFICER: "SUPPORT_OFFICER",
   CONCESSIONAIRE_ADMIN: "CONCESSIONAIRE_ADMIN",
   CONCESSIONAIRE_BILLING: "CONCESSIONAIRE_BILLING",
+  RATEPAYER: "RATEPAYER",
 } as const;
 
 export type StandardRoleId = keyof typeof StandardRoles;

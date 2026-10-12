@@ -24,6 +24,13 @@ export const Permissions = {
   ASSIGN_ROLES: "iam:roles_assign",
   READ_AUDIT: "audit:read",
   MANAGE_DISPUTES: "disputes:manage",
+
+  // Citizen & Ratepayer Self-Service
+  VIEW_OWN_BILLS: "bills:view_own",
+  INITIATE_PAYMENTS: "payments:initiate",
+  VIEW_OWN_RECEIPTS: "receipts:view_own",
+  CLAIM_PROPERTY: "properties:claim",
+  CREATE_DISPUTES: "disputes:create",
 } as const;
 
 export type PermissionId = (typeof Permissions)[keyof typeof Permissions];

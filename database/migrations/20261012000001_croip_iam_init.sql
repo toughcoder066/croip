@@ -143,6 +143,7 @@ CREATE TABLE croip_iam.ratepayer_profiles (
     
     -- Name details
     first_name VARCHAR(100),
+    middle_name VARCHAR(100),
     last_name VARCHAR(100),
     company_name VARCHAR(255),
     
@@ -159,7 +160,7 @@ CREATE TABLE croip_iam.ratepayer_profiles (
     -- Contact & Communication Preferences
     primary_email CITEXT,
     primary_phone VARCHAR(20) NOT NULL,
-    preferred_channel VARCHAR(20) NOT NULL DEFAULT 'SMS' CHECK (preferred_channel IN ('SMS', 'EMAIL', 'WHATSAPP', 'APP_PUSH')),
+    preferred_channels VARCHAR(20)[] NOT NULL DEFAULT ARRAY['SMS']::VARCHAR(20)[],
     preferred_language VARCHAR(10) NOT NULL DEFAULT 'en',
     
     -- National billing delivery address
@@ -344,7 +345,14 @@ INSERT INTO croip_iam.permissions (id, category, display_name, description) VALU
     ('iam:users_manage', 'IAM', 'Manage Platform Users', 'Invite, suspend, and configure internal staff accounts'),
     ('iam:roles_assign', 'IAM', 'Assign User Roles', 'Grant or revoke roles and scopes to users'),
     ('audit:read', 'AUDIT', 'View Audit Logs', 'Read system audit and forensic trails'),
-    ('disputes:manage', 'SUPPORT', 'Manage Ratepayer Disputes', 'Review and resolve ratepayer billing disputes')
+    ('disputes:manage', 'SUPPORT', 'Manage Ratepayer Disputes', 'Review and resolve ratepayer billing disputes'),
+    
+    -- Citizen & Ratepayer Self-Service
+    ('bills:view_own', 'RATEPAYER', 'View Own Bills', 'Allows ratepayer to inspect their property tax and permit bills'),
+    ('payments:initiate', 'RATEPAYER', 'Initiate Bill Payments', 'Allows ratepayer to trigger cashless payments for bills'),
+    ('receipts:view_own', 'RATEPAYER', 'View Own Receipts', 'Allows ratepayer to view and download digitally signed receipts'),
+    ('properties:claim', 'RATEPAYER', 'Claim Property Ownership', 'Allows ratepayer to link a municipal property to their account'),
+    ('disputes:create', 'RATEPAYER', 'File Bill Disputes', 'Allows ratepayer to raise an objection against an assessment')
 ON CONFLICT (id) DO NOTHING;
 
 -- Standard Core Roles
@@ -358,7 +366,8 @@ INSERT INTO croip_iam.roles (id, role_type, name, description) VALUES
     ('AUDITOR', 'CROIP_GOV_ADMIN', 'National Auditor', 'Read-only access across all records, ledgers, and tamper-proof logs'),
     ('SUPPORT_OFFICER', 'CROIP_GOV_ADMIN', 'Disputes & Support Officer', 'Handles citizen inquiries, missing receipts and disputes'),
     ('CONCESSIONAIRE_ADMIN', 'CONCESSIONAIRE_USER', 'Concessionaire Administrator', 'Administrative lead for a concessionaire system'),
-    ('CONCESSIONAIRE_BILLING', 'CONCESSIONAIRE_USER', 'Concessionaire Billing Officer', 'Submits property valuations, roll registers, and bill batches')
+    ('CONCESSIONAIRE_BILLING', 'CONCESSIONAIRE_USER', 'Concessionaire Billing Officer', 'Submits property valuations, roll registers, and bill batches'),
+    ('RATEPAYER', 'RATEPAYER', 'Registered Ratepayer', 'Citizen or corporate entity with access to view bills, make payments, and manage properties')
 ON CONFLICT (id) DO NOTHING;
 
 -- Link standard permissions to roles
@@ -389,7 +398,14 @@ INSERT INTO croip_iam.role_permissions (role_id, permission_id) VALUES
     -- Auditor
     ('AUDITOR', 'dashboards:view_national'),
     ('AUDITOR', 'payments:view'),
-    ('AUDITOR', 'audit:read')
+    ('AUDITOR', 'audit:read'),
+
+    -- Ratepayer Self-Service
+    ('RATEPAYER', 'bills:view_own'),
+    ('RATEPAYER', 'payments:initiate'),
+    ('RATEPAYER', 'receipts:view_own'),
+    ('RATEPAYER', 'properties:claim'),
+    ('RATEPAYER', 'disputes:create')
 ON CONFLICT DO NOTHING;
 
 -- ----------------------------------------------------------------------------
