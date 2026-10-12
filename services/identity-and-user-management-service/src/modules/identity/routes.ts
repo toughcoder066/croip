@@ -6,7 +6,8 @@ import {
   StaffLoginSchema,
   OnboardStaffSchema,
   UpdateUserStatusSchema,
-  AssignRoleSchema
+  AssignRoleSchema,
+  calculateRatepayerCompletion
 } from './schemas.js';
 import {
   hashPassword,
@@ -29,12 +30,13 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: ['Ratepayer'],
       summary: 'Register Ratepayer Account',
-      description: 'Creates a new citizen ratepayer account with matching password & confirmation.',
+      description: 'Creates a new citizen ratepayer account with matching password & confirmation, requiring either phone or email.',
       body: {
         type: 'object',
-        required: ['fullName', 'phone', 'password', 'confirmPassword'],
+        required: ['firstName', 'lastName', 'password', 'confirmPassword'],
         properties: {
-          fullName: { type: 'string', minLength: 2, example: 'Kwame Mensah' },
+          firstName: { type: 'string', minLength: 2, example: 'Kwame' },
+          lastName: { type: 'string', minLength: 2, example: 'Mensah' },
           phone: { type: 'string', minLength: 9, example: '233241234567' },
           email: { type: 'string', format: 'email', example: 'kwame.mensah@example.com' },
           password: { type: 'string', minLength: 8, example: 'Password123!' },
@@ -44,9 +46,7 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
             items: { type: 'string' },
             default: ['SMS'],
             example: ['SMS']
-          },
-          tin: { type: 'string', example: 'P0012345678' },
-          ghanaCardNumber: { type: 'string', example: 'GHA-123456789-0' }
+          }
         }
       },
       response: {
@@ -58,10 +58,34 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
               type: 'object',
               properties: {
                 id: { type: 'string' },
-                phone: { type: 'string' },
+                phone: { type: 'string', nullable: true },
+                email: { type: 'string', nullable: true },
+                firstName: { type: 'string', nullable: true },
+                lastName: { type: 'string', nullable: true },
                 fullName: { type: 'string' },
                 accountType: { type: 'string' },
-                status: { type: 'string' }
+                status: { type: 'string' },
+                completion: {
+                  type: 'object',
+                  properties: {
+                    percentage: { type: 'number' },
+                    kycLevel: { type: 'string' },
+                    isComplete: { type: 'boolean' },
+                    checklist: {
+                      type: 'object',
+                      properties: {
+                        phoneProvided: { type: 'boolean' },
+                        emailProvided: { type: 'boolean' },
+                        nameProvided: { type: 'boolean' },
+                        ghanaCardProvided: { type: 'boolean' },
+                        digitalAddressProvided: { type: 'boolean' },
+                        tinProvided: { type: 'boolean' }
+                      }
+                    },
+                    missingFields: { type: 'array', items: { type: 'string' } },
+                    nextSteps: { type: 'array', items: { type: 'string' } }
+                  }
+                }
               }
             }
           }
@@ -78,7 +102,7 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     const existing = await app.prisma.user.findFirst({
       where: {
         OR: [
-          { phone: data.phone },
+          ...(data.phone ? [{ phone: data.phone }] : []),
           ...(data.email ? [{ email: data.email }] : [])
         ]
       }
@@ -88,12 +112,13 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     }
 
     const passwordHash = hashPassword(data.password);
+    const fullName = `${data.firstName} ${data.lastName}`.trim();
 
     const user = await app.prisma.$transaction(async (tx) => {
       const newUser = await tx.user.create({
         data: {
           email: data.email ?? null,
-          phone: data.phone,
+          phone: data.phone ?? null,
           accountType: 'RATEPAYER',
           status: 'ACTIVE',
           credential: {
@@ -101,15 +126,29 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
           },
           ratepayerProfile: {
             create: {
-              fullName: data.fullName,
-              preferredChannels: data.preferredChannels,
-              tin: data.tin ?? null,
-              ghanaCardNumber: data.ghanaCardNumber ?? null
+              firstName: data.firstName,
+              lastName: data.lastName,
+              fullName,
+              preferredChannels: data.preferredChannels ?? ['SMS'],
+              kycStatus: 'TIER_1_UNVERIFIED'
             }
           }
         },
         include: { ratepayerProfile: true }
       });
+
+      const ratepayerRole = await tx.role.findUnique({
+        where: { code: 'RATEPAYER' }
+      });
+
+      if (ratepayerRole) {
+        await tx.userRoleAssignment.create({
+          data: {
+            userId: newUser.id,
+            roleId: ratepayerRole.id
+          }
+        });
+      }
 
       await appendOutboxEvent(
         tx,
@@ -126,9 +165,9 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
           correlationId: request.id,
           data: {
             userId: newUser.id,
-            fullName: data.fullName,
-            phone: data.phone,
-            email: data.email
+            fullName,
+            phone: data.phone ?? null,
+            email: data.email ?? null
           }
         })
       );
@@ -136,14 +175,27 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       return newUser;
     });
 
+    const completion = calculateRatepayerCompletion({
+      firstName: data.firstName,
+      lastName: data.lastName,
+      fullName,
+      phone: user.phone,
+      email: user.email,
+      kycStatus: user.ratepayerProfile?.kycStatus
+    });
+
     return reply.code(201).send({
       success: true,
       data: {
         id: user.id,
         phone: user.phone,
+        email: user.email,
+        firstName: user.ratepayerProfile?.firstName,
+        lastName: user.ratepayerProfile?.lastName,
         fullName: user.ratepayerProfile?.fullName,
         accountType: user.accountType,
-        status: user.status
+        status: user.status,
+        completion
       }
     });
   });
@@ -185,14 +237,21 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     if (!parseResult.success) {
       throw new BadRequestError('Phone and password are required');
     }
-    const { phone, password } = parseResult.data;
+    const data = parseResult.data;
+    const identifier = (data.identifier || data.phone || data.email)!;
 
     const user = await app.prisma.user.findFirst({
-      where: { phone, accountType: 'RATEPAYER' },
+      where: {
+        accountType: 'RATEPAYER',
+        OR: [
+          { phone: identifier },
+          { email: identifier }
+        ]
+      },
       include: { credential: true, ratepayerProfile: true }
     });
 
-    if (!user || !user.credential || !verifyPassword(password, user.credential.passwordHash)) {
+    if (!user || !user.credential || !verifyPassword(data.password, user.credential.passwordHash)) {
       throw new UnauthorizedError('Invalid phone number or password');
     }
 
@@ -203,11 +262,12 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     const otp = generateOtp();
     const otpHashValue = hashOtp(otp);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    const destination = user.phone || user.email || identifier;
 
     await app.prisma.$transaction(async (tx) => {
       await tx.otpVerification.create({
         data: {
-          phone,
+          phone: destination!,
           otpHash: otpHashValue,
           expiresAt
         }
@@ -221,12 +281,12 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
           eventVersion: 1,
           producer: app.serviceInfo.name,
           aggregateType: 'OtpVerification',
-          aggregateId: phone,
+          aggregateId: destination!,
           aggregateVersion: 1,
           concessionId: '00000000-0000-0000-0000-000000000000',
           assemblyId: '00000000-0000-0000-0000-000000000000',
           correlationId: request.id,
-          data: { phone, otp, expiresAt: expiresAt.toISOString() }
+          data: { destination, otp, expiresAt: expiresAt.toISOString() }
         })
       );
     });
@@ -235,7 +295,9 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       success: true,
       message: 'OTP dispatched successfully',
       data: {
-        phone,
+        destination,
+        phone: user.phone,
+        email: user.email,
         expiresInSeconds: 600,
         devOtp: otp
       }
@@ -250,9 +312,10 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       description: 'Step 2 of Ratepayer login: Validates 6-digit OTP and issues authenticated session token.',
       body: {
         type: 'object',
-        required: ['phone', 'otp'],
+        required: ['otp'],
         properties: {
           phone: { type: 'string', example: '233241234567' },
+          identifier: { type: 'string', example: '233241234567' },
           otp: { type: 'string', example: '123456' }
         }
       },
@@ -270,9 +333,18 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
                   type: 'object',
                   properties: {
                     id: { type: 'string' },
-                    phone: { type: 'string' },
+                    phone: { type: 'string', nullable: true },
+                    email: { type: 'string', nullable: true },
                     accountType: { type: 'string' },
                     fullName: { type: 'string' }
+                  }
+                },
+                completion: {
+                  type: 'object',
+                  properties: {
+                    percentage: { type: 'number' },
+                    kycLevel: { type: 'string' },
+                    isComplete: { type: 'boolean' }
                   }
                 }
               }
@@ -284,13 +356,31 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   }, async (request, reply) => {
     const parseResult = RatepayerVerifyOtpSchema.safeParse(request.body);
     if (!parseResult.success) {
-      throw new BadRequestError('Phone and 6-digit OTP are required');
+      throw new BadRequestError('Identifier and 6-digit OTP are required');
     }
-    const { phone, otp } = parseResult.data;
+    const data = parseResult.data;
+    const identifier = (data.identifier || data.phone)!;
+
+    const user = await app.prisma.user.findFirst({
+      where: {
+        accountType: 'RATEPAYER',
+        OR: [
+          { phone: identifier },
+          { email: identifier }
+        ]
+      },
+      include: { ratepayerProfile: true }
+    });
+
+    if (!user) {
+      throw new NotFoundError('Ratepayer user not found');
+    }
+
+    const destination = (user.phone || user.email || identifier)!;
 
     const otpRecord = await app.prisma.otpVerification.findFirst({
       where: {
-        phone,
+        phone: destination,
         verifiedAt: null,
         expiresAt: { gt: new Date() }
       },
@@ -301,22 +391,13 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       throw new UnauthorizedError('OTP is invalid or has expired');
     }
 
-    const candidateHash = hashOtp(otp);
+    const candidateHash = hashOtp(data.otp);
     if (candidateHash !== otpRecord.otpHash) {
       await app.prisma.otpVerification.update({
         where: { id: otpRecord.id },
         data: { attempts: { increment: 1 } }
       });
       throw new UnauthorizedError('Incorrect verification code');
-    }
-
-    const user = await app.prisma.user.findFirst({
-      where: { phone, accountType: 'RATEPAYER' },
-      include: { ratepayerProfile: true }
-    });
-
-    if (!user) {
-      throw new NotFoundError('Ratepayer user not found');
     }
 
     const token = generateSessionToken();
@@ -338,6 +419,18 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       });
     });
 
+    const completion = calculateRatepayerCompletion({
+      firstName: user.ratepayerProfile?.firstName,
+      lastName: user.ratepayerProfile?.lastName,
+      fullName: user.ratepayerProfile?.fullName,
+      phone: user.phone,
+      email: user.email,
+      ghanaCardNumber: user.ratepayerProfile?.ghanaCardNumber,
+      digitalAddress: user.ratepayerProfile?.digitalAddress,
+      tin: user.ratepayerProfile?.tin,
+      kycStatus: user.ratepayerProfile?.kycStatus
+    });
+
     return reply.send({
       success: true,
       data: {
@@ -346,16 +439,20 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
         user: {
           id: user.id,
           phone: user.phone,
+          email: user.email,
           accountType: user.accountType,
-          fullName: user.ratepayerProfile?.fullName
-        }
+          fullName: user.ratepayerProfile?.fullName ?? ""
+        },
+        completion
       }
     });
   });
 
   app.get('/ratepayers', {
+    preHandler: [app.authenticate],
     schema: {
       tags: ['Ratepayer'],
+      security: [{ bearerAuth: [] }],
       summary: 'List Ratepayers',
       description: 'Returns a paginated list of all registered citizens / ratepayers.',
       querystring: {
@@ -396,6 +493,69 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
         createdAt: r.createdAt
       })),
       pagination: { total, limit, offset }
+    });
+  });
+
+  app.patch('/ratepayers/profile', {
+    preHandler: [app.authenticate],
+    schema: {
+      tags: ['Ratepayer'],
+      security: [{ bearerAuth: [] }],
+      summary: 'Update Ratepayer Profile (Progressive KYC)',
+      description: 'Allows an authenticated ratepayer to enrich their profile with Ghana Card, digital address, or TIN, increasing their profile completion percentage.',
+      body: {
+        type: 'object',
+        properties: {
+          ghanaCardNumber: { type: 'string', example: 'GHA-123456789-0' },
+          digitalAddress: { type: 'string', example: 'AK-039-5028' },
+          tin: { type: 'string', example: 'P0012345678' },
+          preferredChannels: { type: 'array', items: { type: 'string' } }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    const callerId = request.auth?.subject;
+    const user = await app.prisma.user.findFirst({
+      where: {
+        OR: [{ id: callerId }, { email: callerId }, { phone: callerId }]
+      },
+      include: { ratepayerProfile: true }
+    });
+
+    if (!user || user.accountType !== 'RATEPAYER' || !user.ratepayerProfile) {
+      throw new BadRequestError('Only registered ratepayers can update citizen profiles');
+    }
+
+    const body = request.body as Record<string, any>;
+    const updatedProfile = await app.prisma.ratepayerProfile.update({
+      where: { id: user.ratepayerProfile.id },
+      data: {
+        ...(body.ghanaCardNumber ? { ghanaCardNumber: body.ghanaCardNumber } : {}),
+        ...(body.digitalAddress ? { digitalAddress: body.digitalAddress } : {}),
+        ...(body.tin ? { tin: body.tin } : {}),
+        ...(body.preferredChannels ? { preferredChannels: body.preferredChannels } : {})
+      }
+    });
+
+    const completion = calculateRatepayerCompletion({
+      firstName: updatedProfile.firstName,
+      lastName: updatedProfile.lastName,
+      fullName: updatedProfile.fullName,
+      phone: user.phone,
+      email: user.email,
+      ghanaCardNumber: updatedProfile.ghanaCardNumber,
+      digitalAddress: updatedProfile.digitalAddress,
+      tin: updatedProfile.tin,
+      kycStatus: updatedProfile.kycStatus
+    });
+
+    return reply.send({
+      success: true,
+      message: 'Profile updated successfully',
+      data: {
+        profile: updatedProfile,
+        completion
+      }
     });
   });
 
@@ -504,8 +664,10 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/staff/onboard', {
+    preHandler: [app.authenticate],
     schema: {
       tags: ['Staff & Government Oversight'],
+      security: [{ bearerAuth: [] }],
       summary: 'Onboard Staff Member (Admin)',
       description: 'Onboards a new government or concession oversight staff member with scoped roles.',
       body: {
@@ -623,8 +785,10 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/staff', {
+    preHandler: [app.authenticate],
     schema: {
       tags: ['Staff & Government Oversight'],
+      security: [{ bearerAuth: [] }],
       summary: 'List Staff Members',
       description: 'Returns a paginated list of all staff members and their scoped assignments.',
       querystring: {
@@ -681,8 +845,10 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   // =========================================================================
 
   app.get('/users', {
+    preHandler: [app.authenticate],
     schema: {
       tags: ['Access Control & RBAC'],
+      security: [{ bearerAuth: [] }],
       summary: 'List All Platform Users',
       description: 'Query users segregated by account type (RATEPAYER or STAFF) with pagination.',
       querystring: {
@@ -745,8 +911,10 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.patch('/users/:id/status', {
+    preHandler: [app.authenticate],
     schema: {
       tags: ['Access Control & RBAC'],
+      security: [{ bearerAuth: [] }],
       summary: 'Update User Account Status',
       description: 'Activate, suspend, or pend any platform account.',
       params: {
@@ -788,8 +956,10 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/users/:id/roles', {
+    preHandler: [app.authenticate],
     schema: {
       tags: ['Access Control & RBAC'],
+      security: [{ bearerAuth: [] }],
       summary: 'Assign Scoped Role to User',
       description: 'Grants a role to a user scoped to an optional concession and district assembly.',
       params: {
@@ -845,9 +1015,120 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.get('/roles', {
+  app.get('/users/:id', {
+    preHandler: [app.authenticate],
     schema: {
       tags: ['Access Control & RBAC'],
+      security: [{ bearerAuth: [] }],
+      summary: 'Get User By ID',
+      description: 'Fetches details of a specific user including their profile and role assignments.',
+      params: {
+        type: 'object',
+        required: ['id'],
+        properties: { id: { type: 'string', format: 'uuid' } }
+      }
+    }
+  }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = await app.prisma.user.findUnique({
+      where: { id },
+      include: {
+        ratepayerProfile: true,
+        staffProfile: true,
+        roleAssignments: { include: { role: true } }
+      }
+    });
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    let completion = undefined;
+    if (user.accountType === 'RATEPAYER' && user.ratepayerProfile) {
+      completion = calculateRatepayerCompletion({
+        firstName: user.ratepayerProfile.firstName,
+        lastName: user.ratepayerProfile.lastName,
+        fullName: user.ratepayerProfile.fullName,
+        phone: user.phone,
+        email: user.email,
+        ghanaCardNumber: user.ratepayerProfile.ghanaCardNumber,
+        digitalAddress: user.ratepayerProfile.digitalAddress,
+        tin: user.ratepayerProfile.tin,
+        kycStatus: user.ratepayerProfile.kycStatus
+      });
+    }
+
+    return reply.send({
+      success: true,
+      data: {
+        id: user.id,
+        email: user.email,
+        phone: user.phone,
+        accountType: user.accountType,
+        status: user.status,
+        fullName: user.ratepayerProfile?.fullName ?? user.staffProfile?.fullName,
+        ratepayerProfile: user.ratepayerProfile,
+        staffProfile: user.staffProfile,
+        roles: user.roleAssignments.map((ra) => ({
+          roleId: ra.roleId,
+          code: ra.role.code,
+          name: ra.role.name,
+          concessionId: ra.concessionId,
+          assemblyId: ra.assemblyId
+        })),
+        createdAt: user.createdAt,
+        ...(completion ? { completion } : {})
+      }
+    });
+  });
+
+  app.delete('/users/:id/roles/:roleId', {
+    preHandler: [app.authenticate],
+    schema: {
+      tags: ['Access Control & RBAC'],
+      security: [{ bearerAuth: [] }],
+      summary: 'Revoke Scoped Role from User',
+      description: 'Removes a role assignment from a specific user.',
+      params: {
+        type: 'object',
+        required: ['id', 'roleId'],
+        properties: {
+          id: { type: 'string', format: 'uuid' },
+          roleId: { type: 'string', format: 'uuid' }
+        }
+      }
+    }
+  }, async (request, reply) => {
+    const { id, roleId } = request.params as { id: string; roleId: string };
+    const assignment = await app.prisma.userRoleAssignment.findFirst({
+      where: {
+        userId: id,
+        OR: [
+          { roleId },
+          { role: { code: roleId } }
+        ]
+      }
+    });
+
+    if (!assignment) {
+      throw new NotFoundError('Role assignment not found for this user');
+    }
+
+    await app.prisma.userRoleAssignment.delete({
+      where: { id: assignment.id }
+    });
+
+    return reply.send({
+      success: true,
+      message: 'Role assignment revoked successfully'
+    });
+  });
+
+  app.get('/roles', {
+    preHandler: [app.authenticate],
+    schema: {
+      tags: ['Access Control & RBAC'],
+      security: [{ bearerAuth: [] }],
       summary: 'List All Roles',
       description: 'Returns the catalog of all system roles and their assigned permissions.'
     }
@@ -870,8 +1151,10 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get('/permissions', {
+    preHandler: [app.authenticate],
     schema: {
       tags: ['Access Control & RBAC'],
+      security: [{ bearerAuth: [] }],
       summary: 'List All Permissions',
       description: 'Returns the complete catalog of atomic platform permissions.'
     }
@@ -891,8 +1174,10 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   // =========================================================================
 
   app.get('/auth/me', {
+    preHandler: [app.authenticate],
     schema: {
       tags: ['Session & Profile'],
+      security: [{ bearerAuth: [] }],
       summary: 'Active Session Profile',
       description: 'Returns profile details and active permissions for the currently authenticated caller.'
     }
@@ -921,6 +1206,21 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
       throw new NotFoundError('User profile not found');
     }
 
+    let completion = undefined;
+    if (user.accountType === 'RATEPAYER' && user.ratepayerProfile) {
+      completion = calculateRatepayerCompletion({
+        firstName: user.ratepayerProfile.firstName,
+        lastName: user.ratepayerProfile.lastName,
+        fullName: user.ratepayerProfile.fullName,
+        phone: user.phone,
+        email: user.email,
+        ghanaCardNumber: user.ratepayerProfile.ghanaCardNumber,
+        digitalAddress: user.ratepayerProfile.digitalAddress,
+        tin: user.ratepayerProfile.tin,
+        kycStatus: user.ratepayerProfile.kycStatus
+      });
+    }
+
     return reply.send({
       success: true,
       data: {
@@ -937,7 +1237,8 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
           name: ra.role.name,
           concessionId: ra.concessionId,
           assemblyId: ra.assemblyId
-        }))
+        })),
+        ...(completion ? { completion } : {})
       }
     });
   });

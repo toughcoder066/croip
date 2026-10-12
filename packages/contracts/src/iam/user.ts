@@ -19,73 +19,173 @@ export type User = z.infer<typeof UserSchema>;
 
 export const RatepayerProfileSchema = z.object({
   userId: z.string().uuid(),
-  ratepayerType: z.enum(["INDIVIDUAL", "ORGANIZATION"]),
+  ratepayerType: z.enum(["INDIVIDUAL", "ORGANIZATION"]).default("INDIVIDUAL"),
   firstName: z.string().max(100).nullable().optional(),
   lastName: z.string().max(100).nullable().optional(),
+  fullName: z.string().max(200),
   companyName: z.string().max(255).nullable().optional(),
   ghanaCardNumber: z.string().max(30).nullable().optional(),
   tinNumber: z.string().max(30).nullable().optional(),
   kycStatus: z.enum([
     "UNVERIFIED",
+    "TIER_1_UNVERIFIED",
+    "TIER_2_BASIC",
+    "TIER_3_VERIFIED",
     "PHONE_VERIFIED",
     "GHANA_CARD_SUBMITTED",
     "GHANA_CARD_VERIFIED",
     "ENTERPRISE_TIN_VERIFIED",
-  ]),
-  primaryPhone: z.string().min(9).max(20),
+  ]).default("TIER_1_UNVERIFIED"),
+  primaryPhone: z.string().min(9).max(20).nullable().optional(),
   primaryEmail: z.string().email().nullable().optional(),
   preferredChannels: z.array(z.string()).default(["SMS"]),
   digitalAddressGhPost: z.string().max(20).nullable().optional(),
 });
 export type RatepayerProfile = z.infer<typeof RatepayerProfileSchema>;
 
+export const ProfileCompletionChecklistSchema = z.object({
+  phoneProvided: z.boolean(),
+  emailProvided: z.boolean(),
+  nameProvided: z.boolean(),
+  ghanaCardProvided: z.boolean(),
+  digitalAddressProvided: z.boolean(),
+  tinProvided: z.boolean(),
+});
+export type ProfileCompletionChecklist = z.infer<typeof ProfileCompletionChecklistSchema>;
+
 export const ProfileCompletionSchema = z.object({
   percentage: z.number().min(0).max(100),
   kycLevel: z.string(),
   isComplete: z.boolean(),
-  checklist: z.object({
-    phoneVerified: z.boolean(),
-    nameProvided: z.boolean(),
-    emailProvided: z.boolean(),
-    ghanaCardProvided: z.boolean(),
-    digitalAddressProvided: z.boolean(),
-  }),
+  checklist: ProfileCompletionChecklistSchema,
   missingFields: z.array(z.string()),
   nextSteps: z.array(z.string()),
 });
 export type ProfileCompletion = z.infer<typeof ProfileCompletionSchema>;
 
+export function calculateRatepayerCompletion(profile: {
+  firstName?: string | null | undefined;
+  lastName?: string | null | undefined;
+  fullName?: string | null | undefined;
+  phone?: string | null | undefined;
+  email?: string | null | undefined;
+  primaryPhone?: string | null | undefined;
+  primaryEmail?: string | null | undefined;
+  ghanaCardNumber?: string | null | undefined;
+  digitalAddress?: string | null | undefined;
+  digitalAddressGhPost?: string | null | undefined;
+  tin?: string | null | undefined;
+  tinNumber?: string | null | undefined;
+  kycStatus?: string | null | undefined;
+}): ProfileCompletion {
+  const phone = profile.phone || profile.primaryPhone;
+  const email = profile.email || profile.primaryEmail;
+  const hasName = Boolean((profile.firstName && profile.lastName) || profile.fullName);
+  const hasGhanaCard = Boolean(profile.ghanaCardNumber);
+  const hasDigitalAddress = Boolean(profile.digitalAddress || profile.digitalAddressGhPost);
+  const hasTin = Boolean(profile.tin || profile.tinNumber);
+
+  const checklist: ProfileCompletionChecklist = {
+    phoneProvided: Boolean(phone),
+    emailProvided: Boolean(email),
+    nameProvided: hasName,
+    ghanaCardProvided: hasGhanaCard,
+    digitalAddressProvided: hasDigitalAddress,
+    tinProvided: hasTin,
+  };
+
+  const missingFields: string[] = [];
+  const nextSteps: string[] = [];
+
+  let completedCount = 0;
+  const totalWeight = 6;
+
+  if (checklist.nameProvided) completedCount++;
+  else {
+    missingFields.push("name");
+    nextSteps.push("Provide your first and last name");
+  }
+
+  if (checklist.phoneProvided) completedCount++;
+  else {
+    missingFields.push("phone");
+    nextSteps.push("Add a mobile phone number for SMS and instant OTP login");
+  }
+
+  if (checklist.emailProvided) completedCount++;
+  else {
+    missingFields.push("email");
+    nextSteps.push("Add an email address to receive digital property bills and receipts");
+  }
+
+  if (checklist.ghanaCardProvided) completedCount++;
+  else {
+    missingFields.push("ghanaCardNumber");
+    nextSteps.push("Link your Ghana Card (National ID) to verify property ownership");
+  }
+
+  if (checklist.digitalAddressProvided) completedCount++;
+  else {
+    missingFields.push("digitalAddress");
+    nextSteps.push("Add GhanaPost GPS digital address for accurate property lookup");
+  }
+
+  if (checklist.tinProvided) completedCount++;
+  else {
+    missingFields.push("tin");
+    nextSteps.push("Add Taxpayer Identification Number (TIN) if registered as a corporate ratepayer");
+  }
+
+  const percentage = Math.round((completedCount / totalWeight) * 100);
+
+  let kycLevel = "TIER_1_UNVERIFIED";
+  if (checklist.ghanaCardProvided && checklist.phoneProvided && checklist.digitalAddressProvided) {
+    kycLevel = "TIER_3_VERIFIED";
+  } else if (checklist.phoneProvided || checklist.emailProvided) {
+    kycLevel = "TIER_2_BASIC";
+  }
+
+  return {
+    percentage,
+    kycLevel: profile.kycStatus || kycLevel,
+    isComplete: percentage === 100,
+    checklist,
+    missingFields,
+    nextSteps,
+  };
+}
+
 export const RegisterRatepayerInputSchema = z
   .object({
-    phoneNumber: z.string().min(9).max(20).describe("Primary phone number for SMS notifications and OTP login"),
+    firstName: z.string().min(2, "First name must have at least 2 characters").max(100),
+    lastName: z.string().min(2, "Last name must have at least 2 characters").max(100),
+    phone: z.string().min(9).max(20).optional().describe("Primary mobile number for SMS and OTP login"),
+    email: z.string().email("A valid email address is required").optional().describe("Primary email address"),
     password: z.string().min(8, "Password must be at least 8 characters").describe("Account password for ratepayer authentication"),
     confirmPassword: z.string().min(8, "Confirm password must be at least 8 characters").describe("Confirm account password"),
-    email: z.string().email().optional(),
-    firstName: z.string().max(100).optional(),
-    lastName: z.string().max(100).optional(),
-    companyName: z.string().max(255).optional(),
-    ghanaCardNumber: z.string().max(30).optional().describe("National ID (e.g., GHA-123456789-0)"),
-    ratepayerType: z.enum(["INDIVIDUAL", "ORGANIZATION"]).default("INDIVIDUAL"),
-    digitalAddressGhPost: z.string().max(20).optional().describe("GhanaPost GPS address (e.g. AK-039-5028)"),
-    preferredLanguage: z.string().default("en"),
+    preferredChannels: z.array(z.string()).default(["SMS"]).optional(),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
+  })
+  .refine((data) => Boolean(data.phone || data.email), {
+    message: "At least one contact identifier (phone number or email) is required",
+    path: ["phone"],
   });
 export type RegisterRatepayerInput = z.infer<typeof RegisterRatepayerInputSchema>;
 
-// Ratepayer Login Step 1: Phone + Password Verification
+// Ratepayer Login Step 1: Phone/Email + Password Verification
 export const RatepayerLoginInputSchema = z.object({
-  phoneNumber: z.string().min(9).max(20).describe("Registered phone number"),
-  password: z.string().min(6).describe("Account password"),
+  identifier: z.string().min(3).describe("Registered phone number or email"),
+  password: z.string().min(1).describe("Account password"),
 });
 export type RatepayerLoginInput = z.infer<typeof RatepayerLoginInputSchema>;
 
 export const RatepayerLoginStep1ResponseSchema = z.object({
   status: z.literal("OTP_REQUIRED"),
   message: z.string(),
-  phoneNumber: z.string(),
+  destination: z.string(),
   expiresInSeconds: z.number(),
   devOtpCode: z.string().optional().describe("Mock OTP code for local/test validation"),
 });
@@ -93,13 +193,13 @@ export type RatepayerLoginStep1Response = z.infer<typeof RatepayerLoginStep1Resp
 
 // Ratepayer Login Step 2: OTP Verification & Token Issuance
 export const VerifyOtpSchema = z.object({
-  phoneNumber: z.string().min(9).max(20),
+  identifier: z.string().min(3).describe("Phone number or email receiving OTP"),
   otpCode: z.string().min(4).max(8),
 });
 export type VerifyOtpInput = z.infer<typeof VerifyOtpSchema>;
 
 export const RequestOtpSchema = z.object({
-  phoneNumber: z.string().min(9).max(20),
+  identifier: z.string().min(3),
   purpose: z.enum(["RATEPAYER_LOGIN", "RATEPAYER_REGISTER"]).default("RATEPAYER_LOGIN"),
 });
 export type RequestOtpInput = z.infer<typeof RequestOtpSchema>;

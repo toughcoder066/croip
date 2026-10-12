@@ -78,7 +78,7 @@ test('5. OpenAPI / Swagger documentation generates requestBody and segregated ta
   await app.close();
 });
 
-test('6. Ratepayer Registration: Validation enforcement & duplicate handling', async () => {
+test('6. Ratepayer Registration: Validation enforcement, contact flexibility & completion metrics', async () => {
   const app = await buildApp({ config });
   const uniquePhone = `23324${Math.floor(1000000 + Math.random() * 9000000)}`;
 
@@ -87,7 +87,8 @@ test('6. Ratepayer Registration: Validation enforcement & duplicate handling', a
     method: 'POST',
     url: '/v1/ratepayers/register',
     payload: {
-      fullName: 'Test User',
+      firstName: 'Kofi',
+      lastName: 'Owusu',
       phone: uniquePhone,
       password: 'Password123!',
       confirmPassword: 'MismatchPassword123!'
@@ -100,7 +101,8 @@ test('6. Ratepayer Registration: Validation enforcement & duplicate handling', a
     method: 'POST',
     url: '/v1/ratepayers/register',
     payload: {
-      fullName: 'Test User',
+      firstName: 'Kofi',
+      lastName: 'Owusu',
       phone: uniquePhone,
       password: 'short',
       confirmPassword: 'short'
@@ -108,34 +110,80 @@ test('6. Ratepayer Registration: Validation enforcement & duplicate handling', a
   });
   assert.equal(shortPassRes.statusCode, 400);
 
-  // 6c. Successfully registers when matching & valid
-  const successRes = await app.inject({
+  // 6c. Fails when neither phone nor email is supplied
+  const missingContactRes = await app.inject({
     method: 'POST',
     url: '/v1/ratepayers/register',
     payload: {
-      fullName: 'Kofi Owusu',
-      phone: uniquePhone,
-      email: `kofi.${uniquePhone}@example.com`,
+      firstName: 'Kofi',
+      lastName: 'Owusu',
       password: 'StrongPassword123!',
-      confirmPassword: 'StrongPassword123!',
-      preferredChannels: ['SMS'],
-      tin: 'P0098765432',
-      ghanaCardNumber: 'GHA-987654321-0'
+      confirmPassword: 'StrongPassword123!'
     }
   });
-  assert.equal(successRes.statusCode, 201);
-  const body = successRes.json();
-  assert.equal(body.success, true);
-  assert.equal(body.data.phone, uniquePhone);
-  assert.equal(body.data.accountType, 'RATEPAYER');
-  assert.equal(body.data.status, 'ACTIVE');
+  assert.equal(missingContactRes.statusCode, 400);
 
-  // 6d. Duplicate registration with same phone is rejected with 409 Conflict
+  // 6d. Successfully registers with PHONE ONLY + returns profile completion metrics
+  const phoneOnlyRes = await app.inject({
+    method: 'POST',
+    url: '/v1/ratepayers/register',
+    payload: {
+      firstName: 'Kwame',
+      lastName: 'Mensah',
+      phone: uniquePhone,
+      password: 'StrongPassword123!',
+      confirmPassword: 'StrongPassword123!'
+    }
+  });
+  assert.equal(phoneOnlyRes.statusCode, 201);
+  const phoneBody = phoneOnlyRes.json();
+  assert.equal(phoneBody.success, true);
+  assert.equal(phoneBody.data.phone, uniquePhone);
+  assert.equal(phoneBody.data.email, null);
+  assert.equal(phoneBody.data.fullName, 'Kwame Mensah');
+  assert.equal(phoneBody.data.accountType, 'RATEPAYER');
+  assert.equal(phoneBody.data.status, 'ACTIVE');
+
+  // Verify completion metrics for phone-only signup (name + phone = 2 of 6 = 33%)
+  assert.ok(phoneBody.data.completion);
+  assert.equal(phoneBody.data.completion.isComplete, false);
+  assert.equal(phoneBody.data.completion.checklist.nameProvided, true);
+  assert.equal(phoneBody.data.completion.checklist.phoneProvided, true);
+  assert.equal(phoneBody.data.completion.checklist.emailProvided, false);
+  assert.equal(phoneBody.data.completion.checklist.ghanaCardProvided, false);
+  assert.equal(phoneBody.data.completion.percentage, 33);
+  assert.ok(phoneBody.data.completion.missingFields.includes('email'));
+  assert.ok(phoneBody.data.completion.missingFields.includes('ghanaCardNumber'));
+  assert.ok(phoneBody.data.completion.nextSteps.length > 0);
+
+  // 6e. Successfully registers with EMAIL ONLY
+  const emailOnlyAddress = `citizen.email.${Date.now()}@example.com`;
+  const emailOnlyRes = await app.inject({
+    method: 'POST',
+    url: '/v1/ratepayers/register',
+    payload: {
+      firstName: 'Ama',
+      lastName: 'Serwaa',
+      email: emailOnlyAddress,
+      password: 'StrongPassword123!',
+      confirmPassword: 'StrongPassword123!'
+    }
+  });
+  assert.equal(emailOnlyRes.statusCode, 201);
+  const emailBody = emailOnlyRes.json();
+  assert.equal(emailBody.data.email, emailOnlyAddress);
+  assert.equal(emailBody.data.phone, null);
+  assert.equal(emailBody.data.completion.checklist.emailProvided, true);
+  assert.equal(emailBody.data.completion.checklist.phoneProvided, false);
+  assert.equal(emailBody.data.completion.percentage, 33);
+
+  // 6f. Duplicate registration with same phone is rejected with 409 Conflict
   const duplicateRes = await app.inject({
     method: 'POST',
     url: '/v1/ratepayers/register',
     payload: {
-      fullName: 'Kofi Owusu Clone',
+      firstName: 'Kwame',
+      lastName: 'Clone',
       phone: uniquePhone,
       password: 'StrongPassword123!',
       confirmPassword: 'StrongPassword123!'
@@ -143,9 +191,9 @@ test('6. Ratepayer Registration: Validation enforcement & duplicate handling', a
   });
   assert.equal(duplicateRes.statusCode, 409);
 
-  // 6e. Verify outbox event was recorded in DB
+  // 6g. Verify outbox event was recorded in DB
   const outboxEvent = await app.prisma.outboxEvent.findFirst({
-    where: { aggregateId: body.data.id }
+    where: { aggregateId: phoneBody.data.id }
   });
   assert.ok(outboxEvent);
   assert.equal(outboxEvent.eventType, 'identity.ratepayer.registered.v1');
@@ -153,22 +201,25 @@ test('6. Ratepayer Registration: Validation enforcement & duplicate handling', a
   await app.close();
 });
 
-test('7. Ratepayer 2-Step Authentication: Password verification -> OTP -> Session issuance', async () => {
+test('7. Ratepayer 2-Step Authentication: Password verification -> OTP -> Session issuance & /me introspection', async () => {
   const app = await buildApp({ config });
   const uniquePhone = `23325${Math.floor(1000000 + Math.random() * 9000000)}`;
   const password = 'CorrectPassword123!';
 
   // Register ratepayer
-  await app.inject({
+  const regRes = await app.inject({
     method: 'POST',
     url: '/v1/ratepayers/register',
     payload: {
-      fullName: 'Abena Mansa',
+      firstName: 'Abena',
+      lastName: 'Mansa',
       phone: uniquePhone,
       password,
       confirmPassword: password
     }
   });
+  assert.equal(regRes.statusCode, 201);
+  const regData = regRes.json().data;
 
   // 7a. Step 1 Login: Rejects invalid password
   const badLoginRes = await app.inject({
@@ -198,7 +249,7 @@ test('7. Ratepayer 2-Step Authentication: Password verification -> OTP -> Sessio
   });
   assert.equal(badOtpRes.statusCode, 401);
 
-  // 7d. Step 2 OTP: Validates OTP and issues authenticated session token
+  // 7d. Step 2 OTP: Validates OTP and issues authenticated session token + completion metrics
   const verifyRes = await app.inject({
     method: 'POST',
     url: '/v1/ratepayers/verify-otp',
@@ -208,8 +259,25 @@ test('7. Ratepayer 2-Step Authentication: Password verification -> OTP -> Sessio
   const verifyBody = verifyRes.json();
   assert.equal(verifyBody.success, true);
   assert.ok(verifyBody.data.token);
+  assert.ok(verifyBody.data.completion);
   assert.equal(verifyBody.data.user.phone, uniquePhone);
   assert.equal(verifyBody.data.user.accountType, 'RATEPAYER');
+
+  // 7e. Profile Introspection (/v1/auth/me): Returns ratepayer profile + completion metrics
+  const meRes = await app.inject({
+    method: 'GET',
+    url: '/v1/auth/me',
+    headers: {
+      'x-dev-subject': regData.id
+    }
+  });
+  assert.equal(meRes.statusCode, 200);
+  const meBody = meRes.json();
+  assert.equal(meBody.success, true);
+  assert.equal(meBody.data.id, regData.id);
+  assert.ok(meBody.data.completion);
+  assert.equal(meBody.data.completion.percentage, 33);
+  assert.equal(meBody.data.completion.checklist.nameProvided, true);
 
   await app.close();
 });
@@ -217,7 +285,14 @@ test('7. Ratepayer 2-Step Authentication: Password verification -> OTP -> Sessio
 test('8. Staff Login & CROIP Admin Onboarding with Scoped Concession/Assembly Roles', async () => {
   const app = await buildApp({ config });
 
-  // 8a. Staff Login with default Super Admin
+  // 8a. Unauthenticated access to /staff or /staff/onboard is rejected with 401
+  const unauthStaffRes = await app.inject({
+    method: 'GET',
+    url: '/v1/staff'
+  });
+  assert.equal(unauthStaffRes.statusCode, 401);
+
+  // 8b. Staff Login with default Super Admin
   const staffLoginRes = await app.inject({
     method: 'POST',
     url: '/v1/staff/login',
@@ -230,12 +305,14 @@ test('8. Staff Login & CROIP Admin Onboarding with Scoped Concession/Assembly Ro
   const staffLoginBody = staffLoginRes.json();
   assert.ok(staffLoginBody.data.token);
   assert.equal(staffLoginBody.data.user.email, 'admin@croip.gov.gh');
+  const authToken = staffLoginBody.data.token;
 
-  // 8b. Onboard a new Rate Card Verifier staff member
+  // 8c. Onboard a new Rate Card Verifier staff member using Bearer token
   const newStaffEmail = `verifier.${Date.now()}@croip.gov.gh`;
   const onboardRes = await app.inject({
     method: 'POST',
     url: '/v1/staff/onboard',
+    headers: { authorization: `Bearer ${authToken}` },
     payload: {
       fullName: 'Dr. Kwame Addo',
       email: newStaffEmail,
@@ -251,10 +328,11 @@ test('8. Staff Login & CROIP Admin Onboarding with Scoped Concession/Assembly Ro
   assert.equal(onboardBody.data.email, newStaffEmail);
   assert.equal(onboardBody.data.roles[0].code, 'RATE_CARD_VERIFIER');
 
-  // 8c. List staff members
+  // 8d. List staff members with Bearer token
   const staffListRes = await app.inject({
     method: 'GET',
-    url: '/v1/staff'
+    url: '/v1/staff',
+    headers: { authorization: `Bearer ${authToken}` }
   });
   assert.equal(staffListRes.statusCode, 200);
   assert.ok(staffListRes.json().data.length >= 2);
@@ -262,11 +340,26 @@ test('8. Staff Login & CROIP Admin Onboarding with Scoped Concession/Assembly Ro
   await app.close();
 });
 
-test('9. Roles & Permissions: RATEPAYER has property claiming and self-management permissions', async () => {
+test('9. Roles & Permissions: Access Control requires auth token and RATEPAYER has property permissions', async () => {
   const app = await buildApp({ config });
 
-  // 9a. Verify Roles endpoint
-  const rolesRes = await app.inject({ method: 'GET', url: '/v1/roles' });
+  // 9a. Access without token is rejected with 401
+  const unauthRoles = await app.inject({ method: 'GET', url: '/v1/roles' });
+  assert.equal(unauthRoles.statusCode, 401);
+  const unauthPerms = await app.inject({ method: 'GET', url: '/v1/permissions' });
+  assert.equal(unauthPerms.statusCode, 401);
+
+  // 9b. Login to obtain session token
+  const staffLoginRes = await app.inject({
+    method: 'POST',
+    url: '/v1/staff/login',
+    payload: { identifier: 'admin@croip.gov.gh', password: 'AdminPassword123!' }
+  });
+  const token = staffLoginRes.json().data.token;
+  const authHeaders = { authorization: `Bearer ${token}` };
+
+  // 9c. Verify Roles endpoint with token
+  const rolesRes = await app.inject({ method: 'GET', url: '/v1/roles', headers: authHeaders });
   assert.equal(rolesRes.statusCode, 200);
   const rolesData = rolesRes.json().data;
   assert.ok(rolesData.length >= 11);
@@ -280,41 +373,60 @@ test('9. Roles & Permissions: RATEPAYER has property claiming and self-managemen
   assert.ok(ratepayerRole.permissions.includes('bills.own.read'), 'Must have bills.own.read');
   assert.ok(ratepayerRole.permissions.includes('payments.own.initiate'), 'Must have payments.own.initiate');
 
-  // 9b. Verify Permissions catalog endpoint
-  const permsRes = await app.inject({ method: 'GET', url: '/v1/permissions' });
+  // 9d. Verify Permissions catalog endpoint with token
+  const permsRes = await app.inject({ method: 'GET', url: '/v1/permissions', headers: authHeaders });
   assert.equal(permsRes.statusCode, 200);
   assert.ok(permsRes.json().data.length >= 30);
 
   await app.close();
 });
 
-test('10. User Lifecycle: List segregated users, pagination, and status update', async () => {
+test('10. User Lifecycle: Access Control requires auth token to list users and manage status', async () => {
   const app = await buildApp({ config });
 
-  // 10a. Query RATEPAYER accounts only
+  // 10a. Access without token is rejected with 401
+  const unauthUsers = await app.inject({
+    method: 'GET',
+    url: '/v1/users?limit=10'
+  });
+  assert.equal(unauthUsers.statusCode, 401);
+
+  // 10b. Login to obtain session token
+  const staffLoginRes = await app.inject({
+    method: 'POST',
+    url: '/v1/staff/login',
+    payload: { identifier: 'admin@croip.gov.gh', password: 'AdminPassword123!' }
+  });
+  const token = staffLoginRes.json().data.token;
+  const authHeaders = { authorization: `Bearer ${token}` };
+
+  // 10c. Query RATEPAYER accounts only with token
   const ratepayersRes = await app.inject({
     method: 'GET',
-    url: '/v1/users?accountType=RATEPAYER&limit=10'
+    url: '/v1/users?accountType=RATEPAYER&limit=10',
+    headers: authHeaders
   });
   assert.equal(ratepayersRes.statusCode, 200);
   const ratepayerUsers = ratepayersRes.json().data;
   assert.ok(ratepayerUsers.every((u: any) => u.accountType === 'RATEPAYER'));
 
-  // 10b. Query STAFF accounts only
+  // 10d. Query STAFF accounts only with token
   const staffRes = await app.inject({
     method: 'GET',
-    url: '/v1/users?accountType=STAFF&limit=10'
+    url: '/v1/users?accountType=STAFF&limit=10',
+    headers: authHeaders
   });
   assert.equal(staffRes.statusCode, 200);
   const staffUsers = staffRes.json().data;
   assert.ok(staffUsers.every((u: any) => u.accountType === 'STAFF'));
 
-  // 10c. Suspend a user account
+  // 10e. Suspend and Reactivate a user account with token
   const targetUser = ratepayerUsers[0];
   if (targetUser) {
     const suspendRes = await app.inject({
       method: 'PATCH',
       url: `/v1/users/${targetUser.id}/status`,
+      headers: authHeaders,
       payload: { status: 'SUSPENDED' }
     });
     assert.equal(suspendRes.statusCode, 200);
@@ -324,10 +436,37 @@ test('10. User Lifecycle: List segregated users, pagination, and status update',
     const reactivateRes = await app.inject({
       method: 'PATCH',
       url: `/v1/users/${targetUser.id}/status`,
+      headers: authHeaders,
       payload: { status: 'ACTIVE' }
     });
     assert.equal(reactivateRes.statusCode, 200);
     assert.equal(reactivateRes.json().data.status, 'ACTIVE');
+
+    // 10f. Get single user details with token
+    const singleUserRes = await app.inject({
+      method: 'GET',
+      url: `/v1/users/${targetUser.id}`,
+      headers: authHeaders
+    });
+    assert.equal(singleUserRes.statusCode, 200);
+    assert.equal(singleUserRes.json().data.id, targetUser.id);
+
+    // 10g. Assign and revoke scoped role
+    const assignRoleRes = await app.inject({
+      method: 'POST',
+      url: `/v1/users/${targetUser.id}/roles`,
+      headers: authHeaders,
+      payload: { roleCode: 'RATE_CARD_VERIFIER' }
+    });
+    assert.equal(assignRoleRes.statusCode, 201);
+    const assignData = assignRoleRes.json().data;
+
+    const revokeRoleRes = await app.inject({
+      method: 'DELETE',
+      url: `/v1/users/${targetUser.id}/roles/${assignData.roleCode}`,
+      headers: authHeaders
+    });
+    // Can lookup role id or verify role deletion
   }
 
   await app.close();
