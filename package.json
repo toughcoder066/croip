@@ -1,0 +1,21 @@
+{
+  "name": "central-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CROIP - Central Revenue Oversight & Integration Platform",
+  "author": "Level10-Ghana",
+  "license": "MIT",
+  "packageManager": "pnpm@10.6.2",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.4",
+    "prettier": "^3.5.2",
+    "typescript": "^5.8.2"
+  }
+}
