@@ -131,6 +131,61 @@ importers:
         specifier: 5.9.3
         version: 5.9.3
 
+  services/property-management-service:
+    dependencies:
+      '@croip/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
+      '@fastify/cors':
+        specifier: 11.1.0
+        version: 11.1.0
+      '@fastify/helmet':
+        specifier: 13.0.2
+        version: 13.0.2
+      '@fastify/sensible':
+        specifier: 6.0.3
+        version: 6.0.3
+      '@fastify/swagger':
+        specifier: 9.9.1
+        version: 9.9.1
+      '@fastify/swagger-ui':
+        specifier: 6.1.2
+        version: 6.1.2
+      '@prisma/client':
+        specifier: 6.19.3
+        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
+      '@prometheus-io/client':
+        specifier: 0.16.1
+        version: 0.16.1
+      amqplib:
+        specifier: 2.2.0
+        version: 2.2.0
+      fastify:
+        specifier: 5.12.5
+        version: 5.12.5
+      fastify-plugin:
+        specifier: 5.1.0
+        version: 5.1.0
+      jose:
+        specifier: 6.1.0
+        version: 6.1.0
+      zod:
+        specifier: ^3.24.2
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: 24.9.1
+        version: 24.9.1
+      prisma:
+        specifier: 6.19.3
+        version: 6.19.3(typescript@5.9.3)
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: 5.9.3
+        version: 5.9.3
+
 packages:
 
   '@cspotcode/source-map-support@0.8.1':

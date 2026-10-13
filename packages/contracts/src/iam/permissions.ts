@@ -28,6 +28,10 @@ export const Permissions = {
   READ_AUDIT: "audit:read",
   MANAGE_DISPUTES: "disputes:manage",
 
+  // Property Oversight & Administration (Admin/Staff)
+  VIEW_ALL_PROPERTIES: "properties:read",
+  MANAGE_PROPERTIES: "properties:manage",
+
   // Ratepayer / Citizen Property Claim & Self-Service
   SEARCH_PROPERTIES: "properties:search",
   CLAIM_PROPERTY: "properties:claim",

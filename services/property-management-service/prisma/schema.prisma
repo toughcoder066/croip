@@ -1,0 +1,141 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BuildingStatus {
+  COMPLETED
+  UNDER_CONSTRUCTION
+  UNCOMPLETED_SHELL
+  DILAPIDATED
+}
+
+enum UnitType {
+  WHOLE_BUILDING
+  APARTMENT
+  FLAT
+  SHOP
+  OFFICE
+  WAREHOUSE
+}
+
+enum OwnershipType {
+  OWNER
+  LANDLORD
+  CARETAKER
+  TENANT
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  DISPUTED
+}
+
+enum PhotoType {
+  FRONT_VIEW
+  SIDE_VIEW
+  ROOF_VIEW
+  INTERIOR
+}
+
+model Property {
+  id                   String         @id @default(uuid()) @db.Uuid
+  systemPropertyCode   String         @unique @db.VarChar(32) @map("system_property_code")
+  propertyName         String         @db.VarChar(255) @map("property_name")
+  polygonCoordinates  String         @db.Text @map("polygon_coordinates")
+  centroidGhanapostGps String         @db.VarChar(16) @map("centroid_ghanapost_gps")
+  streetName           String?        @db.VarChar(255) @map("street_name")
+  houseNumber          String?        @db.VarChar(64) @map("house_number")
+  numberOfFloors       Int            @default(1) @map("number_of_floors")
+  buildingStatus       BuildingStatus @map("building_status")
+  createdAt            DateTime       @default(now()) @map("created_at")
+  updatedAt            DateTime       @updatedAt @map("updated_at")
+
+  units                PropertyUnit[]
+  photos               PropertyPhoto[]
+
+  @@index([centroidGhanapostGps])
+  @@map("properties")
+}
+
+model PropertyUnit {
+  id              String         @id @default(uuid()) @db.Uuid
+  propertyId      String         @db.Uuid @map("property_id")
+  unitIdentifier  String         @db.VarChar(64) @map("unit_identifier")
+  unitType        UnitType       @default(WHOLE_BUILDING) @map("unit_type")
+  floorLevel      Int            @default(0) @map("floor_level")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  property        Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  ratepayerLinks  PropertyRatepayerLink[]
+
+  @@unique([propertyId, unitIdentifier])
+  @@index([propertyId])
+  @@map("property_units")
+}
+
+model PropertyRatepayerLink {
+  id                      String             @id @default(uuid()) @db.Uuid
+  unitId                  String             @db.Uuid @map("unit_id")
+  ratepayerId             String             @db.Uuid @map("ratepayer_id")
+  ownershipType           OwnershipType      @default(OWNER) @map("ownership_type")
+  ownershipPercentage     Decimal            @default(100.00) @db.Decimal(5, 2) @map("ownership_percentage")
+  isPrimaryBillingContact Boolean            @default(true) @map("is_primary_billing_contact")
+  verificationStatus      VerificationStatus @default(PENDING) @map("verification_status")
+  createdAt               DateTime           @default(now()) @map("created_at")
+  updatedAt               DateTime           @updatedAt @map("updated_at")
+
+  unit                    PropertyUnit       @relation(fields: [unitId], references: [id], onDelete: Cascade)
+
+  @@unique([unitId, ratepayerId])
+  @@index([ratepayerId])
+  @@index([unitId])
+  @@map("property_ratepayer_links")
+}
+
+model PropertyPhoto {
+  id          String    @id @default(uuid()) @db.Uuid
+  propertyId  String    @db.Uuid @map("property_id")
+  photoType   PhotoType @map("photo_type")
+  mediaUrl    String    @db.VarChar(1024) @map("media_url")
+  uploadedAt  DateTime  @default(now()) @map("uploaded_at")
+
+  property    Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
+  @@map("property_photos")
+}
+
+model OutboxEvent {
+  id               String    @id @default(uuid()) @db.Uuid
+  eventType        String    @map("event_type")
+  eventVersion     Int       @map("event_version")
+  aggregateType    String    @map("aggregate_type")
+  aggregateId      String    @map("aggregate_id")
+  aggregateVersion Int       @map("aggregate_version")
+  routingKey       String    @map("routing_key")
+  payload          Json
+  headers          Json
+  publishedAt      DateTime? @map("published_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_events")
+}
+
+model InboxEvent {
+  id          String   @id
+  producer    String
+  eventType   String   @map("event_type")
+  payload     Json
+  processedAt DateTime @default(now()) @map("processed_at")
+
+  @@map("inbox_events")
+}
