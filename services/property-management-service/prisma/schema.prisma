@@ -8,51 +8,86 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// Physical construction and structural condition of the building.
 enum BuildingStatus {
+  /// Fully completed structure with active occupancy.
   COMPLETED
+  /// Active construction ongoing.
   UNDER_CONSTRUCTION
+  /// Uncompleted structure / shell.
   UNCOMPLETED_SHELL
+  /// Severely deteriorated or dilapidated structure.
   DILAPIDATED
 }
 
+/// Sectional Titling Unit Type under Ghana Land Act, 2020 (Act 1043).
 enum UnitType {
+  /// Single detached building or compound.
   WHOLE_BUILDING
+  /// Residential apartment unit.
   APARTMENT
+  /// Residential flat.
   FLAT
+  /// Commercial shop or retail stall.
   SHOP
+  /// Commercial office suite.
   OFFICE
+  /// Industrial or logistics warehouse.
   WAREHOUSE
 }
 
+/// Legal relationship and occupancy title of a ratepayer to a unit.
 enum OwnershipType {
+  /// Legal title deed holder.
   OWNER
+  /// Landlord leasing units to tenants.
   LANDLORD
+  /// Designated caretaker or property manager.
   CARETAKER
+  /// Occupant or tenant.
   TENANT
 }
 
+/// Municipal inspection and verification state of an ownership link.
 enum VerificationStatus {
+  /// Awaiting municipal taskforce or document review.
   PENDING
+  /// Verified by municipal taskforce or statutory records.
   VERIFIED
+  /// Disputed due to competing claims.
   DISPUTED
 }
 
+/// Cardinal perspective classification for property photographs.
 enum PhotoType {
+  /// Front elevation facing the road/entrance.
   FRONT_VIEW
+  /// Side elevation.
   SIDE_VIEW
+  /// Aerial roof view.
   ROOF_VIEW
+  /// Interior layout view.
   INTERIOR
 }
 
+/// Mother parcel or building holding spatial boundaries and physical structure attributes.
 model Property {
   id                   String         @id @default(uuid()) @db.Uuid
+  /// Unique CROIP system identifier (e.g. CRP-2026-XXXXX).
   systemPropertyCode   String         @unique @db.VarChar(32) @map("system_property_code")
+  /// Common name or title of the property.
   propertyName         String         @db.VarChar(255) @map("property_name")
+  /// Semicolon-delimited bounding polygon coordinates (min 4 pairs).
   polygonCoordinates  String         @db.Text @map("polygon_coordinates")
+  /// Centroid GhanaPost GPS digital address.
   centroidGhanapostGps String         @db.VarChar(16) @map("centroid_ghanapost_gps")
+  /// Optional street name.
   streetName           String?        @db.VarChar(255) @map("street_name")
+  /// Optional house/plot number.
   houseNumber          String?        @db.VarChar(64) @map("house_number")
+  /// Total number of storeys/floors.
   numberOfFloors       Int            @default(1) @map("number_of_floors")
+  /// Physical construction condition.
   buildingStatus       BuildingStatus @map("building_status")
   createdAt            DateTime       @default(now()) @map("created_at")
   updatedAt            DateTime       @updatedAt @map("updated_at")
@@ -64,11 +99,15 @@ model Property {
   @@map("properties")
 }
 
+/// Individual sectional titling unit under Ghana Land Act 1043.
 model PropertyUnit {
   id              String         @id @default(uuid()) @db.Uuid
   propertyId      String         @db.Uuid @map("property_id")
+  /// Unit designation (e.g. "Flat 2B", "Shop 4", "Main Building").
   unitIdentifier  String         @db.VarChar(64) @map("unit_identifier")
+  /// Sectional unit type.
   unitType        UnitType       @default(WHOLE_BUILDING) @map("unit_type")
+  /// Floor level (0 = Ground Floor, 1 = 1st Floor).
   floorLevel      Int            @default(0) @map("floor_level")
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
@@ -81,12 +120,15 @@ model PropertyUnit {
   @@map("property_units")
 }
 
+/// M:N link associating citizen ratepayers with sectional units (supports multi-property & co-ownership).
 model PropertyRatepayerLink {
   id                      String             @id @default(uuid()) @db.Uuid
   unitId                  String             @db.Uuid @map("unit_id")
   ratepayerId             String             @db.Uuid @map("ratepayer_id")
   ownershipType           OwnershipType      @default(OWNER) @map("ownership_type")
+  /// Co-ownership percentage stake (0.01 to 100.00).
   ownershipPercentage     Decimal            @default(100.00) @db.Decimal(5, 2) @map("ownership_percentage")
+  /// Whether municipal rate bills should be routed to this contact.
   isPrimaryBillingContact Boolean            @default(true) @map("is_primary_billing_contact")
   verificationStatus      VerificationStatus @default(PENDING) @map("verification_status")
   createdAt               DateTime           @default(now()) @map("created_at")
@@ -100,6 +142,7 @@ model PropertyRatepayerLink {
   @@map("property_ratepayer_links")
 }
 
+/// Normalized media photographs attached to a property.
 model PropertyPhoto {
   id          String    @id @default(uuid()) @db.Uuid
   propertyId  String    @db.Uuid @map("property_id")
@@ -113,6 +156,7 @@ model PropertyPhoto {
   @@map("property_photos")
 }
 
+/// Transactional outbox table for reliable distributed event publishing.
 model OutboxEvent {
   id               String    @id @default(uuid()) @db.Uuid
   eventType        String    @map("event_type")
@@ -130,6 +174,7 @@ model OutboxEvent {
   @@map("outbox_events")
 }
 
+/// Deduplicated idempotent incoming domain events.
 model InboxEvent {
   id          String   @id
   producer    String

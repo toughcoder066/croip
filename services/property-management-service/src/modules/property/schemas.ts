@@ -1,7 +1,21 @@
 /**
+ * Fastify / Swagger OpenAPI Validation Schemas for Property Management.
+ *
+ * Exposes explicit JSON Schema definitions to `@fastify/swagger` and `@fastify/swagger-ui`
+ * ensuring all request parameters, query arguments, and body payloads render interactive
+ * forms with examples and type constraints in the Swagger documentation interface.
+ */
+
+/**
  * JSON Schema representations for Fastify Swagger / OpenAPI UI
  */
 
+/**
+ * JSON Schema definition for registering a new land parcel or multi-unit building.
+ *
+ * Enforces boundary coordinates polygon formatting, GhanaPost GPS centroid address,
+ * building construction status, initial sectional unit details, and optional photo URLs.
+ */
 export const RegisterPropertyBodySchema = {
   type: 'object',
   required: ['propertyName', 'polygonCoordinates', 'centroidGhanapostGps', 'buildingStatus'],
@@ -115,6 +129,12 @@ export const RegisterPropertyBodySchema = {
   }
 };
 
+/**
+ * JSON Schema definition for claiming ownership or tenancy over an existing sectional unit.
+ *
+ * Implements Ghana Land Act 1043 co-ownership by allowing ratepayers to record their
+ * ownership stake percentage (0.01% - 100.00%) and designate primary billing contacts.
+ */
 export const ClaimUnitBodySchema = {
   type: 'object',
   properties: {
@@ -142,6 +162,12 @@ export const ClaimUnitBodySchema = {
   }
 };
 
+/**
+ * JSON Schema definition for nationwide property directory pagination and query filters.
+ *
+ * Supports page size limits (up to 100), full-text search across digital addresses,
+ * property names, and street names, plus building status filtering.
+ */
 export const AdminPropertyQueryFastifySchema = {
   type: 'object',
   properties: {
@@ -173,6 +199,9 @@ export const AdminPropertyQueryFastifySchema = {
   }
 };
 
+/**
+ * JSON Schema parameter definition validating the 36-character UUID format of a target property.
+ */
 export const PropertyIdParamSchema = {
   type: 'object',
   required: ['id'],
@@ -186,6 +215,9 @@ export const PropertyIdParamSchema = {
   }
 };
 
+/**
+ * JSON Schema parameter definition validating both property UUID and sectional unit UUID.
+ */
 export const ClaimUnitParamsSchema = {
   type: 'object',
   required: ['id', 'unitId'],

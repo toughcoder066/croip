@@ -20,11 +20,31 @@ import { BadRequestError, UnauthorizedError, NotFoundError, ConflictError } from
 import { appendOutboxEvent } from '../../events/outbox.js';
 import { domainEvent } from '../../events/envelope.js';
 
+/**
+ * Identity & User Management Route Plugin.
+ *
+ * Implements the core citizen & administrative authentication lifecycle:
+ * 1. Citizen Ratepayer Self-Service (Registration, 2-Step OTP Authentication, Progressive KYC Profile Completion).
+ * 2. Internal Staff Authentication & Onboarding (CROIP Admins, MMDA Officers, Concessionaire Staff).
+ * 3. Scoped RBAC Management (Role assignments, assembly/concession zone scoping, permissions enumeration).
+ * 4. Microservice Session Introspection (`/auth/me` Bearer token resolution for downstream services).
+ */
 export const identityRoutes: FastifyPluginAsync = async (app) => {
   // =========================================================================
   // 1. RATEPAYER SECTION (Citizen Identity & Self-Service)
   // =========================================================================
 
+  /**
+   * Citizen Ratepayer Self-Registration.
+   *
+   * Creates a new citizen user account in `PENDING_VERIFICATION` status with initial Ratepayer
+   * profile metadata. Automatically emits a `ratepayer.registered.v1` domain event to the
+   * transactional outbox for downstream asynchronous greeting and Welcome SMS delivery.
+   *
+   * @public Endpoint is accessible without prior authentication.
+   * @throws {ConflictError} If phone or email is already registered to another account.
+   * @throws {BadRequestError} If password confirmation fails or contact identifiers are missing.
+   */
   app.post('/ratepayers/register', {
     config: { public: true },
     schema: {
@@ -200,6 +220,16 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  /**
+   * Ratepayer Authentication — Step 1: Credential Verification & OTP Dispatch.
+   *
+   * Validates citizen password using scrypt KDF. Upon successful password verification,
+   * generates a cryptographically secure 6-digit numeric OTP, stores its SHA-256 hash with
+   * a 5-minute time-to-live (TTL), and dispatches it via SMS to the user's primary mobile phone.
+   *
+   * @public Endpoint is accessible without prior authentication.
+   * @throws {UnauthorizedError} If user not found, account suspended, or password invalid.
+   */
   app.post('/ratepayers/login', {
     config: { public: true },
     schema: {
@@ -304,6 +334,18 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  /**
+   * Ratepayer Authentication — Step 2: OTP Verification & Session Issuance.
+   *
+   * Compares caller's submitted 6-digit OTP against the stored SHA-256 digest in constant time.
+   * Upon successful match:
+   * 1. Transitions account status from `PENDING_VERIFICATION` to `ACTIVE`.
+   * 2. Issues a 64-character cryptographically secure hex session token with a 30-day sliding TTL.
+   * 3. Calculates and returns the citizen's current profile completion score and KYC tier.
+   *
+   * @public Endpoint is accessible without prior authentication.
+   * @throws {UnauthorizedError} If OTP has expired, reached max attempts, or does not match.
+   */
   app.post('/ratepayers/verify-otp', {
     config: { public: true },
     schema: {
@@ -448,6 +490,14 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  /**
+   * Nationwide Ratepayer Directory (Administrative Oversight).
+   *
+   * Lists registered citizen ratepayers with server-side pagination, full-text search
+   * across names, phone numbers, and emails, and status filtering.
+   *
+   * @requiresPermission `ratepayer:read`
+   */
   app.get('/ratepayers', {
     preHandler: [app.authenticate],
     schema: {
@@ -496,6 +546,15 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  /**
+   * Ratepayer Self-Service Profile Update & Progressive KYC.
+   *
+   * Updates citizen contact information, Ghana Card PIN, GhanaPost GPS digital address,
+   * and GRA TIN. Automatically re-evaluates the KYC completion score (0-100%) and updates
+   * the regulatory KYC tier (e.g. elevating from `TIER_2_BASIC` to `TIER_3_VERIFIED`).
+   *
+   * @requiresAuthentication Active ratepayer session token or ZITADEL bearer JWT.
+   */
   app.patch('/ratepayers/profile', {
     preHandler: [app.authenticate],
     schema: {
@@ -563,6 +622,16 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   // 2. STAFF & GOVERNMENT OVERSIGHT SECTION
   // =========================================================================
 
+  /**
+   * Internal Staff & Municipal Officer Authentication.
+   *
+   * Single-step credential authentication for CROIP platform administrators, MMDA revenue
+   * collectors, and Concessionaire supervisors. Validates scrypt-hashed credentials and issues
+   * a 64-character administrative session token containing scoped system permissions.
+   *
+   * @public Endpoint is accessible without prior authentication.
+   * @throws {UnauthorizedError} If credentials are invalid or staff account is inactive.
+   */
   app.post('/staff/login', {
     config: { public: true },
     schema: {
@@ -663,6 +732,16 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  /**
+   * Onboard Internal Staff Member.
+   *
+   * Creates an administrative staff user, assigns a default organizational role,
+   * and binds their operational scope to a specific MMDA assembly or concessionaire zone.
+   * Emits a `user.onboarded.v1` event to the transactional outbox.
+   *
+   * @requiresPermission `user:manage`
+   * @throws {ConflictError} If staff email or phone is already registered.
+   */
   app.post('/staff/onboard', {
     preHandler: [app.authenticate],
     schema: {
@@ -784,6 +863,14 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  /**
+   * Administrative Staff Directory.
+   *
+   * Retrieves paginated list of internal CROIP administrators, MMDA officers, and
+   * concessionaire personnel, including role assignments and organizational scopes.
+   *
+   * @requiresPermission `user:manage`
+   */
   app.get('/staff', {
     preHandler: [app.authenticate],
     schema: {
@@ -844,6 +931,14 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   // 3. ACCESS CONTROL & RBAC SECTION
   // =========================================================================
 
+  /**
+   * Global User Directory Query.
+   *
+   * Administrative search across all user archetypes (Citizens, Staff, System accounts)
+   * with filtering by account type, verification status, and organizational affiliation.
+   *
+   * @requiresPermission `user:manage`
+   */
   app.get('/users', {
     preHandler: [app.authenticate],
     schema: {
@@ -910,6 +1005,15 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  /**
+   * User Lifecycle State Management.
+   *
+   * Transitions user account status between `ACTIVE`, `SUSPENDED`, and `PENDING`.
+   * Automatically invalidates all active sessions when a user is suspended and emits
+   * a `user.status_updated.v1` domain event to the outbox.
+   *
+   * @requiresPermission `user:manage`
+   */
   app.patch('/users/:id/status', {
     preHandler: [app.authenticate],
     schema: {
@@ -955,6 +1059,15 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  /**
+   * Assign RBAC Role to User.
+   *
+   * Grants a predefined system role to a user, optionally restricting the role's scope
+   * to a specific MMDA district assembly or private concessionaire geographic zone.
+   * Emits a `user.role_assigned.v1` domain event to the outbox.
+   *
+   * @requiresPermission `user:manage`
+   */
   app.post('/users/:id/roles', {
     preHandler: [app.authenticate],
     schema: {
@@ -1015,6 +1128,14 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  /**
+   * Retrieve User Entity Details.
+   *
+   * Fetches full user profile details including active role assignments, resolved
+   * system permissions, and progressive profile completion metrics.
+   *
+   * @requiresPermission `user:read` or caller is self (`callerId === params.id`).
+   */
   app.get('/users/:id', {
     preHandler: [app.authenticate],
     schema: {
@@ -1082,6 +1203,14 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  /**
+   * Revoke User Role Assignment.
+   *
+   * Removes a previously granted RBAC role assignment from a user entity and emits
+   * a `user.role_revoked.v1` domain event to the transactional outbox.
+   *
+   * @requiresPermission `user:manage`
+   */
   app.delete('/users/:id/roles/:roleId', {
     preHandler: [app.authenticate],
     schema: {
@@ -1124,6 +1253,14 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  /**
+   * System RBAC Roles Directory.
+   *
+   * Returns all available organizational roles (e.g. `CROIP_SUPER_ADMIN`, `MMDA_REVENUE_OFFICER`,
+   * `RATEPAYER_SELF_SERVICE`) and their associated granular permissions.
+   *
+   * @requiresPermission `role:read`
+   */
   app.get('/roles', {
     preHandler: [app.authenticate],
     schema: {
@@ -1150,6 +1287,13 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
+  /**
+   * System Permissions Registry.
+   *
+   * Enumerates all 24 granular permission codes and their human-readable descriptions.
+   *
+   * @requiresPermission `role:read`
+   */
   app.get('/permissions', {
     preHandler: [app.authenticate],
     schema: {
@@ -1173,6 +1317,17 @@ export const identityRoutes: FastifyPluginAsync = async (app) => {
   // 4. SESSION & PROFILE INTROSPECTION
   // =========================================================================
 
+  /**
+   * Active Session & Identity Introspection.
+   *
+   * Introspects caller credentials from the `Authorization: Bearer <token>` header.
+   * Returns caller UUID, user account type, active roles, effective permissions, and profile completion.
+   *
+   * Downstream microservices (such as `property-management-service`) call this endpoint
+   * to validate ratepayer session tokens and verify authorization.
+   *
+   * @requiresAuthentication Valid session token or ZITADEL JWT.
+   */
   app.get('/auth/me', {
     preHandler: [app.authenticate],
     schema: {

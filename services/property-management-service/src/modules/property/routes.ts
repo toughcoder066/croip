@@ -1,3 +1,17 @@
+/**
+ * Property Management & Sectional Titling Fastify Route Module.
+ *
+ * Implements:
+ * - Citizen Ratepayer Property Registration: Bounding polygon spatial coordinates (min 4 pairs),
+ *   GhanaPost GPS digital addresses, and primary sectional units under Ghana Land Act 1043.
+ * - Sectional Unit Co-Ownership Claims: Multiple ratepayers holding verified or pending percentage
+ *   stakes on the same physical unit.
+ * - Central Administrative Property Oversight: Nationwide property directory, search, pagination,
+ *   and individual inspection for CROIP staff.
+ * - Transactional Outbox Pattern: Writes `property.registered.v1` and `property.unit.claimed.v1`
+ *   domain events atomically with database mutations.
+ * - Tenant Isolation: Strictly restricts ratepayers to properties they own or have registered links to.
+ */
 import type { FastifyPluginAsync } from 'fastify';
 import crypto from 'node:crypto';
 import { z } from 'zod';

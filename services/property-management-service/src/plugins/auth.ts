@@ -1,3 +1,16 @@
+/**
+ * Property Management Service Authentication & Authorization Fastify Plugin.
+ *
+ * Implements:
+ * 1. Development Header Support: Allows passing `x-dev-subject` for isolated testing.
+ * 2. Identity Service Session Token Introspection: When an external client presents a
+ *    64-character bearer token, this plugin queries `IDENTITY_SERVICE_URL/v1/auth/me` to
+ *    resolve the user's authentic UUID and role permissions.
+ * 3. Strict UUID Integrity Guards: Ensures caller identifiers conform to UUID standard format
+ *    before queries reach Prisma, preventing PostgreSQL `P2023` length mismatch exceptions.
+ * 4. ZITADEL Enterprise JWT Validation: Validates cryptographically signed OpenID Connect tokens
+ *    via remote JSON Web Key Sets (JWKS) when `AUTH_MODE=zitadel`.
+ */
 import fp from 'fastify-plugin';
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 import type { AppConfig } from '../config.js';

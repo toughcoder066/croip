@@ -7,17 +7,25 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+/// Primary identity account categorization.
 enum AccountType {
+  /// Citizen property owner or tenant subject to municipal rates.
   RATEPAYER
+  /// Central government administrator or municipal revenue staff.
   STAFF
 }
 
+/// Operational state of a user account.
 enum AccountStatus {
+  /// Awaiting email or telephone OTP verification.
   PENDING
+  /// Fully verified and active.
   ACTIVE
+  /// Temporarily or permanently disabled.
   SUSPENDED
 }
 
+/// Core user identity record across the Central Platform.
 model User {
   id              String          @id @default(uuid()) @db.Uuid
   email           String?         @unique
@@ -36,6 +44,7 @@ model User {
   @@map("users")
 }
 
+/// Hashed authentication credentials for password-based logins.
 model UserCredential {
   id           String   @id @default(uuid()) @db.Uuid
   userId       String   @unique @db.Uuid
@@ -48,6 +57,7 @@ model UserCredential {
   @@map("user_credentials")
 }
 
+/// Stateful session tokens issued upon login or 2-step OTP verification.
 model UserSession {
   id        String    @id @default(uuid()) @db.Uuid
   userId    String    @db.Uuid
@@ -58,80 +68,92 @@ model UserSession {
 
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId, expiresAt])
+  @@index([tokenHash])
+  @@index([userId])
   @@map("user_sessions")
 }
 
+/// Short-lived One-Time Password (OTP) verification records.
 model OtpVerification {
   id         String    @id @default(uuid()) @db.Uuid
   phone      String
   otpHash    String
-  attempts   Int       @default(0)
   expiresAt  DateTime
   verifiedAt DateTime?
+  attempts   Int       @default(0)
   createdAt  DateTime  @default(now())
 
   @@index([phone, expiresAt])
   @@map("otp_verifications")
 }
 
+/// Extended citizen ratepayer profile and progressive KYC metrics.
 model RatepayerProfile {
-  id                String   @id @default(uuid()) @db.Uuid
-  userId            String   @unique @db.Uuid
-  firstName         String?
-  lastName          String?
-  fullName          String
-  preferredChannels String[] @default(["SMS"])
-  tin               String?
-  ghanaCardNumber   String?
-  digitalAddress    String?
-  kycStatus         String   @default("TIER_1_UNVERIFIED")
-  createdAt         DateTime @default(now())
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String   @unique @db.Uuid
+  firstName           String?
+  lastName            String?
+  fullName            String
+  ghanaCardNumber     String?  @unique
+  tin                 String?  @unique
+  preferredChannels   String[] @default(["SMS"])
+  profileCompletionScore Int   @default(20)
+  kycTier             String   @default("TIER_1_UNVERIFIED")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("ratepayer_profiles")
 }
 
+/// Government and municipal staff profiles.
 model StaffProfile {
   id            String   @id @default(uuid()) @db.Uuid
   userId        String   @unique @db.Uuid
   fullName      String
-  department    String?
+  department    String
   staffIdNumber String?
   createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("staff_profiles")
 }
 
+/// System role definitions.
 model Role {
   id          String   @id @default(uuid()) @db.Uuid
   code        String   @unique
   name        String
-  description String?
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   permissions RolePermission[]
-  userRoles   UserRoleAssignment[]
+  assignments UserRoleAssignment[]
 
   @@map("roles")
 }
 
+/// Atomic system permission codes.
 model Permission {
   id          String   @id @default(uuid()) @db.Uuid
   code        String   @unique
   name        String
-  description String?
+  description String
+  createdAt   DateTime @default(now())
 
   roles       RolePermission[]
 
   @@map("permissions")
 }
 
+/// M:N join table associating atomic permissions with roles.
 model RolePermission {
-  roleId       String @db.Uuid
-  permissionId String @db.Uuid
+  roleId       String     @db.Uuid
+  permissionId String     @db.Uuid
 
   role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
   permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
@@ -140,6 +162,7 @@ model RolePermission {
   @@map("role_permissions")
 }
 
+/// User role assignments with optional concessionaire and MMDA scope constraints.
 model UserRoleAssignment {
   id           String    @id @default(uuid()) @db.Uuid
   userId       String    @db.Uuid
@@ -156,6 +179,7 @@ model UserRoleAssignment {
   @@map("user_role_assignments")
 }
 
+/// Transactional outbox table ensuring reliable event distribution.
 model OutboxEvent {
   id               String    @id @default(uuid()) @db.Uuid
   eventType        String
@@ -166,22 +190,18 @@ model OutboxEvent {
   routingKey       String
   payload          Json
   headers          Json
-  occurredAt       DateTime  @default(now())
   publishedAt      DateTime?
-  attempts         Int       @default(0)
-  nextAttemptAt    DateTime  @default(now())
-  lockedAt         DateTime?
-  lastError        String?
+  createdAt        DateTime  @default(now())
 
-  @@index([publishedAt, nextAttemptAt, occurredAt])
+  @@index([publishedAt, createdAt])
   @@map("outbox_events")
 }
 
+/// Deduplicated idempotent incoming event ledger.
 model InboxMessage {
   id          String    @id @default(uuid()) @db.Uuid
   consumerId  String
-  messageId   String    @db.Uuid
-  eventType   String
+  messageId   String
   receivedAt  DateTime  @default(now())
   processedAt DateTime?
   result      Json?
@@ -190,6 +210,7 @@ model InboxMessage {
   @@map("inbox_messages")
 }
 
+/// Idempotency keys preventing duplicate financial or state-changing requests.
 model IdempotencyRecord {
   id             String    @id @default(uuid()) @db.Uuid
   concessionId   String?   @db.Uuid
@@ -205,6 +226,7 @@ model IdempotencyRecord {
   @@map("idempotency_records")
 }
 
+/// Immutable audit trail capturing operations across the platform.
 model AuditRecord {
   id           String    @id @default(uuid()) @db.Uuid
   occurredAt   DateTime  @default(now())

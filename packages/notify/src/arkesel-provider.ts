@@ -1,3 +1,7 @@
+/**
+ * Production SMS Provider connecting to the Arkesel Ghana SMS Gateway v2 API.
+ * Handles API key authentication, E.164 normalization, and OTP delivery.
+ */
 import type { SmsProvider, SmsSendOptions, SmsSendResult } from "./types.js";
 import { normalizeGhanaPhoneNumber } from "./phone-utils.js";
 

@@ -1,3 +1,7 @@
+/**
+ * In-memory Mock SMS Provider for local development and automated CI testing.
+ * Records dispatched messages in memory and outputs simulated delivery logs.
+ */
 import type { SmsProvider, SmsSendOptions, SmsSendResult } from "./types.js";
 import { normalizeGhanaPhoneNumber } from "./phone-utils.js";
 

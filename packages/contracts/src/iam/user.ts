@@ -1,3 +1,7 @@
+/**
+ * User Identity, Ratepayer Profile, and Access Management Contract Schemas.
+ * Governs registration, KYC tiers, profile completion scoring, and credential validation.
+ */
 import { z } from "zod";
 import { UserTypeSchema, AccountStatusSchema, ScopeLevelSchema } from "./roles.js";
 
@@ -63,6 +67,19 @@ export const ProfileCompletionSchema = z.object({
 });
 export type ProfileCompletion = z.infer<typeof ProfileCompletionSchema>;
 
+/**
+ * Calculates progressive profile completion metrics and KYC tier scoring for citizen ratepayers.
+ *
+ * Scored dimensions:
+ * - Basic Contact (Phone / Email): 20 points
+ * - Structured Name (First / Last Name): 20 points
+ * - National Identity (Ghana Card): 30 points
+ * - Digital Address (GhanaPost GPS): 15 points
+ * - Tax Identification Number (GRA TIN): 15 points
+ *
+ * @param profile - Ratepayer profile attributes
+ * @returns Profile completion metric object containing percentage, KYC status, and completion flag.
+ */
 export function calculateRatepayerCompletion(profile: {
   firstName?: string | null | undefined;
   lastName?: string | null | undefined;

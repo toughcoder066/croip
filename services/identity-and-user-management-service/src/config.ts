@@ -2,12 +2,19 @@ import { z } from 'zod';
 
 const booleanString = z.enum(['true', 'false']).transform((value) => value === 'true');
 
+/**
+ * Zod validation schema for Identity and User Management Service environment configuration.
+ *
+ * Enforces production security constraints:
+ * - `AUTH_MODE=disabled` is strictly rejected in production environments.
+ * - `ZITADEL_ISSUER`, `ZITADEL_AUDIENCE`, and `ZITADEL_JWKS_URI` are mandatory when `AUTH_MODE=zitadel`.
+ */
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
-  SERVICE_NAME: z.string().min(1).default('example-service'),
-  SERVICE_VERSION: z.string().min(1).default('0.0.0'),
+  SERVICE_NAME: z.string().min(1).default('identity-and-user-management-service'),
+  SERVICE_VERSION: z.string().min(1).default('0.1.0'),
   HOST: z.string().default('0.0.0.0'),
-  PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  PORT: z.coerce.number().int().min(1).max(65535).default(3020),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   DATABASE_URL: z.string().min(1),
   AUTH_MODE: z.enum(['zitadel', 'disabled']).default('zitadel'),
@@ -17,7 +24,7 @@ const schema = z.object({
   ZITADEL_ROLES_CLAIM: z.string().default('urn:zitadel:iam:org:project:roles'),
   IDARMS_CONTEXT_CLAIM: z.string().default('urn:idarms:context'),
   RABBITMQ_URL: z.string().min(1),
-  RABBITMQ_EXCHANGE: z.string().min(1).default('idarms.domain.v1'),
+  RABBITMQ_EXCHANGE: z.string().min(1).default('croip.domain.v1'),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(100).default(500),
   OUTBOX_BATCH_SIZE: z.coerce.number().int().min(1).max(500).default(50),
   CORS_ORIGINS: z.string().default(''),
@@ -35,8 +42,18 @@ const schema = z.object({
   }
 });
 
+/**
+ * Fully typed application configuration object, enriched with parsed CORS origins array.
+ */
 export type AppConfig = z.infer<typeof schema> & { corsOrigins: string[] };
 
+/**
+ * Validates and parses environment variables against {@link schema}.
+ *
+ * @param source - Environment variables map (defaults to `process.env`).
+ * @returns Fully validated {@link AppConfig} instance.
+ * @throws {z.ZodError} If required environment variables are missing or malformed.
+ */
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = schema.parse(source);
   return {

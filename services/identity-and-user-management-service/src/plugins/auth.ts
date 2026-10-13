@@ -1,3 +1,13 @@
+/**
+ * Authentication and Role-Based Access Control (RBAC) Fastify Plugin.
+ *
+ * Enforces a 3-tier authentication strategy:
+ * 1. Development Header Bypass: Allows isolated unit testing with `x-dev-subject` in test/dev modes.
+ * 2. Database Session Token Validation: Validates stateful 64-character session tokens issued upon
+ *    ratepayer 2-step OTP verification or staff password login against the PostgreSQL `user_sessions` table.
+ * 3. ZITADEL Enterprise JWT Validation: Validates cryptographically signed OpenID Connect tokens
+ *    via remote JSON Web Key Sets (JWKS).
+ */
 import fp from 'fastify-plugin';
 import crypto from 'node:crypto';
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';

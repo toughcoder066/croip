@@ -2,6 +2,14 @@ import { z } from 'zod';
 
 const booleanString = z.enum(['true', 'false']).default('false').transform((value) => value === 'true');
 
+/**
+ * Zod validation schema for Property Management Service environment configuration.
+ *
+ * Enforces production security constraints:
+ * - `AUTH_MODE=disabled` is strictly rejected in production environments.
+ * - `ZITADEL_ISSUER`, `ZITADEL_AUDIENCE`, and `ZITADEL_JWKS_URI` are mandatory when `AUTH_MODE=zitadel`.
+ * - `IDENTITY_SERVICE_URL` specifies the upstream Identity Service endpoint used for session introspection.
+ */
 const schema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   SERVICE_NAME: z.string().min(1).default('property-management-service'),
@@ -36,8 +44,18 @@ const schema = z.object({
   }
 });
 
+/**
+ * Fully typed application configuration object, enriched with parsed CORS origins array.
+ */
 export type AppConfig = z.infer<typeof schema> & { corsOrigins: string[] };
 
+/**
+ * Validates and parses environment variables against {@link schema}.
+ *
+ * @param source - Environment variables map (defaults to `process.env`).
+ * @returns Fully validated {@link AppConfig} instance.
+ * @throws {z.ZodError} If required environment variables are missing or malformed.
+ */
 export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
   const parsed = schema.parse(source);
   return {
