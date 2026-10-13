@@ -81,6 +81,9 @@ importers:
 
   services/identity-and-user-management-service:
     dependencies:
+      '@croip/contracts':
+        specifier: workspace:*
+        version: link:../../packages/contracts
       '@fastify/cors':
         specifier: 11.1.0
         version: 11.1.0

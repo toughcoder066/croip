@@ -11,6 +11,7 @@ import { metricsPlugin } from './plugins/metrics.js';
 import { prismaPlugin } from './plugins/prisma.js';
 import { healthRoutes } from './modules/health/routes.js';
 import { identityRoutes } from './modules/identity/routes.js';
+import { concessionRoutes } from './modules/concession/routes.js';
 
 interface BuildOptions { config: AppConfig; skipInfrastructure?: boolean }
 
@@ -52,6 +53,7 @@ export async function buildApp(options: BuildOptions): Promise<FastifyInstance> 
   await app.register(authPlugin, { config });
   await app.register(healthRoutes, { prefix: '/health' });
   await app.register(identityRoutes, { prefix: '/v1' });
+  await app.register(concessionRoutes, { prefix: '/v1' });
 
   app.setNotFoundHandler(async (request, reply) => reply.code(404).send({
     type: 'https://idarms.example/problems/not-found', title: 'Not Found', status: 404,

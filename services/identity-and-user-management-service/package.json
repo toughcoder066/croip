@@ -32,7 +32,8 @@
     "fastify": "5.12.5",
     "fastify-plugin": "5.1.0",
     "jose": "6.1.0",
-    "zod": "4.1.12"
+    "zod": "4.1.12",
+    "@croip/contracts": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "24.9.1",
