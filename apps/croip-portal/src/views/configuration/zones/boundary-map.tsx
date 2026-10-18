@@ -240,7 +240,7 @@ function DrawControl({ existingPolygon, onDraftChange, applyGeometry, applyToken
 
       if (!layer || !(layer instanceof L.Polygon)) return
 
-      const editing = (layer as unknown as { editing?: { enabled: () => boolean; disable: () => void; enable: () => void } }).editing
+      const editing = (layer as unknown as { editing?: { enabled: () => boolean; updateMarkers: () => void } }).editing
 
       if (!editing || !editing.enabled()) return
 
@@ -269,22 +269,25 @@ function DrawControl({ existingPolygon, onDraftChange, applyGeometry, applyToken
       if (bestIndex === -1 || !bestPoint || Math.sqrt(bestDistSq) > ADD_POINT_CLICK_TOLERANCE_PX) return
 
       const newLatLng = map.layerPointToLatLng(bestPoint)
-      const newRing = [...ring]
 
-      newRing.splice(bestIndex + 1, 0, newLatLng)
+      // Mutate the ring array IN PLACE rather than calling `layer.setLatLngs(...)` with a new
+      // array. `getLatLngs()` returns the *live* `_latlngs` reference (not a copy), and
+      // leaflet-draw's edit handler (`L.Edit.Poly`) caches that same reference once, at
+      // `editing` setup time, as `this.latlngs` — it never re-reads `layer._latlngs` after
+      // that. `setLatLngs()` replaces `_latlngs` with a brand-new array (`_convertLatLngs`),
+      // which breaks that cached reference: the polygon's own data model gets the new point,
+      // but leaflet-draw keeps building vertex markers from the old, now-orphaned array, so
+      // nothing visibly changes. Splicing the shared array directly keeps both in sync.
+      ring.splice(bestIndex + 1, 0, newLatLng)
 
-      if (isFlat) {
-        layer.setLatLngs(newRing)
-      } else {
-        const copy = [...(rawLatLngs as unknown[])]
+      // `redraw()` re-projects and re-renders the path from the now-updated `_latlngs` —
+      // needed because the splice above doesn't go through `setLatLngs()`, which is what
+      // normally triggers it.
+      layer.redraw()
 
-        copy[0] = newRing
-        layer.setLatLngs(copy as L.LatLngExpression[][])
-      }
-
-      // Rebuild leaflet-draw's vertex/midpoint handles so they reflect the inserted point.
-      editing.disable()
-      editing.enable()
+      // Rebuild leaflet-draw's vertex/midpoint handles from the (now-updated, same-reference)
+      // ring so the new point gets a draggable handle too.
+      editing.updateMarkers()
       emitDraft()
     }
 
