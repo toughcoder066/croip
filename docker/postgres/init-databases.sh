@@ -13,6 +13,7 @@ databases=(
   "ratepayer_core"
   "billing_payments"
   "disputes"
+  "zitadel"
 )
 
 for db in "${databases[@]}"; do

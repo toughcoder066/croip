@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
+import { ZITADEL_ISSUER } from '@/lib/zitadel'
+
 export type SocialProviderId = 'google' | 'microsoft' | 'github' | 'apple'
 
 export interface SocialConnectionItem {
@@ -11,198 +13,159 @@ export interface SocialConnectionItem {
   accountEmail?: string | null
   connectedAt?: string | null
   idpType: 'OIDC_FEDERATED'
+
+  /** Needed to target Zitadel's RemoveMyLinkedIDP call — not meaningful otherwise. */
+  idpId?: string
+  linkedUserId?: string
 }
 
-// In-memory fallback cache
-const userConnectionsStore: Record<
-  string,
-  Record<SocialProviderId, { isConnected: boolean; email?: string; connectedAt?: string }>
-> = {}
+const PROVIDER_LABELS: Record<SocialProviderId, { name: string; subtitle: string }> = {
+  google: { name: 'Google', subtitle: 'Government Google accounts & 1-click single sign-on' },
+  microsoft: {
+    name: 'Microsoft 365',
+    subtitle: 'Enterprise public sector directory & government Active Directory'
+  },
+  github: { name: 'GitHub', subtitle: 'Technical platform oversight & developer identity' },
+  apple: { name: 'Apple', subtitle: 'Biometric passkey & secure enclave hardware authentication' }
+}
 
-export async function GET() {
+async function getSessionAccessToken(): Promise<string | null> {
+  const cookieStore = await cookies()
+  const sessionCookie = cookieStore.get('croip_session')
+
+  if (!sessionCookie?.value) return null
+
   try {
-    const cookieStore = await cookies()
-    const sessionCookie = cookieStore.get('croip_session')
+    const session = JSON.parse(sessionCookie.value)
 
-    let userId = '0b18250a-a9fc-44c0-b26b-bf63b08ec310'
-    let userEmail = 'superuser@croip.com'
-    let savedConnections: Record<string, any> = {}
-
-    if (sessionCookie?.value) {
-      try {
-        const parsed = JSON.parse(sessionCookie.value)
-        if (parsed.id) userId = parsed.id
-        if (parsed.email) userEmail = parsed.email
-        if (parsed.socialConnections) savedConnections = parsed.socialConnections
-      } catch {
-        // fallback
-      }
-    }
-
-    if (!userConnectionsStore[userId]) {
-      userConnectionsStore[userId] = {
-        google: { isConnected: false },
-        microsoft: { isConnected: false },
-        github: { isConnected: false },
-        apple: { isConnected: false }
-      }
-    }
-
-    // Merge persistent cookie state with cache
-    if (Object.keys(savedConnections).length > 0) {
-      userConnectionsStore[userId] = {
-        ...userConnectionsStore[userId],
-        ...savedConnections
-      }
-    }
-
-    const current = userConnectionsStore[userId]
-
-    const providers: SocialConnectionItem[] = [
-      {
-        id: 'google',
-        name: 'Google',
-        subtitle: 'Government Google accounts & 1-click single sign-on',
-        isConnected: current.google?.isConnected ?? false,
-        accountEmail: current.google?.email ?? null,
-        connectedAt: current.google?.connectedAt ?? null,
-        idpType: 'OIDC_FEDERATED'
-      },
-      {
-        id: 'microsoft',
-        name: 'Microsoft 365',
-        subtitle: 'Enterprise public sector directory & government Active Directory',
-        isConnected: current.microsoft?.isConnected ?? false,
-        accountEmail: current.microsoft?.email ?? null,
-        connectedAt: current.microsoft?.connectedAt ?? null,
-        idpType: 'OIDC_FEDERATED'
-      },
-      {
-        id: 'github',
-        name: 'GitHub',
-        subtitle: 'Technical platform oversight & developer identity',
-        isConnected: current.github?.isConnected ?? false,
-        accountEmail: current.github?.email ?? null,
-        connectedAt: current.github?.connectedAt ?? null,
-        idpType: 'OIDC_FEDERATED'
-      },
-      {
-        id: 'apple',
-        name: 'Apple',
-        subtitle: 'Biometric passkey & secure enclave hardware authentication',
-        isConnected: current.apple?.isConnected ?? false,
-        accountEmail: current.apple?.email ?? null,
-        connectedAt: current.apple?.connectedAt ?? null,
-        idpType: 'OIDC_FEDERATED'
-      }
-    ]
-
-    return NextResponse.json({
-      success: true,
-      userId,
-      providers
-    })
+    return typeof session.zitadelAccessToken === 'string' ? session.zitadelAccessToken : null
   } catch {
-    return NextResponse.json({ error: 'Failed to fetch social connections' }, { status: 500 })
+    return null
   }
 }
 
-export async function POST(request: Request) {
+/**
+ * Matches a Zitadel IDP link's provider name against our four known providers. Zitadel
+ * names are whatever the admin typed when configuring the federated IDP in its console
+ * (e.g. "Google"), so this matches loosely rather than relying on an exact ID scheme.
+ */
+function matchProvider(idpName: string): SocialProviderId | null {
+  const lower = idpName.toLowerCase()
+
+  if (lower.includes('google')) return 'google'
+  if (lower.includes('microsoft') || lower.includes('azure') || lower.includes('365')) return 'microsoft'
+  if (lower.includes('github')) return 'github'
+  if (lower.includes('apple')) return 'apple'
+
+  return null
+}
+
+/**
+ * Real linked-identity status, read from Zitadel's Auth API (the current user's own
+ * linked external IDPs) rather than a fake in-memory toggle.
+ */
+export async function GET() {
+  const base: Record<SocialProviderId, SocialConnectionItem> = {
+    google: { id: 'google', ...PROVIDER_LABELS.google, isConnected: false, idpType: 'OIDC_FEDERATED' },
+    microsoft: { id: 'microsoft', ...PROVIDER_LABELS.microsoft, isConnected: false, idpType: 'OIDC_FEDERATED' },
+    github: { id: 'github', ...PROVIDER_LABELS.github, isConnected: false, idpType: 'OIDC_FEDERATED' },
+    apple: { id: 'apple', ...PROVIDER_LABELS.apple, isConnected: false, idpType: 'OIDC_FEDERATED' }
+  }
+
+  const accessToken = await getSessionAccessToken()
+
+  if (!accessToken) {
+    return NextResponse.json({ success: true, providers: Object.values(base) })
+  }
+
   try {
-    const body = await request.json()
-    const { provider, action, email } = body as {
-      provider: SocialProviderId
-      action: 'connect' | 'disconnect'
-      email?: string
+    const res = await fetch(`${ZITADEL_ISSUER}/auth/v1/users/me/idps/_search`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({})
+    })
+
+    if (!res.ok) {
+      console.warn('[croip-portal] Zitadel linked-IDP lookup failed:', res.status, await res.text())
+
+      return NextResponse.json({ success: true, providers: Object.values(base) })
     }
 
-    if (!provider || !['google', 'microsoft', 'github', 'apple'].includes(provider)) {
-      return NextResponse.json({ error: 'Invalid provider specified' }, { status: 400 })
-    }
+    const data = await res.json()
 
-    const cookieStore = await cookies()
-    const sessionCookie = cookieStore.get('croip_session')
-    let userId = '0b18250a-a9fc-44c0-b26b-bf63b08ec310'
-    let userEmail = 'superuser@croip.com'
-    let sessionUser: Record<string, any> = {
-      id: userId,
-      email: userEmail,
-      fullName: 'CROIP Super Administrator'
-    }
+    const links: Array<{
+      idpId?: string
+      idpName?: string
+      userId?: string
+      userDisplayName?: string
+      changeDate?: string
+    }> = data.result || []
 
-    if (sessionCookie?.value) {
-      try {
-        const parsed = JSON.parse(sessionCookie.value)
-        sessionUser = { ...sessionUser, ...parsed }
-        if (parsed.id) userId = parsed.id
-        if (parsed.email) userEmail = parsed.email
-      } catch {
-        // fallback
-      }
-    }
+    for (const link of links) {
+      const providerId = link.idpName ? matchProvider(link.idpName) : null
 
-    if (!userConnectionsStore[userId]) {
-      userConnectionsStore[userId] = {
-        google: { isConnected: false },
-        microsoft: { isConnected: false },
-        github: { isConnected: false },
-        apple: { isConnected: false }
-      }
-    }
+      if (!providerId) continue
 
-    // Merge cookie connections if available
-    if (sessionUser.socialConnections) {
-      userConnectionsStore[userId] = {
-        ...userConnectionsStore[userId],
-        ...sessionUser.socialConnections
-      }
-    }
-
-    if (action === 'connect') {
-      const defaultDomain =
-        provider === 'github'
-          ? 'users.noreply.github.com'
-          : provider === 'google'
-            ? 'gmail.com'
-            : provider === 'apple'
-              ? 'privaterelay.appleid.com'
-              : 'croip.gov.gh'
-
-      const assignedEmail = (email && email.trim()) || `${userEmail.split('@')[0]}@${defaultDomain}`
-
-      userConnectionsStore[userId][provider] = {
+      base[providerId] = {
+        ...base[providerId],
         isConnected: true,
-        email: assignedEmail,
-        connectedAt: new Date().toISOString()
-      }
-    } else {
-      userConnectionsStore[userId][provider] = {
-        isConnected: false,
-        email: undefined,
-        connectedAt: undefined
+        accountEmail: link.userDisplayName || null,
+        connectedAt: link.changeDate || null,
+        idpId: link.idpId,
+        linkedUserId: link.userId
       }
     }
+  } catch (err) {
+    console.warn('[croip-portal] Could not reach Zitadel for linked-IDP status:', err)
+  }
 
-    // Persist to session cookie so it stays connected across refreshes, routes, and browser restarts
-    const updatedUser = {
-      ...sessionUser,
-      socialConnections: userConnectionsStore[userId]
+  return NextResponse.json({ success: true, providers: Object.values(base) })
+}
+
+/** Disconnect only — "Connect" goes through the popup-based link flow instead. */
+export async function POST(request: Request) {
+  const body = await request.json()
+
+  const { provider, action, idpId, linkedUserId } = body as {
+    provider?: SocialProviderId
+    action?: 'disconnect'
+    idpId?: string
+    linkedUserId?: string
+  }
+
+  if (action !== 'disconnect') {
+    return NextResponse.json({ error: 'Unsupported action' }, { status: 400 })
+  }
+
+  if (!provider || !idpId || !linkedUserId) {
+    return NextResponse.json({ error: 'Missing idpId/linkedUserId for this provider' }, { status: 400 })
+  }
+
+  const accessToken = await getSessionAccessToken()
+
+  if (!accessToken) {
+    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
+  }
+
+  try {
+    const res = await fetch(`${ZITADEL_ISSUER}/auth/v1/users/me/idps/${idpId}/${linkedUserId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${accessToken}` }
+    })
+
+    if (!res.ok) {
+      console.warn('[croip-portal] Zitadel RemoveMyLinkedIDP failed:', res.status, await res.text())
+
+      return NextResponse.json({ error: 'Failed to disconnect provider' }, { status: 502 })
     }
 
-    cookieStore.set('croip_session', JSON.stringify(updatedUser), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7 // 7 days
-    })
+    return NextResponse.json({ success: true, provider })
+  } catch (err) {
+    console.error('[croip-portal] Zitadel RemoveMyLinkedIDP request failed:', err)
 
-    return NextResponse.json({
-      success: true,
-      provider,
-      status: userConnectionsStore[userId][provider]
-    })
-  } catch {
-    return NextResponse.json({ error: 'Failed to update social connection' }, { status: 500 })
+    return NextResponse.json({ error: 'Network error disconnecting provider' }, { status: 500 })
   }
 }

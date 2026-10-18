@@ -54,6 +54,40 @@ services:
       - central-platform-net
     restart: unless-stopped
 
+  # Self-hosted identity provider (real OIDC auth for the portal + federated
+  # Google/Microsoft/GitHub, once configured in its own console). LoginV2 is
+  # explicitly disabled so this stays a single container — the current upstream
+  # default splits into zitadel-api + a separate zitadel-login service behind
+  # Traefik, which this stack has no other use for.
+  zitadel:
+    image: ghcr.io/zitadel/zitadel:v4.16.0
+    container_name: central-platform-zitadel
+    restart: unless-stopped
+    user: "0"
+    command: start-from-init --masterkey "${ZITADEL_MASTERKEY:-CROIPLocalDevMasterkey32Chars!!!}"
+    environment:
+      ZITADEL_PORT: 8080
+      ZITADEL_EXTERNALDOMAIN: localhost
+      ZITADEL_EXTERNALPORT: 8080
+      ZITADEL_EXTERNALSECURE: "false"
+      ZITADEL_TLS_ENABLED: "false"
+      ZITADEL_DATABASE_POSTGRES_DSN: postgresql://idarms:idarms_dev_only@postgres:5432/zitadel?sslmode=disable
+      ZITADEL_DEFAULTINSTANCE_FEATURES_LOGINV2_REQUIRED: "false"
+      ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORDCHANGEREQUIRED: "false"
+    healthcheck:
+      test: ["CMD", "/app/zitadel", "ready"]
+      interval: 10s
+      timeout: 30s
+      retries: 12
+      start_period: 20s
+    ports:
+      - "8080:8080"
+    networks:
+      - central-platform-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 
   # -------------------------------------------------------------
   # 1. Reporting Gateway Service (Port 3001)

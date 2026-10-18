@@ -65,10 +65,14 @@ const ProfileDropdown = () => {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' })
+      const res = await fetch('/api/auth/logout', { method: 'POST' })
+      const data = await res.json()
+
       toast.success('Signed out successfully')
-      router.push('/login')
-      router.refresh()
+
+      // Full navigation (not router.push) — this also ends the Zitadel-side session,
+      // on Zitadel's own origin, before it redirects back here.
+      window.location.href = data.redirectUrl || '/login'
     } catch {
       router.push('/login')
     }

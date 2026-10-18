@@ -26,6 +26,8 @@ interface SocialProvider {
   accountEmail?: string | null
   connectedAt?: string | null
   idpType: string
+  idpId?: string
+  linkedUserId?: string
 }
 
 function ProviderLogo({ id, className = 'size-6' }: { id: string; className?: string }) {
@@ -113,6 +115,7 @@ function ConnectionsCard() {
             name: PROVIDER_METADATA[p.id]?.name || p.name,
             subtitle: PROVIDER_METADATA[p.id]?.subtitle || p.subtitle
           }))
+
           setProviders(enriched)
         }
       })
@@ -121,20 +124,13 @@ function ConnectionsCard() {
 
   useEffect(() => {
     fetchConnections()
-
-    // Listen for OAuth completion from popup window
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'OAUTH_SUCCESS') {
-        toast.success(`${event.data.providerName || 'Account'} connected successfully!`)
-        fetchConnections()
-      }
-    }
-
-    window.addEventListener('message', handleMessage)
-    return () => window.removeEventListener('message', handleMessage)
   }, [])
 
-  // Open the authentic auth screen of the service in question
+  // Opens Zitadel's own "Identity Providers" self-service page in a popup — Zitadel
+  // handles the actual OAuth dance and account linking itself, so there's no
+  // postMessage contract to listen for here (that was only ever meaningful for the old
+  // direct-to-provider flow). Instead, re-fetch real connection status once the popup
+  // closes, whenever that happens to be.
   const handleOpenAuthScreen = (provider: SocialProvider) => {
     const width = 520
     const height = 680
@@ -142,15 +138,27 @@ function ConnectionsCard() {
     const top = window.screenY + (window.outerHeight - height) / 2
 
     const popup = window.open(
-      `/api/auth/oauth/${provider.id}/login`,
-      `oauth_${provider.id}`,
+      `/api/auth/oauth/zitadel/link/${provider.id}`,
+      `zitadel_idp_${provider.id}`,
       `width=${width},height=${height},left=${left},top=${top},status=no,menubar=no,toolbar=no`
     )
 
     if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-      // Fallback if popup is blocked
-      window.location.href = `/api/auth/oauth/${provider.id}/login?returnTo=${encodeURIComponent(window.location.pathname + window.location.search)}`
+      // Same window.location.href redirect pattern as ProfileDropdown's handleLogout;
+      // the rule below misfires here only because this function also contains the
+      // setInterval closure further down.
+      // eslint-disable-next-line react-hooks/immutability
+      window.location.href = `/api/auth/oauth/zitadel/link/${provider.id}`
+
+      return
     }
+
+    const pollClosed = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(pollClosed)
+        fetchConnections()
+      }
+    }, 1000)
   }
 
   const handleConfirmDisconnect = async () => {
@@ -163,7 +171,9 @@ function ConnectionsCard() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           provider: disconnectingProvider.id,
-          action: 'disconnect'
+          action: 'disconnect',
+          idpId: disconnectingProvider.idpId,
+          linkedUserId: disconnectingProvider.linkedUserId
         })
       })
 

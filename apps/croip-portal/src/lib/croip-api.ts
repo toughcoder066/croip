@@ -101,11 +101,18 @@ export async function probeServiceHealth(baseUrl: string): Promise<{ ready: bool
 export const croipApi = {
   governance: {
     getUsers: () =>
-      fetchCroipService<Array<{ id: string; code: string; email: string; fullName: string; status: string }>>(
-        CROIP_SERVICES.PLATFORM_GOVERNANCE,
-        '/v1/users',
-        { devPermissions: ['iam:users_manage'] }
-      ),
+      fetchCroipService<
+        Array<{
+          id: string
+          code: string
+          email: string
+          fullName: string
+          status: string
+          createdAt?: string
+          phone?: string
+          roles?: Array<{ code: string; name: string }>
+        }>
+      >(CROIP_SERVICES.PLATFORM_GOVERNANCE, '/v1/users', { devPermissions: ['iam:users_manage'] }),
     createUser: (data: any) =>
       fetchCroipService<any>(CROIP_SERVICES.PLATFORM_GOVERNANCE, '/v1/users', {
         method: 'POST',
