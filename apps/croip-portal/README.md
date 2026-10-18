@@ -6,12 +6,14 @@ This is a UI shell only: every piece of data it shows comes from one of the **11
 
 ## Running It
 
+This app is part of the pnpm workspace (it has its own `pnpm-lock.yaml`) — use **pnpm, not npm**. Running `npm install` here fails with `husky: command not found`, because npm doesn't understand pnpm's hoisted `.pnpm` store layout.
+
 ```bash
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-Opens on **http://localhost:3050**. The 11 backend services must already be running — see the root README's "Running Everything" section (`docker compose up -d --build` from the repo root).
+Opens on **http://localhost:3050**. The 11 backend services must already be running — see the root README's "Running Everything" section (`docker compose up -d --build` from the repo root). If port 3050 is already taken, something is already serving the portal (check other terminals) — stop it, or run on a different port with `pnpm dev -- -p 3051`.
 
 ## Signing In
 
@@ -47,9 +49,9 @@ This checks a real `ACTIVE` user row in `platform-governance-service` — see th
 ## Scripts
 
 ```bash
-npm run dev          # Next dev server, port 3050 (Turbopack)
-npm run build         # production build
-npm run start          # serve a production build
-npm run lint            # ESLint
-npm run check-types      # tsc --noEmit
+pnpm dev           # Next dev server, port 3050 (Turbopack)
+pnpm build         # production build
+pnpm start         # serve a production build
+pnpm lint          # ESLint
+pnpm check-types   # tsc --noEmit
 ```

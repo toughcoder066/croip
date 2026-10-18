@@ -83,15 +83,17 @@ pnpm docker:infra    # start only postgres + rabbitmq
 
 ### 5.2 Start the admin portal
 
-The portal is a plain Next.js dev server — run it directly with npm, not Docker:
+The portal is part of the pnpm workspace (it has its own `pnpm-lock.yaml`) — install and run it with **pnpm, not npm**. Running `npm install` here fails (npm doesn't understand pnpm's hoisted `.pnpm` store layout and can't resolve nested dependencies' own install scripts, e.g. `husky: command not found`) and, even if it somehow completed, would create a conflicting `package-lock.json`.
 
 ```bash
 cd apps/croip-portal
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
-The portal starts on **http://localhost:3050** and proxies all data through the 11 services above (see `apps/croip-portal/src/lib/croip-api.ts`); it never talks to a database directly.
+Or from the repo root, without `cd`-ing in: `pnpm install && pnpm --filter croip-portal dev`.
+
+The portal starts on **http://localhost:3050** and proxies all data through the 11 services above (see `apps/croip-portal/src/lib/croip-api.ts`); it never talks to a database directly. If you get `EADDRINUSE: address already in use :::3050`, something is already serving the portal on that port (check for another terminal, or a `next dev` process left running) — stop it first, or use a different port with `pnpm dev -- -p 3051`.
 
 ### 5.3 Sign in
 

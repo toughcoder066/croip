@@ -14,6 +14,13 @@ import './boundary-map-overrides.css'
 // Side-effect import: attaches L.Control.Draw / L.Draw.* onto the shared Leaflet module.
 import 'leaflet-draw'
 
+// By default, clicking an existing vertex handle in Edit mode deletes that point
+// (`L.Edit.Poly.prototype._onMarkerClick`) — a one-click, no-confirmation way to lose a point
+// on a real administrative boundary, and easy to trigger by accident while aiming for a
+// nearby bit of line. Disabled platform-wide: points are only removed deliberately, via the
+// toolbar's "Delete layers" tool.
+;(L as unknown as { Edit: { Poly: { prototype: Record<string, unknown> } } }).Edit.Poly.prototype._onMarkerClick = function noop() {}
+
 // --- Fix default marker icon paths -----------------------------------------------------
 // Well-known Leaflet + webpack/Next.js bundler gotcha: Leaflet's default marker icon
 // resolves image URLs relative to its own source, which breaks once bundled. The fix is
@@ -53,6 +60,28 @@ export interface ReferenceZone {
 // they're context, not the subject — so the active boundary (drawn in blue by DrawControl)
 // is unambiguously the thing your eye goes to. Hovering a grayed-out shape still names it.
 const REFERENCE_ZONE_COLOR = '#6b7280'
+
+// Perpendicular projection of point `p` onto the segment `a`→`b`, clamped to the segment
+// (not the infinite line) — used to find where along a specific edge a click landed closest.
+function closestPointOnSegment(p: L.Point, a: L.Point, b: L.Point): { point: L.Point; distSq: number } {
+  const abx = b.x - a.x
+  const aby = b.y - a.y
+  const lengthSq = abx * abx + aby * aby
+  let t = lengthSq === 0 ? 0 : ((p.x - a.x) * abx + (p.y - a.y) * aby) / lengthSq
+
+  t = Math.max(0, Math.min(1, t))
+
+  const point = L.point(a.x + abx * t, a.y + aby * t)
+  const dx = p.x - point.x
+  const dy = p.y - point.y
+
+  return { point, distSq: dx * dx + dy * dy }
+}
+
+// How close (in screen pixels) a click needs to land to the boundary outline before it counts
+// as "clicking the line" and inserts a point there — keeps clicks deep inside the shape's
+// fill (selecting/inspecting it) from unexpectedly adding a point far from the cursor.
+const ADD_POINT_CLICK_TOLERANCE_PX = 30
 
 interface DrawControlProps {
   existingPolygon: GeoJsonGeometry | null
@@ -194,14 +223,81 @@ function DrawControl({ existingPolygon, onDraftChange, applyGeometry, applyToken
     const handleEdited = () => emitDraft()
     const handleDeleted = () => emitDraft()
 
+    // Click directly on the boundary outline (not on a vertex or midpoint handle — those are
+    // leaflet-draw's own markers, a separate layer group that receives the click instead of
+    // this one) to insert a new point at that spot, while the shape is in Edit mode. Each
+    // `L.Polygon` gets an `editing` controller attached automatically (leaflet-draw's
+    // addInitHook); `.enabled()` on it is true only while its vertex handles are currently
+    // shown, which is exactly when "click the line to add a point" should be live.
+    const handleLineClick = (e: L.LeafletMouseEvent) => {
+      // `drawnItems` is a FeatureGroup: it re-fires its children's events on itself so this
+      // listener can catch them, but Leaflet's own `fire()` always overwrites `target` to be
+      // the re-firing object (the FeatureGroup) on a propagated event — the *actual* layer
+      // that was clicked is carried separately as `e.layer` (see `_propagateEvent` in
+      // Leaflet's Evented mixin). Reading `e.target` here is the one-letter bug that made this
+      // silently no-op: it was always the FeatureGroup, never `instanceof L.Polygon`.
+      const layer = (e as L.LeafletMouseEvent & { layer?: L.Layer }).layer as L.Polygon | undefined
+
+      if (!layer || !(layer instanceof L.Polygon)) return
+
+      const editing = (layer as unknown as { editing?: { enabled: () => boolean; disable: () => void; enable: () => void } }).editing
+
+      if (!editing || !editing.enabled()) return
+
+      const rawLatLngs = layer.getLatLngs()
+      const isFlat = (L.Polyline as unknown as { _flat: (latlngs: unknown) => boolean })._flat(rawLatLngs)
+      const ring = (isFlat ? rawLatLngs : (rawLatLngs as unknown[])[0]) as L.LatLng[]
+
+      if (!Array.isArray(ring) || ring.length < 3) return
+
+      let bestIndex = -1
+      let bestDistSq = Infinity
+      let bestPoint: L.Point | null = null
+
+      for (let i = 0; i < ring.length; i++) {
+        const a = map.latLngToLayerPoint(ring[i]!)
+        const b = map.latLngToLayerPoint(ring[(i + 1) % ring.length]!)
+        const { point, distSq } = closestPointOnSegment(e.layerPoint, a, b)
+
+        if (distSq < bestDistSq) {
+          bestDistSq = distSq
+          bestIndex = i
+          bestPoint = point
+        }
+      }
+
+      if (bestIndex === -1 || !bestPoint || Math.sqrt(bestDistSq) > ADD_POINT_CLICK_TOLERANCE_PX) return
+
+      const newLatLng = map.layerPointToLatLng(bestPoint)
+      const newRing = [...ring]
+
+      newRing.splice(bestIndex + 1, 0, newLatLng)
+
+      if (isFlat) {
+        layer.setLatLngs(newRing)
+      } else {
+        const copy = [...(rawLatLngs as unknown[])]
+
+        copy[0] = newRing
+        layer.setLatLngs(copy as L.LatLngExpression[][])
+      }
+
+      // Rebuild leaflet-draw's vertex/midpoint handles so they reflect the inserted point.
+      editing.disable()
+      editing.enable()
+      emitDraft()
+    }
+
     map.on(L.Draw.Event.CREATED, handleCreated as L.LeafletEventHandlerFn)
     map.on(L.Draw.Event.EDITED, handleEdited)
     map.on(L.Draw.Event.DELETED, handleDeleted)
+    drawnItems.on('click', handleLineClick as L.LeafletEventHandlerFn)
 
     return () => {
       map.off(L.Draw.Event.CREATED, handleCreated as L.LeafletEventHandlerFn)
       map.off(L.Draw.Event.EDITED, handleEdited)
       map.off(L.Draw.Event.DELETED, handleDeleted)
+      drawnItems.off('click', handleLineClick as L.LeafletEventHandlerFn)
       map.removeControl(drawControl)
       map.removeLayer(drawnItems)
       drawnItemsRef.current = null

@@ -7,3 +7,16 @@
 .leaflet-editing-icon {
   border-radius: 50%;
 }
+
+/*
+ * Edit mode has two ways to add a point: leaflet-draw's own midpoint marker at the center of
+ * every edge (drag or click it), and our own click-anywhere-on-the-line handler in
+ * DrawControl for everywhere else on an edge. Styling midpoints as a distinct faint ring
+ * (not a smaller size — changing size would need compensating position math) makes the two
+ * marker kinds tell-apart-able at a glance: solid dot = an existing point you can drag;
+ * faint ring = click or drag outward to add a point here.
+ */
+.leaflet-editing-icon[style*='opacity: 0.6'] {
+  background: rgba(37, 99, 235, 0.25);
+  border: 1px dashed rgba(37, 99, 235, 0.7);
+}
