@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     const normalizedEmail = String(email).trim().toLowerCase()
 
     // 1. Ingest CROIP platform-governance-service (:3010) to verify user profile exists in database
-    let platformUsers: Array<{ id: string; code: string; email: string; fullName: string; status: string }> = []
+    let platformUsers: Array<{ id: string; code: string; email: string; fullName: string; status: string; createdAt?: string }> = []
     try {
       platformUsers = await croipApi.governance.getUsers()
     } catch (err: unknown) {
@@ -51,7 +51,9 @@ export async function POST(request: Request) {
         roleName: 'Super Administrator',
         department: 'Executive Oversight & Platform Governance',
         permissions: ['*'],
-        status: platformUser.status
+        status: platformUser.status,
+        createdAt: platformUser.createdAt,
+        loginAt: new Date().toISOString()
       }
 
       const cookieStore = await cookies()

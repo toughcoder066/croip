@@ -84,21 +84,31 @@ export async function GET() {
       }
     })
 
-    // 4. Genuine account lifecycle events for this user
-    const accountEvents: UserActivityItem[] = [
-      {
+    // 4. Genuine account lifecycle events for this user. Both timestamps come from the
+    // session cookie set at login time (real loginAt / the officer's real createdAt from
+    // Platform Governance) — never fabricated, so they're omitted entirely if the cookie
+    // doesn't carry them (e.g. no session yet) rather than showing a fake date.
+    const accountEvents: UserActivityItem[] = []
+    const loginAt = (user as any).loginAt as string | undefined
+    const createdAt = (user as any).createdAt as string | undefined
+
+    if (loginAt) {
+      accountEvents.push({
         id: `login-${user.id || 'curr'}`,
         description: `${user.fullName} signed in to Central Platform`,
-        timestamp: 'Just now',
+        timestamp: formatRelativeTime(loginAt),
         detail: `Session authenticated with officer credentials for code ${user.code}.`
-      },
-      {
+      })
+    }
+
+    if (createdAt) {
+      accountEvents.push({
         id: `created-${user.id || 'init'}`,
         description: 'Account provisioned in Platform Governance',
-        timestamp: formatRelativeTime((user as any).createdAt || '2026-10-16T07:06:52.360Z'),
+        timestamp: formatRelativeTime(createdAt),
         detail: `Officer ${user.code} registered with Super Administrator privileges.`
-      }
-    ]
+      })
+    }
 
     // Only combine real audit records with genuine account events, limited to the most recent 4
     const combined = [...mappedActivities, ...accountEvents]
