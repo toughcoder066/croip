@@ -1,0 +1,529 @@
+services:
+  # -------------------------------------------------------------
+  # Infrastructure
+  # -------------------------------------------------------------
+  postgres:
+    image: postgres:17-alpine
+    container_name: central-platform-postgres
+    environment:
+      POSTGRES_USER: idarms
+      POSTGRES_PASSWORD: idarms_dev_only
+      POSTGRES_DB: idarms_root
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
+      - central-platform-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U idarms -d idarms_root"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks:
+      - central-platform-net
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    container_name: central-platform-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: idarms
+      RABBITMQ_DEFAULT_PASS: idarms_dev_only
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - central-platform-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - central-platform-net
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: central-platform-mailpit
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    environment:
+      MP_SMTP_AUTH_ACCEPT_ANY: 1
+      MP_SMTP_AUTH_ALLOW_INSECURE: 1
+    networks:
+      - central-platform-net
+    restart: unless-stopped
+
+
+  # -------------------------------------------------------------
+  # 1. Reporting Gateway Service (Port 3001)
+  # -------------------------------------------------------------
+  reporting-gateway-migrate:
+    build:
+      context: ./services/reporting-gateway-service
+      target: migration
+    environment:
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/reporting_gateway?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - central-platform-net
+    restart: "no"
+
+  reporting-gateway-service:
+    build:
+      context: ./services/reporting-gateway-service
+    container_name: central-platform-reporting-gateway
+    environment:
+      PORT: 3001
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/reporting_gateway?schema=public
+      RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
+      NODE_ENV: development
+      AUTH_MODE: disabled
+      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      reporting-gateway-migrate:
+        condition: service_completed_successfully
+    networks:
+      - central-platform-net
+    restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # 2. Event Processing Service (Port 3002)
+  # -------------------------------------------------------------
+  event-processing-migrate:
+    build:
+      context: ./services/event-processing-service
+      target: migration
+    environment:
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/event_processing?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - central-platform-net
+    restart: "no"
+
+  event-processing-service:
+    build:
+      context: ./services/event-processing-service
+    container_name: central-platform-event-processing
+    environment:
+      PORT: 3002
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/event_processing?schema=public
+      RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
+      NODE_ENV: development
+      AUTH_MODE: disabled
+      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
+    ports:
+      - "3002:3002"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      event-processing-migrate:
+        condition: service_completed_successfully
+    networks:
+      - central-platform-net
+    restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # 3. Independent Evidence Service (Port 3003)
+  # -------------------------------------------------------------
+  independent-evidence-migrate:
+    build:
+      context: ./services/independent-evidence-service
+      target: migration
+    environment:
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/independent_evidence?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - central-platform-net
+    restart: "no"
+
+  independent-evidence-service:
+    build:
+      context: ./services/independent-evidence-service
+    container_name: central-platform-independent-evidence
+    environment:
+      PORT: 3003
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/independent_evidence?schema=public
+      RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
+      NODE_ENV: development
+      AUTH_MODE: disabled
+      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
+    ports:
+      - "3003:3003"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      independent-evidence-migrate:
+        condition: service_completed_successfully
+    networks:
+      - central-platform-net
+    restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # 4. Shared Services (Port 3004)
+  # -------------------------------------------------------------
+  shared-services-migrate:
+    build:
+      context: ./services/shared-services
+      target: migration
+    environment:
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/shared_services?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - central-platform-net
+    restart: "no"
+
+  shared-services:
+    build:
+      context: ./services/shared-services
+    container_name: central-platform-shared-services
+    environment:
+      PORT: 3004
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/shared_services?schema=public
+      RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
+      NODE_ENV: development
+      AUTH_MODE: disabled
+      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
+    ports:
+      - "3004:3004"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      shared-services-migrate:
+        condition: service_completed_successfully
+    networks:
+      - central-platform-net
+    restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # 5. Oversight Reconciliation Service (Port 3005)
+  # -------------------------------------------------------------
+  oversight-reconciliation-migrate:
+    build:
+      context: ./services/oversight-reconciliation-service
+      target: migration
+    environment:
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/oversight_reconciliation?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - central-platform-net
+    restart: "no"
+
+  oversight-reconciliation-service:
+    build:
+      context: ./services/oversight-reconciliation-service
+    container_name: central-platform-oversight-reconciliation
+    environment:
+      PORT: 3005
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/oversight_reconciliation?schema=public
+      RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
+      NODE_ENV: development
+      AUTH_MODE: disabled
+      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
+    ports:
+      - "3005:3005"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      oversight-reconciliation-migrate:
+        condition: service_completed_successfully
+    networks:
+      - central-platform-net
+    restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # 6. Audit Assurance Service (Port 3006)
+  # -------------------------------------------------------------
+  audit-assurance-migrate:
+    build:
+      context: ./services/audit-assurance-service
+      target: migration
+    environment:
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/audit_assurance?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - central-platform-net
+    restart: "no"
+
+  audit-assurance-service:
+    build:
+      context: ./services/audit-assurance-service
+    container_name: central-platform-audit-assurance
+    environment:
+      PORT: 3006
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/audit_assurance?schema=public
+      RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
+      NODE_ENV: development
+      AUTH_MODE: disabled
+      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
+    ports:
+      - "3006:3006"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      audit-assurance-migrate:
+        condition: service_completed_successfully
+    networks:
+      - central-platform-net
+    restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # 7. Billing & Payments Service (Port 3007)
+  # -------------------------------------------------------------
+  billing-payments-migrate:
+    build:
+      context: ./services/billing-payments-service
+      target: migration
+    environment:
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/billing_payments?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - central-platform-net
+    restart: "no"
+
+  billing-payments-service:
+    build:
+      context: ./services/billing-payments-service
+    container_name: central-platform-billing-payments
+    environment:
+      PORT: 3007
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/billing_payments?schema=public
+      RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
+      NODE_ENV: development
+      AUTH_MODE: disabled
+      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
+    ports:
+      - "3007:3007"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      billing-payments-migrate:
+        condition: service_completed_successfully
+    networks:
+      - central-platform-net
+    restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # 8. Dispute Service (Port 3008)
+  # -------------------------------------------------------------
+  dispute-migrate:
+    build:
+      context: ./services/dispute-service
+      target: migration
+    environment:
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/disputes?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - central-platform-net
+    restart: "no"
+
+  dispute-service:
+    build:
+      context: ./services/dispute-service
+    container_name: central-platform-dispute
+    environment:
+      PORT: 3008
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/disputes?schema=public
+      RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
+      NODE_ENV: development
+      AUTH_MODE: disabled
+      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
+    ports:
+      - "3008:3008"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      dispute-migrate:
+        condition: service_completed_successfully
+    networks:
+      - central-platform-net
+    restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # 9. Platform Governance Service (Port 3010)
+  # -------------------------------------------------------------
+  platform-governance-migrate:
+    build:
+      context: ./services/platform-governance-service
+      target: migration
+    environment:
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/platform_governance?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - central-platform-net
+    restart: "no"
+
+  platform-governance-service:
+    build:
+      context: ./services/platform-governance-service
+    container_name: central-platform-platform-governance
+    environment:
+      PORT: 3010
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/platform_governance?schema=public
+      RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
+      NODE_ENV: development
+      AUTH_MODE: disabled
+      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
+    ports:
+      - "3010:3010"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      platform-governance-migrate:
+        condition: service_completed_successfully
+    networks:
+      - central-platform-net
+    restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # 10. Property Registry Service (Port 3020)
+  # -------------------------------------------------------------
+  property-registry-migrate:
+    build:
+      context: ./services/property-registry-service
+      target: migration
+    environment:
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/property_registry?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - central-platform-net
+    restart: "no"
+
+  property-registry-service:
+    build:
+      context: ./services/property-registry-service
+    container_name: central-platform-property-registry
+    environment:
+      PORT: 3020
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/property_registry?schema=public
+      RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
+      NODE_ENV: development
+      AUTH_MODE: disabled
+      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
+      SHARED_SERVICES_URL: http://shared-services:3004
+    ports:
+      - "3020:3020"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      property-registry-migrate:
+        condition: service_completed_successfully
+      shared-services:
+        condition: service_started
+    networks:
+      - central-platform-net
+    restart: unless-stopped
+
+  # -------------------------------------------------------------
+  # 11. Ratepayer Service (Port 3030)
+  # -------------------------------------------------------------
+  ratepayer-migrate:
+    build:
+      context: ./services/ratepayer-service
+      target: migration
+    environment:
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/ratepayer_core?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - central-platform-net
+    restart: "no"
+
+  ratepayer-service:
+    build:
+      context: ./services/ratepayer-service
+    container_name: central-platform-ratepayer-service
+    environment:
+      PORT: 3030
+      HOST: "0.0.0.0"
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/ratepayer_core?schema=public
+      RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
+      NODE_ENV: development
+      AUTH_MODE: disabled
+      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
+    ports:
+      - "3030:3030"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      ratepayer-migrate:
+        condition: service_completed_successfully
+    networks:
+      - central-platform-net
+    restart: unless-stopped
+
+networks:
+  central-platform-net:
+    driver: bridge
+
+volumes:
+  central-platform-postgres-data:
+  central-platform-rabbitmq-data:

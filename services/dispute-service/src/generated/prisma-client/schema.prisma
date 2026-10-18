@@ -1,0 +1,130 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Dispute {
+  id                    String    @id @default(uuid()) @db.Uuid
+  code                  String    @unique @db.VarChar(50)
+  disputeType           String    @map("dispute_type") @db.VarChar(20)
+  propertyId            String?   @map("property_id") @db.Uuid
+  billId                String?   @map("bill_id") @db.Uuid
+  raisedByRatepayerId   String    @map("raised_by_ratepayer_id") @db.Uuid
+  status                String    @default("OPEN") @db.VarChar(20)
+  assignedToPersonnelId String?   @map("assigned_to_personnel_id") @db.Uuid
+  slaDueAt              DateTime? @map("sla_due_at") @db.Timestamptz
+  resolution            String?   @db.Text
+  resolvedAt            DateTime? @map("resolved_at") @db.Timestamptz
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  evidence DisputeEvidence[]
+  comments DisputeComment[]
+
+  @@index([propertyId])
+  @@index([billId])
+  @@index([raisedByRatepayerId])
+  @@index([status, slaDueAt])
+  @@map("disputes")
+}
+
+model DisputeEvidence {
+  id                  String   @id @default(uuid()) @db.Uuid
+  disputeId           String   @map("dispute_id") @db.Uuid
+  mediaUrl            String   @map("media_url") @db.VarChar(500)
+  uploadedByActorType String   @map("uploaded_by_actor_type") @db.VarChar(30)
+  uploadedByActorId   String   @map("uploaded_by_actor_id") @db.VarChar(100)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  dispute Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+
+  @@index([disputeId])
+  @@map("dispute_evidence")
+}
+
+model DisputeComment {
+  id        String   @id @default(uuid()) @db.Uuid
+  disputeId String   @map("dispute_id") @db.Uuid
+  actorType String   @map("actor_type") @db.VarChar(30)
+  actorId   String   @map("actor_id") @db.VarChar(100)
+  body      String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  dispute Dispute @relation(fields: [disputeId], references: [id], onDelete: Cascade)
+
+  @@index([disputeId])
+  @@map("dispute_comments")
+}
+
+model OutboxEvent {
+  id               String    @id @default(uuid()) @db.Uuid
+  eventType        String
+  eventVersion     Int       @default(1)
+  aggregateType    String
+  aggregateId      String
+  aggregateVersion Int
+  routingKey       String
+  payload          Json
+  headers          Json
+  occurredAt       DateTime  @default(now())
+  publishedAt      DateTime?
+  attempts         Int       @default(0)
+  nextAttemptAt    DateTime  @default(now())
+  lockedAt         DateTime?
+  lastError        String?
+
+  @@index([publishedAt, nextAttemptAt, occurredAt])
+  @@map("outbox_events")
+}
+
+model InboxMessage {
+  id          String    @id @default(uuid()) @db.Uuid
+  consumerId  String
+  messageId   String    @db.Uuid
+  eventType   String
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  result      Json?
+
+  @@unique([consumerId, messageId])
+  @@map("inbox_messages")
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  concessionId   String   @db.Uuid
+  idempotencyKey String
+  requestHash    String
+  responseStatus Int?
+  responseBody   Json?
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+
+  @@unique([concessionId, idempotencyKey])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+model AuditRecord {
+  id           String   @id @default(uuid()) @db.Uuid
+  occurredAt   DateTime @default(now())
+  actorId      String
+  actorType    String
+  concessionId String?  @db.Uuid
+  assemblyId   String?  @db.Uuid
+  action       String
+  resourceType String
+  resourceId   String?
+  requestId    String
+  sourceIp     String?
+  outcome      String
+  metadata     Json
+
+  @@index([concessionId, assemblyId, occurredAt])
+  @@index([resourceType, resourceId])
+  @@map("audit_records")
+}

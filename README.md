@@ -1,114 +1,171 @@
 # CROIP — Central Revenue Oversight & Integration Platform
-> **Repository:** `Level10-Ghana/Central-Platform`  
-> **Status:** Active Core Platform Development (Phase 0)  
-> **Architecture:** Modular Monorepo (pnpm Workspaces + Turborepo)
 
----
+> **Repository:** `Level10-Ghana/Central-Platform`
+> **Architecture:** 11 independent Fastify microservices + a Next.js admin portal, orchestrated with Docker Compose and pnpm/Turborepo
 
 ## 1. Overview
-**CROIP** (Central Revenue Oversight & Integration Platform) is the national platform established to provide centralized oversight, rate card governance, financial reconciliation, and unified ratepayer payment orchestration across all municipal concessions in Ghana.
 
-### Core Operating Principles
-* **Open Standard Integration:** Concessionaires retain their local operational software (e.g., valuation, customer operations, iDARMS) and connect via published OpenAPI standards.
-* **Rate Card Governance:** Concessionaires compute local property rates, but CROIP independently verifies municipal rate cards and validates bills before they become payable.
-* **Central Payment Orchestration:** Ratepayers pay through CROIP's unified channels (MoMo, cards, bank) via a pluggable gateway. Funds never sit in concessionaire or municipal accounts.
-* **Automated Disbursement:** CROIP applies national revenue split rules and orchestrates daily settlement instructions with the partner banking institution.
-* **Unified Citizen Experience:** A single national Ratepayer application (Flutter: iOS, Android & Web) + USSD channel allowing citizens to manage properties across multiple District Assemblies with one account.
+**CROIP** (Central Revenue Oversight & Integration Platform) is Ghana's national platform for centralized oversight of municipal (MMDA) property-rate revenue. Concessionaires (private revenue-collection partners) register properties, issue bills, and receive payments against boundaries that CROIP itself defines and verifies; the platform independently reconciles what concessionaires report against independent payment evidence, and gives government oversight staff one place to audit the whole chain.
 
----
+Each business capability — identity, properties, billing, disputes, reconciliation, audit — is owned by its **own microservice with its own Postgres database**, so services can be deployed, scaled, and changed independently. Services talk to each other only through published HTTP APIs and a RabbitMQ transactional outbox/inbox for domain events; nothing reaches into another service's database directly.
 
-## 2. Monorepo Architecture
-
-The repository is organized into isolated, independently deployable **apps** and shared internal **packages**:
+## 2. Repository Layout
 
 ```
 Central-Platform/
 ├── apps/
-│   ├── api/              # Core API Gateway (Hono/OpenAPI 3.1, OAuth2 client ingress)
-│   ├── admin/            # Government Oversight & Admin Portal (Next.js 15, shadcn/ui)
-│   ├── worker/           # Background Processing Worker (pg-boss: webhooks, disbursements, SMS)
-│   └── ratepayer_app/    # Unified Citizen Mobile & Web App (Flutter)
-│
+│   └── croip-portal/        # Next.js 16 admin portal (government oversight UI)
+├── services/                 # 11 independent Fastify + Prisma microservices (see table below)
 ├── packages/
-│   ├── contracts/        # Canonical Zod schemas, OpenAPI contract, and shared domain events
-│   ├── db/               # PostgreSQL client (Kysely/Prisma), query helpers, and typed models
-│   ├── ui/               # Shared shadcn/Tailwind design tokens and primitives
-│   └── tsconfig/         # Unified, strict TypeScript configurations across the workspace
-│
-├── database/
-│   └── migrations/       # Versioned PostgreSQL SQL migrations (Source of truth)
-│
-├── docs/                 # Architecture Decision Records (ADRs) and integration specifications
-└── .github/              # Issue templates, PR templates, and CI/CD pipelines
+│   ├── contracts/            # Shared Zod schemas / IAM role & permission constants
+│   └── tsconfig/             # Shared strict TypeScript base configs
+├── docker-compose.yml         # Postgres, RabbitMQ, and all 11 services + their migration jobs
+├── docs/                     # Architecture docs, API reference, data dictionary
+├── AGENTS.md                 # API-ingestion rule: all apps must consume only the 11 services below
+└── package.json              # Root Turborepo scripts (build/dev/lint/typecheck, docker:*)
 ```
 
----
+## 3. The 11 Microservices
 
-## 3. Team Collaboration & Git Workflow
+| # | Service | Port | Database | Owns |
+|---|---------|------|----------|------|
+| 1 | `reporting-gateway-service` | `3001` | `reporting_gateway` | Generic CloudEvents ingestion from external/concessionaire systems |
+| 2 | `event-processing-service` | `3002` | `event_processing` | Event quarantine, replay, and operational projections |
+| 3 | `independent-evidence-service` | `3003` | `independent_evidence` | Independent PSP/MoMo/bank feed ingestion and control totals (used to cross-check concessionaire-reported payments) |
+| 4 | `shared-services` | `3004` | `shared_services` | Reference data, **GIS regions & MMDA boundaries** (real COD-AB dataset), notifications, receipt verification |
+| 5 | `oversight-reconciliation-service` | `3005` | `oversight_reconciliation` | 3-way reconciliation runs, variance exceptions, national KPIs |
+| 6 | `audit-assurance-service` | `3006` | `audit_assurance` | Tamper-evident audit log, archive manifests, auditor trace |
+| 7 | `billing-payments-service` | `3007` | `billing_payments` | Property bills, payments (full/partial, pay-for-another), payment links |
+| 8 | `dispute-service` | `3008` | `disputes` | Billing/boundary/valuation disputes, evidence, review workflow |
+| 9 | `platform-governance-service` | `3010` | `platform_governance` | Users, RBAC, concessionaire onboarding, MMDA concession assignment, API credentials |
+| 10 | `property-registry-service` | `3020` | `property_registry` | Property cadastre, parcel boundaries, field verification, valuation rolls |
+| 11 | `ratepayer-service` | `3030` | `ratepayer_core` | Ratepayer profiles, KYC, property claims |
 
-With two developers collaborating on the codebase, we adhere to a structured, professional Git workflow to prevent merge conflicts and maintain high code quality.
+Every service exposes `/health/live`, `/health/ready`, `/metrics`, and interactive OpenAPI docs at `/docs` (e.g. `http://localhost:3007/docs`).
 
-### 3.1 Branching Strategy
-* **`main`** is protected. Direct commits to `main` are prohibited.
-* All development occurs on short-lived branches cut from `main`.
-* Branch naming conventions:
-  * `feat/<issue-number>-<short-description>`: New features (e.g., `feat/12-user-auth-endpoints`)
-  * `fix/<issue-number>-<short-description>`: Bug fixes (e.g., `fix/19-rate-card-rounding`)
-  * `refactor/<issue-number>-<short-description>`: Code restructuring without behavior changes
-  * `docs/<issue-number>-<short-description>`: Documentation and ADR updates
+## 4. Prerequisites
 
-### 3.2 Issue-Driven Development
-* Every piece of work must have an associated **GitHub Issue** with the appropriate labels (`area:*`, `type:*`, `priority:*`).
-* Pull requests must reference their issue in the description using GitHub keywords (e.g., `Closes #12`).
+- **Node.js** 24+
+- **pnpm** 9+ (`npm install -g pnpm`)
+- **Docker Desktop** (for Postgres, RabbitMQ, and the 11 services)
 
-### 3.3 Pull Request & Code Review Rules
-1. **Branch up-to-date:** Rebase on the latest `main` prior to requesting review.
-2. **Typecheck & Tests:** Verify `pnpm typecheck` and local unit tests pass.
-3. **Peer Review:** Every PR requires **at least 1 review and approval** from the pair developer before merging.
-4. **Merge Strategy:** Use **Squash and Merge** with Conventional Commit messages (`feat(api): add OAuth2 client authentication`).
+## 5. Running Everything
 
----
+### 5.1 Start the backend (all 11 services + Postgres + RabbitMQ)
 
-## 4. Getting Started
-
-### Prerequisites
-* **Node.js**: v22+ LTS (Recommended: v24)
-* **pnpm**: v10+ (`npm install -g pnpm`)
-* **PostgreSQL**: PostgreSQL 15+ (Local instance or Supabase CLI)
-* **Flutter SDK**: v3.24+ (for `apps/ratepayer_app`)
-* **Docker Desktop**: For running local database, Redis/RabbitMQ, and mail-catcher
-
-### Local Setup
 ```bash
-# 1. Clone the repository
-git clone https://github.com/Level10-Ghana/Central-Platform.git
 cd Central-Platform
-
-# 2. Install workspace dependencies
-pnpm install
-
-# 3. Verify TypeScript build across all packages
-pnpm typecheck
-
-# 4. Apply Database Migrations (to local Postgres)
-# Example using psql or Supabase:
-# psql -h localhost -U postgres -d croip -f database/migrations/20261012000001_croip_iam_init.sql
+docker compose up -d --build
 ```
 
-### Available Workspace Scripts
-* `pnpm dev`: Start all apps concurrently in watch mode.
-* `pnpm build`: Run cached production builds for all applications.
-* `pnpm lint`: Run ESLint across all apps and packages.
-* `pnpm typecheck`: Run `tsc --noEmit` across all workspace projects.
-* `pnpm --filter <app-name> <script>`: Run a command inside a specific app (e.g. `pnpm --filter api dev`).
+This builds and starts Postgres, RabbitMQ, each service's one-shot database-migration job, and then each service itself. First run takes a few minutes; subsequent runs are much faster. Check status with:
 
----
+```bash
+docker compose ps
+docker compose logs -f <service-name>   # e.g. docker compose logs -f billing-payments-service
+```
 
-## 5. Security & Data Protection
-* **Regulatory Compliance:** Built in accordance with Ghana Data Protection Act, 2012 (Act 843).
-* **Immutability:** Audit trails and financial transaction ledgers are append-only. Triggers block any update/delete operations.
-* **Separation of Duties:** Maker-checker signoffs enforced for policy updates, rate-card verifications, and disbursement transfers.
-* **Secrets Management:** Credentials and integration API keys are never stored in git. Secrets are managed through encrypted vaults.
+To rebuild a single service after changing its code (`docker compose up -d` alone does **not** pick up source changes):
+
+```bash
+docker compose up -d --build <service-name>
+```
+
+The same shortcuts are available via the root `package.json`:
+
+```bash
+pnpm docker:up       # docker compose up --build -d
+pnpm docker:down     # docker compose down
+pnpm docker:logs     # docker compose logs -f
+pnpm docker:ps       # docker compose ps
+pnpm docker:infra    # start only postgres + rabbitmq
+```
+
+### 5.2 Start the admin portal
+
+The portal is a plain Next.js dev server — run it directly with npm, not Docker:
+
+```bash
+cd apps/croip-portal
+npm install
+npm run dev
+```
+
+The portal starts on **http://localhost:3050** and proxies all data through the 11 services above (see `apps/croip-portal/src/lib/croip-api.ts`); it never talks to a database directly.
+
+### 5.3 Sign in
+
+| Field | Value |
+|---|---|
+| URL | `http://localhost:3050/login` |
+| Email | `superuser@croip.com` |
+| Password | `Password@1` |
+| Role | `SUPER_ADMIN` (full access) |
+
+This account is a row in `platform-governance-service`'s `users` table, not a hardcoded bypass — if you reset that service's database, recreate it:
+
+```bash
+curl -X POST http://localhost:3010/v1/users \
+  -H "Content-Type: application/json" \
+  -H "x-dev-subject: local-developer" -H "x-dev-permissions: iam:users_manage" \
+  -d '{"code":"SUPERUSER-001","email":"superuser@croip.com","fullName":"CROIP Super Administrator","roleCode":"SUPER_ADMIN"}'
+
+# then activate it (new users start PENDING_ACTIVATION):
+curl -X PATCH http://localhost:3010/v1/users/<id-from-the-response-above> \
+  -H "Content-Type: application/json" \
+  -H "x-dev-subject: local-developer" -H "x-dev-permissions: iam:users_manage" \
+  -d '{"status":"ACTIVE"}'
+```
+
+## 6. Authentication in Local Development
+
+Every service runs with `AUTH_MODE=disabled` in `docker-compose.yml`. In this mode, instead of verifying a Zitadel JWT, each service trusts plain `x-dev-subject` / `x-dev-permissions` / `x-dev-concession-id` / `x-dev-assembly-id` headers — so you can curl any endpoint directly without a token, e.g.:
+
+```bash
+curl http://localhost:3020/v1/properties \
+  -H "x-dev-subject: local-developer" \
+  -H "x-dev-permissions: properties:read"
+```
+
+The portal sends these headers on every request automatically (see `fetchCroipService` in `apps/croip-portal/src/lib/croip-api.ts`), stamped with a real seeded concession and MMDA — not a placeholder UUID — so every record created through the portal is attributable to an actual `Concession` and `MunicipalAssembly` row. `AUTH_MODE=disabled` is refused outright in `NODE_ENV=production`.
+
+## 7. GIS Boundary Data
+
+`shared-services` ships with Ghana's real administrative boundaries — 16 regions and 260 MMDAs (districts/municipalities/metros) — imported from the UN OCHA / Ghana Statistical Service **COD-AB** dataset (CC BY-IGO, [data.humdata.org/dataset/cod-ab-gha](https://data.humdata.org/dataset/cod-ab-gha)). Boundaries can be viewed and redrawn in the portal under **Administration → Zones & Boundaries**. Property registration validates a property's footprint against these boundaries and rejects it if it falls outside every drawn MMDA or straddles more than one.
+
+## 8. Development Scripts (Turborepo)
+
+Run from the repo root:
+
+```bash
+pnpm dev         # turbo run dev — all workspace apps/services in watch mode (prefer docker compose for services)
+pnpm build       # turbo run build
+pnpm lint        # turbo run lint
+pnpm typecheck   # turbo run typecheck
+pnpm --filter <workspace-name> <script>   # run a script in one workspace
+```
+
+Per-service commands (run inside a `services/<name>` directory, or via Docker as above):
+
+```bash
+cp .env.example .env
+npm install
+npm run prisma:generate
+npm run prisma:deploy    # applies migrations to DATABASE_URL
+npm test
+npm run dev
+```
+
+## 9. API Ingestion Rule
+
+All frontend apps and portals in this repository must consume **only** the 11 published microservice APIs above — no mock data, no third-party placeholder APIs, no direct database access. See `AGENTS.md` for the full rule and the current endpoint inventory.
+
+## 10. Security & Compliance
+
+- Audit trails (`audit-assurance-service`) are append-only and cryptographically hash-chained.
+- Maker-checker separation of duties on reconciliation exception resolution and oversight approvals.
+- Built in accordance with Ghana's Data Protection Act, 2012 (Act 843).
+- Secrets and real credentials are never committed — `.env.example` files show required variables only.
 
 ---
 *Maintained by Level 10 Ghana Engineering Team.*

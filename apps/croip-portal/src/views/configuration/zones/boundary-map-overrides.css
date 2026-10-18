@@ -1,0 +1,9 @@
+/*
+ * leaflet-draw's vertex handles (while actively drawing a new polygon, and while dragging
+ * points of an existing one in Edit mode) render via Leaflet core's plain `.leaflet-div-icon`
+ * base style (a 1px-bordered white square, no border-radius) with leaflet-draw's own
+ * `.leaflet-editing-icon` class layered on top for sizing. Round them into dots instead.
+ */
+.leaflet-editing-icon {
+  border-radius: 50%;
+}

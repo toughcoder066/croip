@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Region {
+  id              String   @id @default(uuid()) @db.Uuid
+  code            String   @unique @db.VarChar(20)
+  name            String   @db.VarChar(100)
+  polygonGeoJson  Json?    @map("polygon_geojson")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  assemblies MunicipalAssembly[]
+
+  @@map("regions")
+}
+
+model MunicipalAssembly {
+  id              String   @id @default(uuid()) @db.Uuid
+  regionId        String   @map("region_id") @db.Uuid
+  code            String   @unique @db.VarChar(50)
+  name            String   @db.VarChar(150)
+  category        String   @default("DISTRICT") @map("category") @db.VarChar(20)
+  polygonGeoJson  Json?    @map("polygon_geojson")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  region Region @relation(fields: [regionId], references: [id], onDelete: Restrict)
+
+  @@index([regionId])
+  @@map("municipal_assemblies")
+}
+
+model ConcessionScope {
+  id               String    @id @default(uuid()) @db.Uuid
+  concessionaireId String
+  authorityCode    String
+  jurisdictionCode String
+  revenueCode      String
+  effectiveFrom    DateTime
+  effectiveTo      DateTime?
+  status           String    @default("ACTIVE")
+  createdAt        DateTime  @default(now())
+
+  @@index([concessionaireId, status])
+  @@index([authorityCode, revenueCode])
+  @@map("concession_scopes")
+}
+
+model ReferenceDataItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  category  String
+  code      String
+  name      String
+  version   Int      @default(1)
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@unique([category, code, version])
+  @@map("reference_data_items")
+}
+
+model NotificationMessage {
+  id               String   @id @default(uuid()) @db.Uuid
+  concessionId     String   @db.Uuid
+  assemblyId       String   @db.Uuid
+  recipientRef     String
+  channel          String
+  templateVersion  String
+  status           String   @default("REQUESTED")
+  deliveryProvider String?
+  idempotencyKey   String
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([concessionId, idempotencyKey])
+  @@index([recipientRef, status])
+  @@map("notification_messages")
+}
+
+model ReceiptVerification {
+  id               String   @id @default(uuid()) @db.Uuid
+  receiptNumber    String   @unique
+  concessionId     String   @db.Uuid
+  assemblyId       String   @db.Uuid
+  billNumber       String
+  amountPaidMinor  BigInt
+  currency         String   @default("GHS")
+  paidAt           DateTime
+  verificationHash String
+  status           String   @default("VALID")
+  createdAt        DateTime @default(now())
+
+  @@index([concessionId, assemblyId])
+  @@map("receipt_verifications")
+}
+
+
+model OutboxEvent {
+  id                String    @id @default(uuid()) @db.Uuid
+  eventType         String
+  eventVersion      Int       @default(1)
+  aggregateType     String
+  aggregateId       String
+  aggregateVersion  Int
+  routingKey        String
+  payload           Json
+  headers           Json
+  occurredAt        DateTime  @default(now())
+  publishedAt       DateTime?
+  attempts          Int       @default(0)
+  nextAttemptAt     DateTime  @default(now())
+  lockedAt          DateTime?
+  lastError         String?
+
+  @@index([publishedAt, nextAttemptAt, occurredAt])
+  @@map("outbox_events")
+}
+
+model InboxMessage {
+  id          String    @id @default(uuid()) @db.Uuid
+  consumerId  String
+  messageId   String    @db.Uuid
+  eventType   String
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  result      Json?
+
+  @@unique([consumerId, messageId])
+  @@map("inbox_messages")
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  concessionId   String   @db.Uuid
+  idempotencyKey String
+  requestHash    String
+  responseStatus Int?
+  responseBody   Json?
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+
+  @@unique([concessionId, idempotencyKey])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+model AuditRecord {
+  id           String   @id @default(uuid()) @db.Uuid
+  occurredAt   DateTime @default(now())
+  actorId      String
+  actorType    String
+  concessionId String?  @db.Uuid
+  assemblyId   String?  @db.Uuid
+  action       String
+  resourceType String
+  resourceId   String?
+  requestId    String
+  sourceIp     String?
+  outcome      String
+  metadata     Json
+
+  @@index([concessionId, assemblyId, occurredAt])
+  @@index([resourceType, resourceId])
+  @@map("audit_records")
+}
+

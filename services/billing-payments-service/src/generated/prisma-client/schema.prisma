@@ -1,0 +1,149 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model PropertyBill {
+  id                  String   @id @default(uuid()) @db.Uuid
+  billNumber          String   @unique @map("bill_number") @db.VarChar(50)
+  propertyId          String   @map("property_id") @db.Uuid
+  ratepayerId         String   @map("ratepayer_id") @db.Uuid
+  concessionId        String   @map("concession_id") @db.Uuid
+  // Not @db.Uuid: this is the authenticated caller's subject claim, which in local dev
+  // (AUTH_MODE=disabled) defaults to the literal string "local-developer", not a UUID.
+  issuedByPersonnelId String?  @map("issued_by_personnel_id") @db.VarChar(150)
+  supersedesBillId    String?  @map("supersedes_bill_id") @db.Uuid
+  billingPeriod       String   @map("billing_period") @db.VarChar(20)
+  billType            String   @default("ASSESSED") @map("bill_type") @db.VarChar(20)
+  currency            String   @default("GHS") @db.Char(3)
+  amountDue           Decimal  @map("amount_due") @db.Decimal(14, 2)
+  amountPaid          Decimal  @default(0.00) @map("amount_paid") @db.Decimal(14, 2)
+  paymentStatus       String   @default("UNPAID") @map("payment_status") @db.VarChar(20)
+  issuedAt            DateTime @default(now()) @map("issued_at") @db.Timestamptz
+  dueDate             DateTime @map("due_date") @db.Date
+  externalBillRef     String   @map("external_bill_ref") @db.VarChar(100)
+
+  supersededBy    PropertyBill?  @relation("BillSupersedes", fields: [supersedesBillId], references: [id], onDelete: SetNull)
+  supersededBills PropertyBill[] @relation("BillSupersedes")
+  paymentLinks    PaymentLink[]
+  payments        BillPayment[]
+
+  @@unique([concessionId, externalBillRef])
+  @@index([propertyId, billingPeriod])
+  @@index([ratepayerId])
+  @@index([paymentStatus])
+  @@map("property_bills")
+}
+
+model PaymentLink {
+  id             String   @id @default(uuid()) @db.Uuid
+  billId         String   @map("bill_id") @db.Uuid
+  amountFixed    Decimal  @map("amount_fixed") @db.Decimal(14, 2)
+  status         String   @default("ACTIVE") @db.VarChar(20)
+  expiresAt      DateTime @map("expires_at") @db.Timestamptz
+  gatewayLinkRef String   @unique @map("gateway_link_ref") @db.VarChar(100)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  bill     PropertyBill  @relation(fields: [billId], references: [id], onDelete: Restrict)
+  payments BillPayment[]
+
+  @@index([billId])
+  @@index([status, expiresAt])
+  @@map("payment_links")
+}
+
+model BillPayment {
+  id                 String   @id @default(uuid()) @db.Uuid
+  billId             String   @map("bill_id") @db.Uuid
+  paymentLinkId      String?  @map("payment_link_id") @db.Uuid
+  paidByRatepayerId  String?  @map("paid_by_ratepayer_id") @db.Uuid
+  clientEventId      String   @unique @map("client_event_id") @db.Uuid
+  externalPaymentRef String   @map("external_payment_ref") @db.VarChar(100)
+  paymentType        String   @default("PAYMENT") @map("payment_type") @db.VarChar(20)
+  amount             Decimal  @db.Decimal(14, 2)
+  balanceAtPayment   Decimal  @map("balance_at_payment") @db.Decimal(14, 2)
+  status             String   @default("CONFIRMED") @db.VarChar(20)
+  paidAt             DateTime @map("paid_at") @db.Timestamptz
+  receivedAt         DateTime @default(now()) @map("received_at") @db.Timestamptz
+
+  bill        PropertyBill @relation(fields: [billId], references: [id], onDelete: Restrict)
+  paymentLink PaymentLink? @relation(fields: [paymentLinkId], references: [id], onDelete: SetNull)
+
+  @@index([billId])
+  @@index([paidAt])
+  @@map("bill_payments")
+}
+
+model OutboxEvent {
+  id               String    @id @default(uuid()) @db.Uuid
+  eventType        String
+  eventVersion     Int       @default(1)
+  aggregateType    String
+  aggregateId      String
+  aggregateVersion Int
+  routingKey       String
+  payload          Json
+  headers          Json
+  occurredAt       DateTime  @default(now())
+  publishedAt      DateTime?
+  attempts         Int       @default(0)
+  nextAttemptAt    DateTime  @default(now())
+  lockedAt         DateTime?
+  lastError        String?
+
+  @@index([publishedAt, nextAttemptAt, occurredAt])
+  @@map("outbox_events")
+}
+
+model InboxMessage {
+  id          String    @id @default(uuid()) @db.Uuid
+  consumerId  String
+  messageId   String    @db.Uuid
+  eventType   String
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  result      Json?
+
+  @@unique([consumerId, messageId])
+  @@map("inbox_messages")
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  concessionId   String   @db.Uuid
+  idempotencyKey String
+  requestHash    String
+  responseStatus Int?
+  responseBody   Json?
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+
+  @@unique([concessionId, idempotencyKey])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+model AuditRecord {
+  id           String   @id @default(uuid()) @db.Uuid
+  occurredAt   DateTime @default(now())
+  actorId      String
+  actorType    String
+  concessionId String?  @db.Uuid
+  assemblyId   String?  @db.Uuid
+  action       String
+  resourceType String
+  resourceId   String?
+  requestId    String
+  sourceIp     String?
+  outcome      String
+  metadata     Json
+
+  @@index([concessionId, assemblyId, occurredAt])
+  @@index([resourceType, resourceId])
+  @@map("audit_records")
+}
