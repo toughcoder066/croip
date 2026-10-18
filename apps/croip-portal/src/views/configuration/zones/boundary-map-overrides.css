@@ -20,3 +20,16 @@
   background: rgba(37, 99, 235, 0.25);
   border: 1px dashed rgba(37, 99, 235, 0.7);
 }
+
+/*
+ * leaflet-draw's cursor-following help text ("Drag handles or markers to edit features")
+ * ships with no `pointer-events` override, so it defaults to `auto` — a solid, few-hundred-
+ * pixel-wide box sitting a few pixels off the cursor that silently steals the mousedown
+ * meant for whatever vertex marker or line it happens to be overlapping. In a densely
+ * packed boundary this made dragging a point (especially one just added by clicking the
+ * line, since the cursor — and so the tooltip — is still sitting right on top of it)
+ * intermittently grab the tooltip instead of starting a drag. It's a label, not a target.
+ */
+.leaflet-draw-tooltip {
+  pointer-events: none;
+}
