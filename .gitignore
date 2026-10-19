@@ -39,3 +39,7 @@ pnpm-debug.log*
 # Storage & Uploads
 .storage/
 storage/
+
+# Local-only reference material (UI template, architecture docs) — kept on
+# disk, never tracked or pushed.
+/docs/
