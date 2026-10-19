@@ -115,8 +115,10 @@ services:
       DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/reporting_gateway?schema=public
       RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
       NODE_ENV: development
-      AUTH_MODE: disabled
-      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      AUTH_MODE: zitadel
+      ZITADEL_ISSUER: http://localhost:8080
+      ZITADEL_JWKS_URI: http://zitadel:8080/oauth/v2/keys
+      ZITADEL_AUDIENCE: "395706197476376592"
       JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
     ports:
       - "3001:3001"
@@ -157,8 +159,10 @@ services:
       DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/event_processing?schema=public
       RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
       NODE_ENV: development
-      AUTH_MODE: disabled
-      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      AUTH_MODE: zitadel
+      ZITADEL_ISSUER: http://localhost:8080
+      ZITADEL_JWKS_URI: http://zitadel:8080/oauth/v2/keys
+      ZITADEL_AUDIENCE: "395706197476376592"
       JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
     ports:
       - "3002:3002"
@@ -199,8 +203,10 @@ services:
       DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/independent_evidence?schema=public
       RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
       NODE_ENV: development
-      AUTH_MODE: disabled
-      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      AUTH_MODE: zitadel
+      ZITADEL_ISSUER: http://localhost:8080
+      ZITADEL_JWKS_URI: http://zitadel:8080/oauth/v2/keys
+      ZITADEL_AUDIENCE: "395706197476376592"
       JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
     ports:
       - "3003:3003"
@@ -241,8 +247,10 @@ services:
       DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/shared_services?schema=public
       RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
       NODE_ENV: development
-      AUTH_MODE: disabled
-      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      AUTH_MODE: zitadel
+      ZITADEL_ISSUER: http://localhost:8080
+      ZITADEL_JWKS_URI: http://zitadel:8080/oauth/v2/keys
+      ZITADEL_AUDIENCE: "395706197476376592"
       JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
     ports:
       - "3004:3004"
@@ -283,8 +291,10 @@ services:
       DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/oversight_reconciliation?schema=public
       RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
       NODE_ENV: development
-      AUTH_MODE: disabled
-      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      AUTH_MODE: zitadel
+      ZITADEL_ISSUER: http://localhost:8080
+      ZITADEL_JWKS_URI: http://zitadel:8080/oauth/v2/keys
+      ZITADEL_AUDIENCE: "395706197476376592"
       JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
     ports:
       - "3005:3005"
@@ -325,8 +335,10 @@ services:
       DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/audit_assurance?schema=public
       RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
       NODE_ENV: development
-      AUTH_MODE: disabled
-      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      AUTH_MODE: zitadel
+      ZITADEL_ISSUER: http://localhost:8080
+      ZITADEL_JWKS_URI: http://zitadel:8080/oauth/v2/keys
+      ZITADEL_AUDIENCE: "395706197476376592"
       JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
     ports:
       - "3006:3006"
@@ -367,8 +379,10 @@ services:
       DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/billing_payments?schema=public
       RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
       NODE_ENV: development
-      AUTH_MODE: disabled
-      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      AUTH_MODE: zitadel
+      ZITADEL_ISSUER: http://localhost:8080
+      ZITADEL_JWKS_URI: http://zitadel:8080/oauth/v2/keys
+      ZITADEL_AUDIENCE: "395706197476376592"
       JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
     ports:
       - "3007:3007"
@@ -409,8 +423,10 @@ services:
       DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/disputes?schema=public
       RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
       NODE_ENV: development
-      AUTH_MODE: disabled
-      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      AUTH_MODE: zitadel
+      ZITADEL_ISSUER: http://localhost:8080
+      ZITADEL_JWKS_URI: http://zitadel:8080/oauth/v2/keys
+      ZITADEL_AUDIENCE: "395706197476376592"
       JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
     ports:
       - "3008:3008"
@@ -451,8 +467,10 @@ services:
       DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/platform_governance?schema=public
       RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
       NODE_ENV: development
-      AUTH_MODE: disabled
-      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      AUTH_MODE: zitadel
+      ZITADEL_ISSUER: http://localhost:8080
+      ZITADEL_JWKS_URI: http://zitadel:8080/oauth/v2/keys
+      ZITADEL_AUDIENCE: "395706197476376592"
       JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
     ports:
       - "3010:3010"
@@ -493,10 +511,22 @@ services:
       DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/property_registry?schema=public
       RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
       NODE_ENV: development
-      AUTH_MODE: disabled
-      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      AUTH_MODE: zitadel
+      ZITADEL_ISSUER: http://localhost:8080
+      ZITADEL_JWKS_URI: http://zitadel:8080/oauth/v2/keys
+      ZITADEL_AUDIENCE: "395706197476376592"
       JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
       SHARED_SERVICES_URL: http://shared-services:3004
+      # This service's own machine identity in Zitadel — used only for the one
+      # internal call to Shared Services' zone-lookup endpoint (see
+      # assertZoneMembership in src/modules/properties/service.ts). ZITADEL_TOKEN_URL
+      # is the in-network token endpoint; ZITADEL_ISSUER above stays
+      # http://localhost:8080 since that's the literal `iss` baked into every token
+      # Zitadel issues (ZITADEL_EXTERNALDOMAIN=localhost), regardless of which
+      # network path was used to reach it.
+      ZITADEL_TOKEN_URL: http://zitadel:8080/oauth/v2/token
+      ZITADEL_CLIENT_ID: property-registry-service
+      ZITADEL_CLIENT_SECRET: "${ZITADEL_PROPERTY_REGISTRY_CLIENT_SECRET:-rRhsZrPCjk4jq3PfK0ue2uGG8gNVYbaYcAiQhPvkkjTpHsoocrt5W3khItWyDRpn}"
     ports:
       - "3020:3020"
     depends_on:
@@ -508,6 +538,8 @@ services:
         condition: service_completed_successfully
       shared-services:
         condition: service_started
+      zitadel:
+        condition: service_healthy
     networks:
       - central-platform-net
     restart: unless-stopped
@@ -538,8 +570,10 @@ services:
       DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/ratepayer_core?schema=public
       RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
       NODE_ENV: development
-      AUTH_MODE: disabled
-      ZITADEL_ISSUER: https://auth.idarms.gov.gh
+      AUTH_MODE: zitadel
+      ZITADEL_ISSUER: http://localhost:8080
+      ZITADEL_JWKS_URI: http://zitadel:8080/oauth/v2/keys
+      ZITADEL_AUDIENCE: "395706197476376592"
       JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
     ports:
       - "3030:3030"

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
 import { croipApi } from '@/lib/croip-api'
+import { createTokenSession } from '@/lib/token-store'
 import { verifyZitadelIdToken, ZITADEL_CLIENT_ID, ZITADEL_ISSUER } from '@/lib/zitadel'
 
 export const dynamic = 'force-dynamic'
@@ -120,7 +121,9 @@ export async function GET(request: Request) {
   let governanceUser: Awaited<ReturnType<typeof croipApi.governance.getUsers>>[number] | null = null
 
   try {
-    const users = await croipApi.governance.getUsers()
+    // No `croip_session` cookie exists yet at this point in the flow — pass the
+    // freshly-minted token explicitly instead of relying on the cookie lookup.
+    const users = await croipApi.governance.getUsers({ accessToken: tokens.access_token })
 
     governanceUser = users.find(u => u.email?.toLowerCase() === email) || null
   } catch (err) {
@@ -129,6 +132,11 @@ export async function GET(request: Request) {
 
   const role = governanceUser?.roles?.[0]?.code || 'UNASSIGNED'
   const roleName = governanceUser?.roles?.[0]?.name || 'Unassigned'
+
+  // The access token alone can run 6-7KB once it carries the full project-role claim
+  // set — far past the ~4KB a single cookie can hold. Keep the tokens server-side,
+  // referenced from the cookie by a short session ID, rather than embedding them.
+  const tokenSessionId = createTokenSession(tokens.access_token, tokens.id_token, tokens.expires_in)
 
   const sessionUser = {
     id: governanceUser?.id || String(claims.sub),
@@ -143,11 +151,12 @@ export async function GET(request: Request) {
     createdAt: governanceUser?.createdAt,
     loginAt: new Date().toISOString(),
     zitadelSub: claims.sub,
-    zitadelAccessToken: tokens.access_token,
-    zitadelIdToken: tokens.id_token
+    tokenSessionId
   }
 
-  cookieStore.set('croip_session', JSON.stringify(sessionUser), {
+  const response = NextResponse.redirect(new URL('/dashboard', request.url))
+
+  response.cookies.set('croip_session', JSON.stringify(sessionUser), {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
@@ -155,5 +164,5 @@ export async function GET(request: Request) {
     maxAge: 60 * 60 * 24 * 7 // 7 days
   })
 
-  return NextResponse.redirect(new URL('/dashboard', request.url))
+  return response
 }

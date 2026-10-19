@@ -16,6 +16,11 @@ const schema = z.object({
   ZITADEL_JWKS_URI: z.string().url().optional(),
   ZITADEL_ROLES_CLAIM: z.string().default('urn:zitadel:iam:org:project:roles'),
   IDARMS_CONTEXT_CLAIM: z.string().default('urn:idarms:context'),
+  // This service's own machine identity in Zitadel, used only for the one internal
+  // call to Shared Services' zone-lookup endpoint (see getServiceAccessToken).
+  ZITADEL_TOKEN_URL: z.string().url().optional(),
+  ZITADEL_CLIENT_ID: z.string().min(1).optional(),
+  ZITADEL_CLIENT_SECRET: z.string().min(1).optional(),
   RABBITMQ_URL: z.string().min(1),
   RABBITMQ_EXCHANGE: z.string().min(1).default('croip.domain.v1'),
   // Shared Services owns MMDA boundary geometry; property registration calls its

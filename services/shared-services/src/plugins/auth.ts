@@ -1,5 +1,7 @@
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import fp from 'fastify-plugin';
-import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
+import { createLocalJWKSet, jwtVerify, type JWTPayload, type JSONWebKeySet } from 'jose';
 import type { AppConfig } from '../config.js';
 import { ForbiddenError } from '../lib/errors.js';
 
@@ -19,9 +21,67 @@ function stringArray(value: unknown): string[] {
   return [];
 }
 
+/**
+ * This single-instance Zitadel deployment routes every request by the `Host` header,
+ * matching it against its one configured ExternalDomain (`localhost`, since that's what
+ * the portal's browser-facing OIDC flow needs). Containers reach it over the Docker
+ * network at `zitadel:8080`, which has a *different* Host header — Zitadel 404s that as
+ * "Instance not found" even though the service is reachable. The fetch() spec forbids
+ * overriding Host, so we can't fix this with a custom `fetch`; Node's raw http(s)
+ * module has no such restriction, so JWKS is fetched that way instead and cached as a
+ * local (non-remote) JWK set rather than handed to jose's createRemoteJWKSet.
+ */
+function fetchJwks(jwksUri: string, hostHeader: string): Promise<JSONWebKeySet> {
+  const url = new URL(jwksUri);
+  const transport = url.protocol === 'https:' ? httpsRequest : httpRequest;
+
+  return new Promise((resolve, reject) => {
+    const req = transport(
+      {
+        hostname: url.hostname,
+        port: url.port || (url.protocol === 'https:' ? 443 : 80),
+        path: `${url.pathname}${url.search}`,
+        method: 'GET',
+        headers: { Host: hostHeader }
+      },
+      (res) => {
+        let body = '';
+        res.on('data', (chunk) => (body += chunk));
+        res.on('end', () => {
+          if (res.statusCode !== 200) {
+            reject(new Error(`JWKS fetch failed: ${res.statusCode} ${body}`));
+            return;
+          }
+          try {
+            resolve(JSON.parse(body));
+          } catch (err) {
+            reject(err);
+          }
+        });
+      }
+    );
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+const JWKS_TTL_MS = 10 * 60 * 1000;
+
 export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
   const { config } = options;
-  const jwks = config.AUTH_MODE === 'zitadel' ? createRemoteJWKSet(new URL(config.ZITADEL_JWKS_URI!)) : undefined;
+
+  let jwks: ReturnType<typeof createLocalJWKSet> | undefined;
+  let jwksFetchedAt = 0;
+
+  async function getJwks() {
+    if (!jwks || Date.now() - jwksFetchedAt > JWKS_TTL_MS) {
+      const issuerHost = new URL(config.ZITADEL_ISSUER!).host;
+      const keys = await fetchJwks(config.ZITADEL_JWKS_URI!, issuerHost);
+      jwks = createLocalJWKSet(keys);
+      jwksFetchedAt = Date.now();
+    }
+    return jwks;
+  }
 
   app.decorateRequest('auth');
   app.decorate('authenticate', async (request) => {
@@ -40,7 +100,7 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
     const authorization = request.headers.authorization;
     if (!authorization?.startsWith('Bearer ')) throw app.httpErrors.unauthorized('Bearer token required');
     try {
-      const { payload } = await jwtVerify(authorization.slice(7), jwks!, {
+      const { payload } = await jwtVerify(authorization.slice(7), await getJwks(), {
         issuer: config.ZITADEL_ISSUER!,
         audience: config.ZITADEL_AUDIENCE!
       });
@@ -55,7 +115,18 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
         actorType: payload.client_id ? 'SERVICE' : 'USER',
         concessionId: context.concessionId,
         assemblyId: context.assemblyId,
-        permissions: [...new Set([...stringArray(payload.scope), ...stringArray(payload[config.ZITADEL_ROLES_CLAIM])])],
+        // Zitadel's native project-role assertion only populates ZITADEL_ROLES_CLAIM for
+        // human (authorization_code) logins — client_credentials tokens never carry it,
+        // regardless of role grants or assertion settings. `urn:idarms:service-roles` is
+        // a Complement Token Action that reads the machine user's own `roles` metadata
+        // and injects an equivalent claim (see the `injectIdarmsContext` Zitadel Action).
+        permissions: [
+          ...new Set([
+            ...stringArray(payload.scope),
+            ...stringArray(payload[config.ZITADEL_ROLES_CLAIM]),
+            ...stringArray(payload['urn:idarms:service-roles'])
+          ])
+        ],
         claims: payload
       };
     } catch (error) {

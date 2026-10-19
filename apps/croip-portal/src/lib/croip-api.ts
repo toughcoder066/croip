@@ -4,6 +4,10 @@
  * All frontend portals and apps must ingest ONLY APIs exposed by this platform.
  */
 
+import { cookies } from 'next/headers'
+
+import { getTokenSession } from './token-store'
+
 export const CROIP_SERVICES = {
   REPORTING_GATEWAY: process.env.REPORTING_GATEWAY_API_URL || 'http://localhost:3001',
   EVENT_PROCESSING: process.env.EVENT_PROCESSING_API_URL || 'http://localhost:3002',
@@ -20,10 +24,28 @@ export const CROIP_SERVICES = {
 } as const
 
 export interface RequestOptions extends RequestInit {
-  devSubject?: string
-  devPermissions?: string[]
-  devConcessionId?: string
-  devAssemblyId?: string
+  /**
+   * Explicit bearer token to send instead of resolving one from the session cookie —
+   * needed only where no `croip_session` cookie exists yet (the Zitadel OIDC callback
+   * has a freshly-minted token in hand before the session is created).
+   */
+  accessToken?: string
+}
+
+/** Resolves the current request's real Zitadel access token from the session cookie. */
+async function resolveSessionAccessToken(): Promise<string | null> {
+  try {
+    const cookieStore = await cookies()
+    const sessionCookie = cookieStore.get('croip_session')
+
+    if (!sessionCookie?.value) return null
+
+    const session = JSON.parse(sessionCookie.value)
+
+    return getTokenSession(session.tokenSessionId)?.accessToken ?? null
+  } catch {
+    return null
+  }
 }
 
 /**
@@ -34,14 +56,7 @@ export async function fetchCroipService<T>(
   path: string,
   options: RequestOptions = {}
 ): Promise<T> {
-  const {
-    devSubject = 'local-developer',
-    devPermissions = ['*'],
-    devConcessionId = '81fdc8f3-fcad-481a-b7fa-e916d5e97d9e',
-    devAssemblyId = '01c23cab-b1b2-4dae-b99b-32ea574632d9',
-    headers = {},
-    ...rest
-  } = options
+  const { accessToken, headers = {}, ...rest } = options
 
   const url = `${baseUrl.replace(/\/$/, '')}/${path.replace(/^\//, '')}`
 
@@ -51,10 +66,11 @@ export async function fetchCroipService<T>(
     requestHeaders.set('Content-Type', 'application/json')
   }
 
-  requestHeaders.set('x-dev-subject', devSubject)
-  requestHeaders.set('x-dev-permissions', devPermissions.join(' '))
-  requestHeaders.set('x-dev-concession-id', devConcessionId)
-  requestHeaders.set('x-dev-assembly-id', devAssemblyId)
+  const token = accessToken ?? (await resolveSessionAccessToken())
+
+  if (token) {
+    requestHeaders.set('Authorization', `Bearer ${token}`)
+  }
 
   const response = await fetch(url, {
     headers: requestHeaders,
@@ -100,7 +116,7 @@ export async function probeServiceHealth(baseUrl: string): Promise<{ ready: bool
  */
 export const croipApi = {
   governance: {
-    getUsers: () =>
+    getUsers: (options: RequestOptions = {}) =>
       fetchCroipService<
         Array<{
           id: string
@@ -112,58 +128,46 @@ export const croipApi = {
           phone?: string
           roles?: Array<{ code: string; name: string }>
         }>
-      >(CROIP_SERVICES.PLATFORM_GOVERNANCE, '/v1/users', { devPermissions: ['iam:users_manage'] }),
+      >(CROIP_SERVICES.PLATFORM_GOVERNANCE, '/v1/users', options),
     createUser: (data: any) =>
       fetchCroipService<any>(CROIP_SERVICES.PLATFORM_GOVERNANCE, '/v1/users', {
         method: 'POST',
         body: JSON.stringify(data),
-        devPermissions: ['iam:users_manage']
       }),
     updateUser: (id: string, data: any) =>
       fetchCroipService<any>(CROIP_SERVICES.PLATFORM_GOVERNANCE, `/v1/users/${encodeURIComponent(id)}`, {
         method: 'PATCH',
         body: JSON.stringify(data),
-        devPermissions: ['iam:users_manage']
       }),
     deleteUser: (id: string) =>
       fetchCroipService<any>(CROIP_SERVICES.PLATFORM_GOVERNANCE, `/v1/users/${encodeURIComponent(id)}`, {
         method: 'DELETE',
-        devPermissions: ['iam:users_manage']
       }),
     resendInvite: (id: string) =>
       fetchCroipService<any>(CROIP_SERVICES.PLATFORM_GOVERNANCE, `/v1/users/${encodeURIComponent(id)}/resend-invite`, {
         method: 'POST',
-        devPermissions: ['iam:users_manage']
       }),
     getUser: (id: string) =>
-      fetchCroipService<any>(CROIP_SERVICES.PLATFORM_GOVERNANCE, `/v1/users/${encodeURIComponent(id)}`, {
-        devPermissions: ['iam:users_manage']
-      }),
+      fetchCroipService<any>(CROIP_SERVICES.PLATFORM_GOVERNANCE, `/v1/users/${encodeURIComponent(id)}`),
     getRoles: () =>
       fetchCroipService<Array<{ id: string; code: string; name: string; scopeLevel: string }>>(
         CROIP_SERVICES.PLATFORM_GOVERNANCE,
-        '/v1/roles',
-        { devPermissions: ['iam:users_manage'] }
+        '/v1/roles'
       ),
     getRbacMatrix: () =>
-      fetchCroipService<any>(CROIP_SERVICES.PLATFORM_GOVERNANCE, '/v1/rbac/matrix', {
-        devPermissions: ['iam:roles_assign']
-      }),
+      fetchCroipService<any>(CROIP_SERVICES.PLATFORM_GOVERNANCE, '/v1/rbac/matrix'),
     setRoleGrant: (roleId: string, permissionId: string, granted: boolean) =>
       fetchCroipService<any>(
         CROIP_SERVICES.PLATFORM_GOVERNANCE,
         `/v1/rbac/roles/${encodeURIComponent(roleId)}/permissions/${encodeURIComponent(permissionId)}`,
-        { method: granted ? 'PUT' : 'DELETE', devPermissions: ['iam:roles_assign'] }
+        { method: granted ? 'PUT' : 'DELETE' }
       ),
     getConcessions: () =>
-      fetchCroipService<any[]>(CROIP_SERVICES.PLATFORM_GOVERNANCE, '/v1/concessions', {
-        devPermissions: ['concessionaires:read', 'concessionaires:manage']
-      }),
+      fetchCroipService<any[]>(CROIP_SERVICES.PLATFORM_GOVERNANCE, '/v1/concessions'),
     createConcession: (data: any) =>
       fetchCroipService<any>(CROIP_SERVICES.PLATFORM_GOVERNANCE, '/v1/concessions', {
         method: 'POST',
         body: JSON.stringify(data),
-        devPermissions: ['concessionaires:manage']
       }),
     assignAssembly: (concessionId: string, data: { assemblyId: string; contractStart: string; contractEnd: string }) =>
       fetchCroipService<any>(
@@ -172,7 +176,6 @@ export const croipApi = {
         {
           method: 'POST',
           body: JSON.stringify(data),
-          devPermissions: ['concessionaires:manage']
         }
       ),
     provisionApiClient: (concessionId: string) =>
@@ -181,7 +184,6 @@ export const croipApi = {
         `/v1/concessions/${encodeURIComponent(concessionId)}/api-clients`,
         {
           method: 'POST',
-          devPermissions: ['api_clients:manage']
         }
       ),
     registerPersonnel: (concessionId: string, data: { externalStaffRef: string; fullName: string; phone: string }) =>
@@ -191,60 +193,44 @@ export const croipApi = {
         {
           method: 'POST',
           body: JSON.stringify(data),
-          devPermissions: ['concessionaires:manage']
         }
       ),
     getPersonnel: (concessionId: string) =>
       fetchCroipService<any[]>(
         CROIP_SERVICES.PLATFORM_GOVERNANCE,
-        `/v1/concessions/${encodeURIComponent(concessionId)}/personnel`,
-        { devPermissions: ['concessionaires:read'] }
+        `/v1/concessions/${encodeURIComponent(concessionId)}/personnel`
       ),
     getConcession: (id: string) =>
-      fetchCroipService<any>(CROIP_SERVICES.PLATFORM_GOVERNANCE, `/v1/concessions/${encodeURIComponent(id)}`, {
-        devPermissions: ['concessionaires:read']
-      }),
+      fetchCroipService<any>(CROIP_SERVICES.PLATFORM_GOVERNANCE, `/v1/concessions/${encodeURIComponent(id)}`),
     getAssignedAssemblies: (concessionId: string) =>
       fetchCroipService<any[]>(
         CROIP_SERVICES.PLATFORM_GOVERNANCE,
-        `/v1/concessions/${encodeURIComponent(concessionId)}/assemblies`,
-        { devPermissions: ['concessionaires:read'] }
+        `/v1/concessions/${encodeURIComponent(concessionId)}/assemblies`
       ),
     getApiClients: (concessionId: string) =>
       fetchCroipService<any[]>(
         CROIP_SERVICES.PLATFORM_GOVERNANCE,
-        `/v1/concessions/${encodeURIComponent(concessionId)}/api-clients`,
-        { devPermissions: ['api_clients:manage'] }
+        `/v1/concessions/${encodeURIComponent(concessionId)}/api-clients`
       ),
     deactivateConcession: (id: string) =>
       fetchCroipService<any>(CROIP_SERVICES.PLATFORM_GOVERNANCE, `/v1/concessions/${encodeURIComponent(id)}/deactivate`, {
         method: 'POST',
-        devPermissions: ['concessionaires:manage']
       })
   },
   propertyRegistry: {
     getProperties: () =>
-      fetchCroipService<any[]>(CROIP_SERVICES.PROPERTY_REGISTRY, '/v1/properties', {
-        devPermissions: ['properties:read']
-      }),
+      fetchCroipService<any[]>(CROIP_SERVICES.PROPERTY_REGISTRY, '/v1/properties'),
     getProperty: (id: string) =>
-      fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${id}`, {
-        devPermissions: ['properties:read']
-      }),
+      fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${id}`),
     createProperty: (data: any) =>
       fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, '/v1/properties', {
         method: 'POST',
         body: JSON.stringify(data),
-        devPermissions: ['properties:manage']
       }),
     getPropertyDocuments: (code: string) =>
-      fetchCroipService<any[]>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${code}/documents`, {
-        devPermissions: ['properties:read']
-      }),
+      fetchCroipService<any[]>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${code}/documents`),
     listVerifications: (propertyId: string) =>
-      fetchCroipService<any[]>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${propertyId}/verifications`, {
-        devPermissions: ['properties:read']
-      }),
+      fetchCroipService<any[]>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${propertyId}/verifications`),
     reviewVerification: (
       verificationId: string,
       data: { reviewStatus: 'APPROVED' | 'REJECTED'; reviewedByPersonnelId: string; reviewNotes?: string }
@@ -252,7 +238,6 @@ export const croipApi = {
       fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/verifications/${verificationId}/review`, {
         method: 'PATCH',
         body: JSON.stringify(data),
-        devPermissions: ['properties:verify:review']
       }),
 
     // NOTE: property-registry-service does not expose a dedicated "list all valuations" endpoint.
@@ -262,9 +247,7 @@ export const croipApi = {
     // composes this across every property (see /api/properties/valuations) the same way
     // /api/dashboard/metrics already does for its rateable-value aggregates.
     getValuations: (propertyId: string) =>
-      fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${propertyId}`, {
-        devPermissions: ['properties:read']
-      }).then((property: any) => (Array.isArray(property?.valuations) ? property.valuations : []))
+      fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${propertyId}`).then((property: any) => (Array.isArray(property?.valuations) ? property.valuations : []))
   },
   ratepayers: {
     getSummary: () =>
@@ -325,17 +308,13 @@ export const croipApi = {
         page: number
         pageSize: number
         totalPages: number
-      }>(CROIP_SERVICES.RATEPAYER_CORE, `/v1/ratepayers/directory${qs ? `?${qs}` : ''}`, {
-        devPermissions: ['ratepayers:read']
-      })
+      }>(CROIP_SERVICES.RATEPAYER_CORE, `/v1/ratepayers/directory${qs ? `?${qs}` : ''}`)
     },
 
     // Linked properties across any MMDA for a single ratepayer.
     // Thin pass-through to ratepayer-service (:3030) GET /v1/ratepayers/:id/properties.
     getRatepayerProperties: (id: string) =>
-      fetchCroipService<any[]>(CROIP_SERVICES.RATEPAYER_CORE, `/v1/ratepayers/${encodeURIComponent(id)}/properties`, {
-        devPermissions: ['ratepayers:read']
-      }),
+      fetchCroipService<any[]>(CROIP_SERVICES.RATEPAYER_CORE, `/v1/ratepayers/${encodeURIComponent(id)}/properties`),
 
     // CROIP portal: oversight official approves or rejects a ratepayer's pending KYC verification.
     // Thin pass-through to ratepayer-service (:3030) PATCH /v1/ratepayers/:id/verifications/:verificationId.
@@ -350,7 +329,6 @@ export const croipApi = {
         {
           method: 'PATCH',
           body: JSON.stringify(data),
-          devPermissions: ['ratepayers:manage']
         }
       )
   },
@@ -398,15 +376,11 @@ export const croipApi = {
         page: number
         pageSize: number
         totalPages: number
-      }>(CROIP_SERVICES.BILLING_PAYMENTS, `/v1/bills${qs ? `?${qs}` : ''}`, {
-        devPermissions: ['bills:read']
-      })
+      }>(CROIP_SERVICES.BILLING_PAYMENTS, `/v1/bills${qs ? `?${qs}` : ''}`)
     },
 
     getBill: (billNumber: string) =>
-      fetchCroipService<any>(CROIP_SERVICES.BILLING_PAYMENTS, `/v1/bills/${encodeURIComponent(billNumber)}`, {
-        devPermissions: ['bills:read']
-      }),
+      fetchCroipService<any>(CROIP_SERVICES.BILLING_PAYMENTS, `/v1/bills/${encodeURIComponent(billNumber)}`),
 
     // CROIP portal: paginated, searchable payment ledger across all bills and ratepayers.
     // Thin pass-through to billing-payments-service (:3007) GET /v1/payments.
@@ -440,9 +414,7 @@ export const croipApi = {
         page: number
         pageSize: number
         totalPages: number
-      }>(CROIP_SERVICES.BILLING_PAYMENTS, `/v1/payments${qs ? `?${qs}` : ''}`, {
-        devPermissions: ['payments:receive']
-      })
+      }>(CROIP_SERVICES.BILLING_PAYMENTS, `/v1/payments${qs ? `?${qs}` : ''}`)
     }
   },
   disputes: {
@@ -470,21 +442,16 @@ export const croipApi = {
           resolvedAt: string | null
           createdAt: string
         }>
-      >(CROIP_SERVICES.DISPUTE, `/v1/disputes${qs ? `?${qs}` : ''}`, {
-        devPermissions: ['disputes:read']
-      })
+      >(CROIP_SERVICES.DISPUTE, `/v1/disputes${qs ? `?${qs}` : ''}`)
     },
 
     getDispute: (code: string) =>
-      fetchCroipService<any>(CROIP_SERVICES.DISPUTE, `/v1/disputes/${encodeURIComponent(code)}`, {
-        devPermissions: ['disputes:read']
-      }),
+      fetchCroipService<any>(CROIP_SERVICES.DISPUTE, `/v1/disputes/${encodeURIComponent(code)}`),
 
     updateStatus: (code: string, data: { status: 'UNDER_REVIEW' | 'RESOLVED' | 'REJECTED'; resolution?: string }) =>
       fetchCroipService<any>(CROIP_SERVICES.DISPUTE, `/v1/disputes/${encodeURIComponent(code)}/status`, {
         method: 'PATCH',
         body: JSON.stringify(data),
-        devPermissions: ['disputes:review']
       })
   },
   reporting: {
@@ -492,57 +459,43 @@ export const croipApi = {
       fetchCroipService<any>(CROIP_SERVICES.REPORTING_GATEWAY, '/v1/events', {
         method: 'POST',
         body: JSON.stringify(event),
-        devPermissions: ['gateway:ingest']
       }),
     getIngestion: (id: string) =>
-      fetchCroipService<any>(CROIP_SERVICES.REPORTING_GATEWAY, `/v1/ingestions/${id}`, {
-        devPermissions: ['gateway:read']
-      })
+      fetchCroipService<any>(CROIP_SERVICES.REPORTING_GATEWAY, `/v1/ingestions/${id}`)
   },
   oversight: {
     getExceptions: () =>
-      fetchCroipService<any[]>(CROIP_SERVICES.OVERSIGHT_RECONCILIATION, '/v1/exceptions', {
-        devPermissions: ['reconciliation:read']
-      }),
+      fetchCroipService<any[]>(CROIP_SERVICES.OVERSIGHT_RECONCILIATION, '/v1/exceptions'),
     getRuns: () =>
-      fetchCroipService<any[]>(CROIP_SERVICES.OVERSIGHT_RECONCILIATION, '/v1/reconciliation/runs', {
-        devPermissions: ['reconciliation:read']
-      })
+      fetchCroipService<any[]>(CROIP_SERVICES.OVERSIGHT_RECONCILIATION, '/v1/reconciliation/runs')
   },
   audit: {
     getLogs: (concessionId?: string) =>
       fetchCroipService<any[]>(
         CROIP_SERVICES.AUDIT_ASSURANCE,
-        concessionId ? `/v1/audit/records?concessionId=${encodeURIComponent(concessionId)}` : '/v1/audit/records',
-        {
-          devPermissions: ['audit:read']
-        }
+        concessionId ? `/v1/audit/records?concessionId=${encodeURIComponent(concessionId)}` : '/v1/audit/records'
       )
   },
   shared: {
     getReferenceData: (category?: string) =>
       fetchCroipService<Array<{ id: string; category: string; code: string; name: string; metadata?: any }>>(
         CROIP_SERVICES.SHARED_SERVICES,
-        category ? `/v1/reference-data?category=${encodeURIComponent(category)}` : '/v1/reference-data',
-        { devPermissions: ['reference:read', 'ref:read'] }
+        category ? `/v1/reference-data?category=${encodeURIComponent(category)}` : '/v1/reference-data'
       ),
     createReferenceItem: (data: { category: string; code: string; name: string; metadata?: any }) =>
       fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, '/v1/reference-data', {
         method: 'POST',
         body: JSON.stringify(data),
-        devPermissions: ['reference:manage', 'reference:read']
       }),
     deleteReferenceItem: (id: string) =>
       fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, `/v1/reference-data/${id}`, {
         method: 'DELETE',
-        devPermissions: ['reference:manage', 'reference:read']
       }),
     getCountries: async () => {
       try {
         const data = await fetchCroipService<Array<{ id: string; category: string; code: string; name: string; metadata?: any }>>(
           CROIP_SERVICES.SHARED_SERVICES,
-          '/v1/reference-data',
-          { devPermissions: ['reference:read', 'ref:read'] }
+          '/v1/reference-data'
         )
 
         const countryItems = data.filter(item => item.category === 'country')
@@ -572,18 +525,16 @@ export const croipApi = {
           createdAt: string
           updatedAt?: string
         }>
-      >(CROIP_SERVICES.SHARED_SERVICES, '/v1/regions', { devPermissions: ['reference:read'] }),
+      >(CROIP_SERVICES.SHARED_SERVICES, '/v1/regions'),
     createRegion: (data: { code: string; name: string; polygonGeoJson?: Record<string, any> }) =>
       fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, '/v1/regions', {
         method: 'POST',
         body: JSON.stringify(data),
-        devPermissions: ['reference:manage']
       }),
     updateRegionBoundary: (id: string, polygonGeoJson: Record<string, any>) =>
       fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, `/v1/regions/${encodeURIComponent(id)}/boundary`, {
         method: 'PATCH',
         body: JSON.stringify({ polygonGeoJson }),
-        devPermissions: ['reference:manage']
       }),
     listAssemblies: (regionId?: string) =>
       fetchCroipService<
@@ -599,8 +550,7 @@ export const croipApi = {
         }>
       >(
         CROIP_SERVICES.SHARED_SERVICES,
-        regionId ? `/v1/assemblies?regionId=${encodeURIComponent(regionId)}` : '/v1/assemblies',
-        { devPermissions: ['reference:read'] }
+        regionId ? `/v1/assemblies?regionId=${encodeURIComponent(regionId)}` : '/v1/assemblies'
       ),
     createAssembly: (data: {
       regionId: string
@@ -612,13 +562,11 @@ export const croipApi = {
       fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, '/v1/assemblies', {
         method: 'POST',
         body: JSON.stringify(data),
-        devPermissions: ['reference:manage']
       }),
     updateAssemblyBoundary: (id: string, polygonGeoJson: Record<string, any>) =>
       fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, `/v1/assemblies/${encodeURIComponent(id)}/boundary`, {
         method: 'PATCH',
         body: JSON.stringify({ polygonGeoJson }),
-        devPermissions: ['reference:manage']
       }),
     detectZone: (latitude: number, longitude: number) =>
       fetchCroipService<{
@@ -628,7 +576,6 @@ export const croipApi = {
       }>(CROIP_SERVICES.SHARED_SERVICES, '/v1/assemblies/detect-zone', {
         method: 'POST',
         body: JSON.stringify({ latitude, longitude }),
-        devPermissions: ['reference:read']
       })
   }
 }

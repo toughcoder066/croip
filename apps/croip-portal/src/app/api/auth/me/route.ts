@@ -18,9 +18,8 @@ export async function GET() {
   try {
     const session = JSON.parse(sessionCookie.value)
 
-    // Zitadel tokens stay server-side only — the browser never needs them directly.
-    delete session.zitadelAccessToken
-    delete session.zitadelIdToken
+    // The token session ID stays server-side only — the browser never needs it directly.
+    delete session.tokenSessionId
 
     return NextResponse.json({ authenticated: true, user: session })
   } catch {

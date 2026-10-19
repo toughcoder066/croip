@@ -104,7 +104,7 @@ The portal starts on **http://localhost:3050** and proxies all data through the 
 | Password | `Password@1` |
 | Role | `SUPER_ADMIN` (full access) |
 
-This account is a row in `platform-governance-service`'s `users` table, not a hardcoded bypass — if you reset that service's database, recreate it:
+Sign-in goes through the real self-hosted Zitadel identity provider (see §6), not a hardcoded check — the portal redirects to Zitadel, which authenticates this account, then the portal cross-references `platform-governance-service`'s `users` table for the CROIP-specific profile (employee code, role, department). If the `platform-governance-service` row for this user is ever lost, recreate it:
 
 ```bash
 curl -X POST http://localhost:3010/v1/users \
@@ -121,15 +121,33 @@ curl -X PATCH http://localhost:3010/v1/users/<id-from-the-response-above> \
 
 ## 6. Authentication in Local Development
 
-Every service runs with `AUTH_MODE=disabled` in `docker-compose.yml`. In this mode, instead of verifying a Zitadel JWT, each service trusts plain `x-dev-subject` / `x-dev-permissions` / `x-dev-concession-id` / `x-dev-assembly-id` headers — so you can curl any endpoint directly without a token, e.g.:
+All 11 services run with `AUTH_MODE=zitadel` in `docker-compose.yml`, verifying real JWTs issued by the self-hosted Zitadel identity provider (the `zitadel` service, `http://localhost:8080`) instead of trusting headers. The portal attaches a real `Authorization: Bearer <token>` to every request (see `fetchCroipService` in `apps/croip-portal/src/lib/croip-api.ts`), resolved from the signed-in session rather than sent unconditionally.
+
+| Field | Value |
+|---|---|
+| Console URL | `http://localhost:8080/ui/console` |
+| Instance admin email | `zitadel-admin@zitadel.localhost` |
+| Instance admin password | `Password1!` |
+
+The instance admin is Zitadel's own bootstrap account (not a CROIP user) — use it to manage roles, the `central-platform` project, machine users, and the `injectIdarmsContext` Action (which stamps every issued token with the `urn:idarms:context` claim — `concessionId`/`assemblyId` — services require, plus `urn:idarms:service-roles` for machine-to-machine tokens, since Zitadel's native project-role assertion only applies to human logins).
+
+To curl a service directly, mint a token first:
 
 ```bash
-curl http://localhost:3020/v1/properties \
-  -H "x-dev-subject: local-developer" \
-  -H "x-dev-permissions: properties:read"
+# Human login token: sign in through the portal (§5.3), then read the access token
+# out of the server-side session (apps/croip-portal/src/lib/token-store.ts) — it's
+# never exposed to the browser directly.
+
+# Machine-to-machine token (service account):
+curl -s -X POST "http://localhost:8080/oauth/v2/token" \
+  -u "<client-id>:<client-secret>" \
+  -d "grant_type=client_credentials" \
+  -d "scope=openid urn:zitadel:iam:org:project:id:395706197476376592:roles urn:zitadel:iam:org:project:id:395706197476376592:aud"
+
+curl http://localhost:3020/v1/properties -H "Authorization: Bearer <access_token>"
 ```
 
-The portal sends these headers on every request automatically (see `fetchCroipService` in `apps/croip-portal/src/lib/croip-api.ts`), stamped with a real seeded concession and MMDA — not a placeholder UUID — so every record created through the portal is attributable to an actual `Concession` and `MunicipalAssembly` row. `AUTH_MODE=disabled` is refused outright in `NODE_ENV=production`.
+Each service still falls back to trusting `x-dev-subject` / `x-dev-permissions` / `x-dev-concession-id` / `x-dev-assembly-id` headers when `AUTH_MODE=disabled` (refused outright in `NODE_ENV=production`) — useful for isolated per-service development outside the full Docker stack.
 
 ## 7. GIS Boundary Data
 

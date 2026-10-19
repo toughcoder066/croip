@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { domainEvent } from '../../events/envelope.js';
 import { appendOutboxEvent } from '../../events/outbox.js';
 import { NotFoundError, BadRequestError, ForbiddenError, ConflictError, ServiceUnavailableError } from '../../lib/errors.js';
+import { getServiceAccessToken } from '../../lib/zitadel-client.js';
 
 interface DetectZoneForPolygonResult {
   status: 'MATCHED' | 'NO_MATCH' | 'CONFLICT';
@@ -94,13 +95,14 @@ async function assertZoneMembership(
   let result: DetectZoneForPolygonResult;
 
   try {
+    const headers: Record<string, string> =
+      app.config.AUTH_MODE === 'zitadel'
+        ? { Authorization: `Bearer ${await getServiceAccessToken(app.config)}` }
+        : { 'x-dev-subject': 'property-registry-service', 'x-dev-permissions': 'reference:read' };
+
     const response = await fetch(`${app.config.SHARED_SERVICES_URL}/v1/assemblies/detect-zone-for-polygon`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-dev-subject': 'property-registry-service',
-        'x-dev-permissions': 'reference:read'
-      },
+      headers: { 'Content-Type': 'application/json', ...headers },
       body: JSON.stringify({ polygonGeoJson }),
       signal: AbortSignal.timeout(5000)
     });

@@ -1,22 +1,26 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
+import { deleteTokenSession, getTokenSession } from '@/lib/token-store'
 import { ZITADEL_CLIENT_ID, ZITADEL_ISSUER } from '@/lib/zitadel'
 
 export async function POST(request: Request) {
   const cookieStore = await cookies()
   const sessionCookie = cookieStore.get('croip_session')
 
-  let idToken: string | undefined
+  let tokenSessionId: string | undefined
 
   if (sessionCookie?.value) {
     try {
-      idToken = JSON.parse(sessionCookie.value).zitadelIdToken
+      tokenSessionId = JSON.parse(sessionCookie.value).tokenSessionId
     } catch {
       // ignore
     }
   }
 
+  const idToken = getTokenSession(tokenSessionId)?.idToken
+
+  deleteTokenSession(tokenSessionId)
   cookieStore.delete('croip_session')
 
   // Also end the Zitadel-side browser session (RP-initiated logout) — otherwise "Sign
