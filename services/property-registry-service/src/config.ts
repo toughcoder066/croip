@@ -21,6 +21,10 @@ const schema = z.object({
   ZITADEL_TOKEN_URL: z.string().url().optional(),
   ZITADEL_CLIENT_ID: z.string().min(1).optional(),
   ZITADEL_CLIENT_SECRET: z.string().min(1).optional(),
+  // Accepts a ratepayer's own session token (issued by ratepayer-service's phone/email +
+  // password + OTP login) as an alternate auth path for self-service property creation —
+  // see the dual-auth preHandler on POST /properties.
+  RATEPAYER_JWT_SECRET: z.string().min(32),
   RABBITMQ_URL: z.string().min(1),
   RABBITMQ_EXCHANGE: z.string().min(1).default('croip.domain.v1'),
   // Shared Services owns MMDA boundary geometry; property registration calls its

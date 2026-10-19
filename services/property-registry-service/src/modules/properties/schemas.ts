@@ -73,6 +73,11 @@ export const createPropertyBodySchema = {
     structureType: { type: 'string' },
     registrationSource: { type: 'string', enum: ['CONCESSION', 'RATEPAYER'], default: 'CONCESSION' },
     createdByRatepayerId: { type: 'string', format: 'uuid' },
+    assemblyId: {
+      type: 'string',
+      format: 'uuid',
+      description: 'Ratepayer self-service only — overrides the ratepayer\'s own registered assembly if the property is elsewhere. Ignored (and taken from the caller\'s own context) for staff/concession requests.'
+    },
     documents: {
       type: 'array',
       items: propertyDocumentInputSchema,

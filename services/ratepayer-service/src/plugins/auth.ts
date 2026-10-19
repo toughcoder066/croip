@@ -4,6 +4,7 @@ import fp from 'fastify-plugin';
 import { createLocalJWKSet, jwtVerify, type JWTPayload, type JSONWebKeySet } from 'jose';
 import type { AppConfig } from '../config.js';
 import { ForbiddenError } from '../lib/errors.js';
+import { verifyRatepayerToken } from '../lib/ratepayer-jwt.js';
 
 export interface AuthContext {
   subject: string;
@@ -139,6 +140,19 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
     await app.authenticate(request, reply);
     if (!required.every((permission) => request.auth.permissions.includes(permission))) {
       throw new ForbiddenError(`Required permissions: ${required.join(', ')}`);
+    }
+  });
+
+  // Separate from `authenticate` — ratepayer self-service sessions are HS256 tokens
+  // issued by this service's own login flow, not Zitadel-issued staff tokens.
+  app.decorate('authenticateRatepayer', async (request) => {
+    const authorization = request.headers.authorization;
+    if (!authorization?.startsWith('Bearer ')) throw app.httpErrors.unauthorized('Bearer token required');
+    try {
+      request.ratepayerAuth = await verifyRatepayerToken(authorization.slice(7), config.RATEPAYER_JWT_SECRET);
+    } catch (error) {
+      request.log.warn({ err: error }, 'ratepayer access token rejected');
+      throw app.httpErrors.unauthorized('Invalid or expired access token');
     }
   });
 }, { name: 'auth' });

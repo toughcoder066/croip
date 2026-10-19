@@ -5,11 +5,11 @@ import { problemSchema, propertyResponseSchema, createPropertyBodySchema, create
 export const propertyRoutes: FastifyPluginAsync = async (app) => {
   const service = propertyService(app);
 
-  app.post<{ Body: Omit<CreatePropertyInput, 'concessionId' | 'assemblyId' | 'actorId'> }>('/properties', {
-    preHandler: app.requirePermissions(['properties:manage']),
+  app.post<{ Body: Omit<CreatePropertyInput, 'concessionId' | 'actorId'> & { assemblyId?: string } }>('/properties', {
+    preHandler: app.authenticateStaffOrRatepayer(['properties:manage']),
     schema: {
       tags: ['Property Registry'],
-      summary: 'Register landed property parcel into national cadastre',
+      summary: 'Register landed property parcel into national cadastre — staff/concession action, or ratepayer self-service with a valid ratepayer session',
       body: createPropertyBodySchema,
       response: {
         201: propertyResponseSchema,
@@ -21,10 +21,15 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       }
     }
   }, async (request, reply) => {
+    const isRatepayer = request.auth.actorType === 'RATEPAYER';
     const created = await service.createProperty({
       ...request.body,
+      // A ratepayer can only ever register a property as themselves — the body's own
+      // createdByRatepayerId/registrationSource are ignored for this actor type so one
+      // ratepayer can't claim to be registering on another's behalf.
+      ...(isRatepayer ? { createdByRatepayerId: request.auth.subject, registrationSource: 'RATEPAYER' as const } : {}),
       concessionId: request.auth.concessionId,
-      assemblyId: request.auth.assemblyId,
+      assemblyId: (isRatepayer && request.body.assemblyId) || request.auth.assemblyId,
       actorId: request.auth.subject
     });
     return reply.code(201).send(created);

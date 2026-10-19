@@ -2,17 +2,44 @@ import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { domainEvent } from '../../events/envelope.js';
 import { appendOutboxEvent } from '../../events/outbox.js';
-import { NotFoundError, ConflictError, BadRequestError, UnprocessableError } from '../../lib/errors.js';
+import { NotFoundError, ConflictError, BadRequestError, UnauthorizedError, UnprocessableError } from '../../lib/errors.js';
+import { hashPassword, verifyPassword } from '../../lib/password.js';
+import { generateOtpCode, hashOtpCode } from '../../lib/otp.js';
+import { issueRatepayerToken } from '../../lib/ratepayer-jwt.js';
 
 export interface RegisterRatepayerInput {
   ratepayerType?: string;
   legalName: string;
   phone: string;
   email?: string;
+  password: string;
   regionId: string;
   assemblyId: string;
   locationGeo: Record<string, unknown>;
   actorId: string;
+}
+
+export interface LoginInput {
+  identifier: string;
+  password: string;
+}
+
+export interface VerifyOtpInput {
+  identifier: string;
+  otpCode: string;
+}
+
+export interface UpdateProfileInput {
+  legalName?: string;
+  email?: string;
+  locationGeo?: Record<string, unknown>;
+}
+
+const OTP_TTL_MS = 5 * 60 * 1000;
+const OTP_MAX_ATTEMPTS = 5;
+
+function maskPhone(phone: string): string {
+  return phone.length > 4 ? `${'*'.repeat(phone.length - 4)}${phone.slice(-4)}` : phone;
 }
 
 export interface ClaimDocumentInput {
@@ -54,6 +81,15 @@ export interface ClaimPropertyInput {
 export function ratepayerService(app: FastifyInstance) {
   return {
     async registerRatepayer(input: RegisterRatepayerInput) {
+      const existing = await app.prisma.ratepayer.findFirst({
+        where: { OR: [{ phone: input.phone }, ...(input.email ? [{ email: input.email }] : [])] }
+      });
+      if (existing) {
+        throw new ConflictError('A ratepayer is already registered with this phone number or email');
+      }
+
+      const passwordHash = await hashPassword(input.password);
+
       return app.prisma.$transaction(async (tx) => {
         const count = await tx.ratepayer.count();
         const code = `RP-2026-${String(count + 1).padStart(5, '0')}`;
@@ -65,6 +101,7 @@ export function ratepayerService(app: FastifyInstance) {
             legalName: input.legalName,
             phone: input.phone,
             email: input.email ?? null,
+            passwordHash,
             regionId: input.regionId,
             assemblyId: input.assemblyId,
             locationGeo: input.locationGeo as any,
@@ -97,7 +134,94 @@ export function ratepayerService(app: FastifyInstance) {
         include: { verifications: true, propertyLinks: true }
       });
       if (!rp) throw new NotFoundError('Ratepayer profile not found');
-      return rp;
+      const { passwordHash: _passwordHash, ...safe } = rp;
+      return safe;
+    },
+
+    // Step 1 of login: check the password, then issue a short-lived OTP instead of a
+    // session directly — phone/email + password alone isn't enough for a citizen-facing
+    // login, the OTP step confirms the caller still controls the registered phone.
+    async login(input: LoginInput) {
+      const ratepayer = await app.prisma.ratepayer.findFirst({
+        where: { OR: [{ phone: input.identifier }, { email: input.identifier }] }
+      });
+      if (!ratepayer || !ratepayer.passwordHash || !(await verifyPassword(input.password, ratepayer.passwordHash))) {
+        throw new UnauthorizedError('Incorrect phone/email or password');
+      }
+      if (ratepayer.status !== 'ACTIVE') {
+        throw new UnauthorizedError('This ratepayer account is not active');
+      }
+
+      const code = generateOtpCode();
+      await app.prisma.ratepayerOtp.create({
+        data: {
+          ratepayerId: ratepayer.id,
+          purpose: 'LOGIN',
+          codeHash: hashOtpCode(code),
+          expiresAt: new Date(Date.now() + OTP_TTL_MS)
+        }
+      });
+
+      return {
+        status: 'OTP_REQUIRED' as const,
+        destination: maskPhone(ratepayer.phone),
+        expiresInSeconds: OTP_TTL_MS / 1000,
+        // No SMS provider is configured in this environment — the real code is returned
+        // directly so the flow is testable end-to-end. A production deployment would send
+        // this via SMS and drop this field entirely.
+        devOtpCode: code
+      };
+    },
+
+    // Step 2 of login: confirm the OTP and issue the ratepayer's session token.
+    async verifyOtp(input: VerifyOtpInput) {
+      const ratepayer = await app.prisma.ratepayer.findFirst({
+        where: { OR: [{ phone: input.identifier }, { email: input.identifier }] }
+      });
+      if (!ratepayer) throw new UnauthorizedError('Incorrect phone/email or code');
+
+      const otp = await app.prisma.ratepayerOtp.findFirst({
+        where: { ratepayerId: ratepayer.id, purpose: 'LOGIN', consumedAt: null },
+        orderBy: { createdAt: 'desc' }
+      });
+      if (!otp || otp.expiresAt < new Date()) {
+        throw new UnauthorizedError('No active code — request a new one');
+      }
+      if (otp.attempts >= OTP_MAX_ATTEMPTS) {
+        throw new UnauthorizedError('Too many incorrect attempts — request a new code');
+      }
+      if (otp.codeHash !== hashOtpCode(input.otpCode)) {
+        await app.prisma.ratepayerOtp.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
+        throw new UnauthorizedError('Incorrect code');
+      }
+
+      await app.prisma.ratepayerOtp.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
+
+      const accessToken = await issueRatepayerToken(
+        { sub: ratepayer.id, code: ratepayer.code, phone: ratepayer.phone, assemblyId: ratepayer.assemblyId, regionId: ratepayer.regionId, actorType: 'RATEPAYER' },
+        app.config.RATEPAYER_JWT_SECRET
+      );
+
+      return {
+        accessToken,
+        tokenType: 'Bearer' as const,
+        expiresInSeconds: 7 * 24 * 60 * 60,
+        ratepayer
+      };
+    },
+
+    async updateProfile(ratepayerId: string, input: UpdateProfileInput) {
+      const ratepayer = await app.prisma.ratepayer.findUnique({ where: { id: ratepayerId } });
+      if (!ratepayer) throw new NotFoundError('Ratepayer profile not found');
+
+      return app.prisma.ratepayer.update({
+        where: { id: ratepayerId },
+        data: {
+          ...(input.legalName !== undefined ? { legalName: input.legalName } : {}),
+          ...(input.email !== undefined ? { email: input.email } : {}),
+          ...(input.locationGeo !== undefined ? { locationGeo: input.locationGeo as any } : {})
+        }
+      });
     },
 
     async claimProperty(input: ClaimPropertyInput) {

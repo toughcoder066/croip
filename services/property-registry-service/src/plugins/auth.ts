@@ -4,10 +4,24 @@ import fp from 'fastify-plugin';
 import { createLocalJWKSet, jwtVerify, type JWTPayload, type JSONWebKeySet } from 'jose';
 import type { AppConfig } from '../config.js';
 import { ForbiddenError } from '../lib/errors.js';
+import { verifyRatepayerToken } from '../lib/ratepayer-jwt.js';
+
+// Zitadel issues RS256 (asymmetric, JWKS-verified) tokens; ratepayer-service issues
+// HS256 (shared-secret) tokens. Peeking at the unverified header's `alg` is enough to
+// route to the right verifier — neither verifier trusts this value itself, it only
+// decides which one to try.
+function peekAlg(token: string): string | undefined {
+  try {
+    const headerJson = Buffer.from(token.split('.')[0] ?? '', 'base64url').toString('utf8');
+    return (JSON.parse(headerJson) as { alg?: string }).alg;
+  } catch {
+    return undefined;
+  }
+}
 
 export interface AuthContext {
   subject: string;
-  actorType: 'USER' | 'SERVICE';
+  actorType: 'USER' | 'SERVICE' | 'RATEPAYER';
   concessionId: string;
   assemblyId: string;
   permissions: string[];
@@ -140,5 +154,31 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
     if (!required.every((permission) => request.auth.permissions.includes(permission))) {
       throw new ForbiddenError(`Required permissions: ${required.join(', ')}`);
     }
+  });
+
+  // Self-service property creation accepts EITHER a staff Zitadel token (with
+  // properties:manage) OR a ratepayer's own session token — a ratepayer registering
+  // their own property needs no staff-granted permission, just a valid session.
+  app.decorate('authenticateStaffOrRatepayer', (required: string[]) => async (request, reply) => {
+    const authorization = request.headers.authorization;
+    if (config.AUTH_MODE === 'zitadel' && authorization?.startsWith('Bearer ') && peekAlg(authorization.slice(7)) === 'HS256') {
+      try {
+        const claims = await verifyRatepayerToken(authorization.slice(7), config.RATEPAYER_JWT_SECRET);
+        request.auth = {
+          subject: claims.sub,
+          actorType: 'RATEPAYER',
+          concessionId: '00000000-0000-0000-0000-000000000000',
+          assemblyId: claims.assemblyId,
+          permissions: [],
+          claims: {}
+        };
+        return;
+      } catch (error) {
+        request.log.warn({ err: error }, 'ratepayer access token rejected');
+        throw app.httpErrors.unauthorized('Invalid or expired access token');
+      }
+    }
+
+    await app.requirePermissions(required)(request, reply);
   });
 }, { name: 'auth' });

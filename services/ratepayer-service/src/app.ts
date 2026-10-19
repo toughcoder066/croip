@@ -24,6 +24,7 @@ export async function buildApp(options: BuildOptions): Promise<FastifyInstance> 
     genReqId: (request) => String(request.headers['x-request-id'] ?? crypto.randomUUID())
   });
   app.decorate('serviceInfo', { name: config.SERVICE_NAME });
+  app.decorate('config', config);
   await app.register(sensible);
   await app.register(helmet, { contentSecurityPolicy: false });
   await app.register(cors, {
