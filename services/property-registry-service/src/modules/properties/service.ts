@@ -182,7 +182,7 @@ export function propertyService(app: FastifyInstance) {
         });
 
         // Default unit
-        await tx.propertyUnit.create({
+        const defaultUnit = await tx.propertyUnit.create({
           data: {
             propertyId: property.id,
             unitIdentifier: 'WHOLE_BUILDING',
@@ -234,22 +234,34 @@ export function propertyService(app: FastifyInstance) {
 
         await appendOutboxEvent(tx, 'revenue.property.created.v1', evt);
 
-        return property;
+        // defaultUnitId isn't part of the public response schema (fast-json-stringify
+        // strips anything not declared there) — it's only consumed internally, by the
+        // route, to link a self-registered property back to the ratepayer in
+        // ratepayer-service right after this transaction commits.
+        return { ...property, defaultUnitId: defaultUnit.id };
       });
     },
 
-    async listProperties(assemblyId: string) {
+    // Platform-wide by default — matches the other oversight list/get endpoints
+    // (ratepayer directory, bill lookup by number), which were never scoped to a single
+    // assembly either. assemblyId narrows the search when the caller wants one MMDA's
+    // view. Deliberately NOT using the idarms:context claim here at all: that claim is a
+    // single hardcoded value shared by every officer today (there's no per-officer
+    // assembly assignment in the data model yet) and several OTHER services hard-filter
+    // on it as a real UUID with no wildcard support — changing what it contains would
+    // silently break those, so this fix stays local to how these two routes query.
+    async listProperties(assemblyId?: string) {
       return app.prisma.property.findMany({
-        where: { assemblyId },
+        where: assemblyId ? { assemblyId } : {},
         include: { documents: true },
         orderBy: { createdAt: 'desc' },
         take: 50
       });
     },
 
-    async getProperty(id: string, assemblyId: string) {
+    async getProperty(id: string, assemblyId?: string) {
       const prop = await app.prisma.property.findFirst({
-        where: { id, assemblyId },
+        where: assemblyId ? { id, assemblyId } : { id },
         include: {
           units: true,
           documents: true,

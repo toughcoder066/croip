@@ -32,18 +32,42 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       assemblyId: (isRatepayer && request.body.assemblyId) || request.auth.assemblyId,
       actorId: request.auth.subject
     });
+
+    if (isRatepayer) {
+      // Best-effort: the property is already correctly attributed in this service's own
+      // database (createdByRatepayerId above) regardless of whether this call succeeds —
+      // this just propagates the link to ratepayer-service's own relationship table so
+      // the ratepayer sees it under "my properties". Forwards the same ratepayer bearer
+      // token the caller used for this request, so ratepayer-service's authenticateRatepayer
+      // resolves the ratepayer id itself rather than trusting a body field.
+      try {
+        const response = await fetch(`${app.config.RATEPAYER_SERVICE_URL}/v1/ratepayers/me/properties/link`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: request.headers.authorization! },
+          body: JSON.stringify({ propertyId: created.id, unitId: created.defaultUnitId }),
+          signal: AbortSignal.timeout(5000)
+        });
+        if (!response.ok) {
+          request.log.error({ status: response.status, body: await response.text() }, 'Failed to link self-registered property to ratepayer profile');
+        }
+      } catch (err) {
+        request.log.error({ err }, 'Failed to reach ratepayer-service to link self-registered property');
+      }
+    }
+
     return reply.code(201).send(created);
   });
 
-  app.get('/properties', {
+  app.get<{ Querystring: { assemblyId?: string } }>('/properties', {
     preHandler: app.requirePermissions(['properties:read']),
     schema: {
       tags: ['Property Registry'],
-      summary: 'Search / list properties within caller assembly context',
+      summary: 'Search / list properties platform-wide, optionally filtered to one MMDA',
+      querystring: { type: 'object', properties: { assemblyId: { type: 'string', format: 'uuid' } } },
       response: { 200: { type: 'array', items: propertyResponseSchema }, 401: problemSchema, 403: problemSchema }
     }
   }, async (request) => {
-    return service.listProperties(request.auth.assemblyId);
+    return service.listProperties(request.query?.assemblyId);
   });
 
   app.get<{ Params: { id: string } }>('/properties/:id', {
@@ -55,7 +79,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema, 404: problemSchema }
     }
   }, async (request) => {
-    return service.getProperty(request.params.id, request.auth.assemblyId);
+    return service.getProperty(request.params.id);
   });
 
   app.post<{ Params: { id: string }; Body: { unitIdentifier: string; unitType?: string; floorLevel?: number } }>('/properties/:id/units', {

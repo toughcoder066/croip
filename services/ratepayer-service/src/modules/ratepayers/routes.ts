@@ -6,7 +6,8 @@ import {
   type DirectoryFilter,
   type LoginInput,
   type VerifyOtpInput,
-  type UpdateProfileInput
+  type UpdateProfileInput,
+  type LinkOwnPropertyInput
 } from './service.js';
 import {
   problemSchema,
@@ -20,7 +21,8 @@ import {
   otpRequiredResponseSchema,
   verifyOtpBodySchema,
   authTokenResponseSchema,
-  updateProfileBodySchema
+  updateProfileBodySchema,
+  linkOwnPropertyBodySchema
 } from './schemas.js';
 
 export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
@@ -73,6 +75,19 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
     }
   }, async (request) => {
     return service.updateProfile(request.ratepayerAuth.sub, request.body);
+  });
+
+  app.post<{ Body: LinkOwnPropertyInput }>('/ratepayers/me/properties/link', {
+    preHandler: app.authenticateRatepayer,
+    schema: {
+      tags: ['Ratepayer Self-Service'],
+      summary: 'Internal: called by property-registry-service right after a ratepayer self-registers a property, to link it to their own profile',
+      body: linkOwnPropertyBodySchema,
+      response: { 201: { type: 'object', additionalProperties: true }, 401: problemSchema, 404: problemSchema }
+    }
+  }, async (request, reply) => {
+    const link = await service.linkOwnProperty(request.ratepayerAuth.sub, request.body);
+    return reply.code(201).send(link);
   });
 
   app.get('/ratepayers/me', {

@@ -35,6 +35,12 @@ export interface UpdateProfileInput {
   locationGeo?: Record<string, unknown>;
 }
 
+export interface LinkOwnPropertyInput {
+  propertyId: string;
+  unitId: string;
+  ownershipType?: string;
+}
+
 const OTP_TTL_MS = 5 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
 
@@ -221,6 +227,48 @@ export function ratepayerService(app: FastifyInstance) {
           ...(input.email !== undefined ? { email: input.email } : {}),
           ...(input.locationGeo !== undefined ? { locationGeo: input.locationGeo as any } : {})
         }
+      });
+    },
+
+    // Called by property-registry-service right after it creates a property on this
+    // ratepayer's own behalf (self-service registration — not the separate "claim an
+    // existing property" flow below, which is for properties someone else already
+    // registered). The ratepayer already proved ownership via the documents attached at
+    // creation time, so this is approved immediately rather than going through
+    // claimProperty's PENDING_VERIFICATION review queue.
+    async linkOwnProperty(ratepayerId: string, input: LinkOwnPropertyInput) {
+      const ratepayer = await app.prisma.ratepayer.findUnique({ where: { id: ratepayerId } });
+      if (!ratepayer) throw new NotFoundError('Ratepayer profile not found');
+
+      return app.prisma.$transaction(async (tx) => {
+        const link = await tx.propertyRatepayerLink.create({
+          data: {
+            ratepayerId,
+            propertyId: input.propertyId,
+            unitId: input.unitId,
+            ownershipType: input.ownershipType ?? 'OWNER',
+            ownershipPercentage: 100.0,
+            isPrimaryBillingContact: true,
+            claimStatus: 'APPROVED',
+            effectiveFrom: new Date()
+          }
+        });
+
+        const evt = domainEvent({
+          eventType: 'PropertySelfRegisteredAndLinked',
+          eventVersion: 1,
+          producer: app.serviceInfo.name,
+          aggregateType: 'PropertyRatepayerLink',
+          aggregateId: link.id,
+          aggregateVersion: 1,
+          concessionId: '00000000-0000-0000-0000-000000000000',
+          assemblyId: ratepayer.assemblyId,
+          correlationId: crypto.randomUUID(),
+          data: { linkId: link.id, propertyId: link.propertyId, unitId: link.unitId, ratepayerId: link.ratepayerId }
+        });
+        await appendOutboxEvent(tx, 'revenue.property.self_registered_and_linked.v1', evt);
+
+        return link;
       });
     },
 

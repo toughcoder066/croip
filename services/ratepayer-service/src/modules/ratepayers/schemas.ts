@@ -92,6 +92,16 @@ export const updateProfileBodySchema = {
   }
 };
 
+export const linkOwnPropertyBodySchema = {
+  type: 'object',
+  required: ['propertyId', 'unitId'],
+  properties: {
+    propertyId: { type: 'string', format: 'uuid' },
+    unitId: { type: 'string', format: 'uuid' },
+    ownershipType: { type: 'string', default: 'OWNER' }
+  }
+};
+
 export const verificationResponseSchema = {
   type: 'object',
   required: ['id', 'ratepayerId', 'provider', 'verificationStatus', 'createdAt'],

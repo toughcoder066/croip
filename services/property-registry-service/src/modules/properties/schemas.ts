@@ -27,6 +27,9 @@ export const propertyResponseSchema = {
     tenureType: { type: 'string' },
     structureType: { type: 'string' },
     verificationStatus: { type: 'string' },
+    registrationSource: { type: 'string', enum: ['CONCESSION', 'RATEPAYER'] },
+    registeredByConcessionId: { type: ['string', 'null'], format: 'uuid' },
+    createdByRatepayerId: { type: ['string', 'null'], format: 'uuid' },
     polygonGeoJson: { type: 'object', additionalProperties: true },
     createdAt: { type: 'string', format: 'date-time' }
   }
