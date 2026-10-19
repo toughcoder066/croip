@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
-import { deleteTokenSession, getTokenSession } from '@/lib/token-store'
+import { deleteTokenSession, peekIdToken } from '@/lib/token-store'
 import { ZITADEL_CLIENT_ID, ZITADEL_ISSUER } from '@/lib/zitadel'
 
 export async function POST(request: Request) {
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     }
   }
 
-  const idToken = getTokenSession(tokenSessionId)?.idToken
+  const idToken = peekIdToken(tokenSessionId)
 
   deleteTokenSession(tokenSessionId)
   cookieStore.delete('croip_session')

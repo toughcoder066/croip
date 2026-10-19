@@ -6,7 +6,7 @@
 
 import { cookies } from 'next/headers'
 
-import { getTokenSession } from './token-store'
+import { touchTokenSession } from './token-store'
 
 export const CROIP_SERVICES = {
   REPORTING_GATEWAY: process.env.REPORTING_GATEWAY_API_URL || 'http://localhost:3001',
@@ -32,7 +32,12 @@ export interface RequestOptions extends RequestInit {
   accessToken?: string
 }
 
-/** Resolves the current request's real Zitadel access token from the session cookie. */
+/**
+ * Resolves the current request's real Zitadel access token from the session cookie.
+ * Every call here counts as activity (see touchTokenSession) — an officer who keeps
+ * using the portal stays silently signed in via the refresh token; one who stops gets
+ * logged out after 5 idle minutes regardless of the access token's own lifetime.
+ */
 async function resolveSessionAccessToken(): Promise<string | null> {
   try {
     const cookieStore = await cookies()
@@ -41,8 +46,9 @@ async function resolveSessionAccessToken(): Promise<string | null> {
     if (!sessionCookie?.value) return null
 
     const session = JSON.parse(sessionCookie.value)
+    const tokens = await touchTokenSession(session.tokenSessionId)
 
-    return getTokenSession(session.tokenSessionId)?.accessToken ?? null
+    return tokens?.accessToken ?? null
   } catch {
     return null
   }

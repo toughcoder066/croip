@@ -33,9 +33,13 @@ export async function GET(request: Request) {
   // itself into `aud` — that's the one fixed value every one of the 11 backend
   // services is configured to accept as `ZITADEL_AUDIENCE`, so this one token can
   // authenticate against all of them without registering 11 separate API resources.
+  // `offline_access` requests a refresh token so an active session can be silently
+  // renewed without the officer re-entering credentials — the inactivity timeout (see
+  // token-store.ts) is what actually ends the session, not the access token's own
+  // short lifetime.
   authorizeUrl.searchParams.set(
     'scope',
-    'openid profile email ' +
+    'openid profile email offline_access ' +
       'urn:zitadel:iam:org:project:id:zitadel:aud ' +
       'urn:zitadel:iam:org:project:id:395706197476376592:roles ' +
       'urn:zitadel:iam:org:project:id:395706197476376592:aud'
