@@ -73,6 +73,10 @@ export const StandardRoles = {
   CONCESSIONAIRE_ADMIN: "CONCESSIONAIRE_ADMIN",
   /** Concessionaire Billing Officer: calculates draft bills and pushes batch submissions to CROIP. */
   CONCESSIONAIRE_BILLING: "CONCESSIONAIRE_BILLING",
+  /** Field Agent: verifies properties on-premises, registers new properties, and issues bills. */
+  CONCESSIONAIRE_AGENT: "CONCESSIONAIRE_AGENT",
+  /** Concessionaire Officer: reviews and approves field verifications and handles disputes within the MMDA. */
+  CONCESSIONAIRE_OFFICER: "CONCESSIONAIRE_OFFICER",
   /** Citizen Ratepayer: discovers properties, claims units, pays municipal bills, and tracks receipts. */
   RATEPAYER: "RATEPAYER",
 } as const;

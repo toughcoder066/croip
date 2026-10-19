@@ -1,0 +1,90 @@
+services:
+  service:
+    build: .
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/reporting_gateway?schema=public
+      RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks: [service-net]
+    restart: unless-stopped
+
+  outbox-worker:
+    build: .
+    command: ["node", "dist/src/workers/outbox.js"]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/reporting_gateway?schema=public
+      RABBITMQ_URL: amqp://idarms:idarms_dev_only@rabbitmq:5672
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    networks: [service-net]
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      target: migration
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://idarms:idarms_dev_only@postgres:5432/reporting_gateway?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [service-net]
+    restart: "no"
+
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: idarms
+      POSTGRES_PASSWORD: idarms_dev_only
+      POSTGRES_DB: reporting_gateway
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U idarms -d reporting_gateway"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [service-net]
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: idarms
+      RABBITMQ_DEFAULT_PASS: idarms_dev_only
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [service-net]
+
+networks:
+  service-net:
+    internal: false
+
+volumes:
+  postgres-data:
+  rabbitmq-data:

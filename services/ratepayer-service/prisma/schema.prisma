@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Ratepayer {
+  id            String   @id @default(uuid()) @db.Uuid
+  code          String   @unique @db.VarChar(50)
+  ratepayerType String   @default("INDIVIDUAL") @map("ratepayer_type") @db.VarChar(20)
+  legalName     String   @map("legal_name") @db.VarChar(200)
+  phone         String   @db.VarChar(30)
+  email         String?  @db.VarChar(255)
+  regionId      String   @map("region_id") @db.Uuid
+  assemblyId    String   @map("assembly_id") @db.Uuid
+  locationGeo   Json     @map("location_geo")
+  status        String   @default("ACTIVE") @db.VarChar(20)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  verifications RatepayerVerification[]
+  propertyLinks PropertyRatepayerLink[]
+
+  @@index([assemblyId, status])
+  @@index([phone])
+  @@map("ratepayers")
+}
+
+model RatepayerVerification {
+  id                 String    @id @default(uuid()) @db.Uuid
+  ratepayerId        String    @map("ratepayer_id") @db.Uuid
+  provider           String    @db.VarChar(50)
+  providerReference  String    @map("provider_reference") @db.VarChar(150)
+  verificationStatus String    @default("PENDING") @map("verification_status") @db.VarChar(20)
+  verifiedAt         DateTime? @map("verified_at") @db.Timestamptz
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  ratepayer Ratepayer @relation(fields: [ratepayerId], references: [id], onDelete: Cascade)
+
+  @@index([ratepayerId, verificationStatus])
+  @@map("ratepayer_verifications")
+}
+
+model PropertyRatepayerLink {
+  id                       String    @id @default(uuid()) @db.Uuid
+  unitId                   String    @map("unit_id") @db.Uuid
+  propertyId               String    @map("property_id") @db.Uuid
+  ratepayerId              String    @map("ratepayer_id") @db.Uuid
+  ownershipType            String    @default("OWNER") @map("ownership_type") @db.VarChar(30)
+  ownershipPercentage      Decimal   @default(100.00) @map("ownership_percentage") @db.Decimal(5, 2)
+  isPrimaryBillingContact  Boolean   @default(true) @map("is_primary_billing_contact")
+  claimStatus              String    @default("APPROVED") @map("claim_status") @db.VarChar(30)
+  effectiveFrom            DateTime  @default(now()) @map("effective_from") @db.Date
+  effectiveTo              DateTime? @map("effective_to") @db.Date
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  ratepayer      Ratepayer               @relation(fields: [ratepayerId], references: [id], onDelete: Cascade)
+  claimDocuments PropertyClaimDocument[]
+
+  @@unique([unitId, ratepayerId])
+  @@index([ratepayerId, claimStatus])
+  @@index([propertyId])
+  @@map("property_ratepayer_links")
+}
+
+model PropertyClaimDocument {
+  id                 String   @id @default(uuid()) @db.Uuid
+  linkId             String   @map("link_id") @db.Uuid
+  documentType       String   @map("document_type") @db.VarChar(50)
+  documentNumber     String?  @map("document_number") @db.VarChar(100)
+  issuingAuthority   String?  @map("issuing_authority") @db.VarChar(150)
+  mediaUrl           String   @map("media_url") @db.VarChar(500)
+  verificationStatus String   @default("PENDING") @map("verification_status") @db.VarChar(30)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  link PropertyRatepayerLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+
+  @@index([linkId])
+  @@map("property_claim_documents")
+}
+
+model OutboxEvent {
+  id                String    @id @default(uuid()) @db.Uuid
+  eventType         String
+  eventVersion      Int       @default(1)
+  aggregateType     String
+  aggregateId       String
+  aggregateVersion  Int
+  routingKey        String
+  payload           Json
+  headers           Json
+  occurredAt        DateTime  @default(now())
+  publishedAt       DateTime?
+  attempts          Int       @default(0)
+  nextAttemptAt     DateTime  @default(now())
+  lockedAt          DateTime?
+  lastError         String?
+
+  @@index([publishedAt, nextAttemptAt, occurredAt])
+  @@map("outbox_events")
+}
+
+model InboxMessage {
+  id          String    @id @default(uuid()) @db.Uuid
+  consumerId  String
+  messageId   String    @db.Uuid
+  eventType   String
+  receivedAt  DateTime  @default(now())
+  processedAt DateTime?
+  result      Json?
+
+  @@unique([consumerId, messageId])
+  @@map("inbox_messages")
+}
+
+model IdempotencyRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  concessionId   String   @db.Uuid
+  idempotencyKey String
+  requestHash    String
+  responseStatus Int?
+  responseBody   Json?
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+
+  @@unique([concessionId, idempotencyKey])
+  @@index([expiresAt])
+  @@map("idempotency_records")
+}
+
+model AuditRecord {
+  id           String   @id @default(uuid()) @db.Uuid
+  occurredAt   DateTime @default(now())
+  actorId      String
+  actorType    String
+  concessionId String?  @db.Uuid
+  assemblyId   String?  @db.Uuid
+  action       String
+  resourceType String
+  resourceId   String?
+  requestId    String
+  sourceIp     String?
+  outcome      String
+  metadata     Json
+
+  @@index([concessionId, assemblyId, occurredAt])
+  @@index([resourceType, resourceId])
+  @@map("audit_records")
+}
