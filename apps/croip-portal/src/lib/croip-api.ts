@@ -45,7 +45,13 @@ async function resolveSessionAccessToken(): Promise<string | null> {
 
     if (!sessionCookie?.value) return null
 
-    const session = JSON.parse(sessionCookie.value)
+    let raw = sessionCookie.value
+    if (raw.startsWith('%')) {
+      try {
+        raw = decodeURIComponent(raw)
+      } catch {}
+    }
+    const session = JSON.parse(raw)
     const tokens = await touchTokenSession(session.tokenSessionId)
 
     return tokens?.accessToken ?? null

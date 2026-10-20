@@ -13,8 +13,8 @@ import { toast } from 'sonner'
 
 // Components Import
 import Logo from '@/components/shared/Logo'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import LoginForm from './login-form'
 
 // SVG Import
 import AuthBackgroundShape from '@/assets/svg/auth-background-shape'
@@ -62,19 +62,13 @@ const Login = () => {
           </div>
         </CardHeader>
 
-        <CardContent className='px-6'>
-          <Button
-            className='w-full gap-2'
-            size='lg'
-            render={<a href='/api/auth/oauth/zitadel/login' />}
-            nativeButton={false}
-          >
-            <ShieldCheckIcon className='size-4.5' />
-            Sign in with CROIP ID
-          </Button>
-          <p className='text-muted-foreground mt-3 text-center text-sm'>
-            Authenticated by CROIP&apos;s identity provider.
-          </p>
+        <CardContent className='flex flex-col gap-4 px-6'>
+          <LoginForm />
+
+          <div className='flex items-center justify-center gap-1.5 pt-2 text-xs text-muted-foreground'>
+            <ShieldCheckIcon className='size-3.5 text-primary' />
+            <span>Identity and access secured by Zitadel</span>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -82,3 +76,4 @@ const Login = () => {
 }
 
 export default Login
+
