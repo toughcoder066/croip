@@ -304,8 +304,8 @@ export function RegionDetailModal({
                 </div>
 
                 <div className='text-[11px] text-muted-foreground pt-1 flex items-center justify-between border-t'>
-                  <span>Database ID:</span>
-                  <span className='font-mono text-[10px]'>{region.id.slice(0, 8)}...{region.id.slice(-4)}</span>
+                  <span>Region Code:</span>
+                  <span className='font-mono text-xs font-semibold text-foreground'>{code || region.code}</span>
                 </div>
               </div>
             </div>

@@ -614,7 +614,7 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
                           <TableCell>
                             <span className="flex items-center gap-1.5 font-mono text-[11px] text-muted-foreground">
                               <UserIcon className="size-3 text-primary" />
-                              {v.verifiedByPersonnelId.slice(0, 8)}...
+                              Field Officer
                             </span>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground">{formatDateTime(v.capturedAt)}</TableCell>

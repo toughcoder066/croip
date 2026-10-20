@@ -376,8 +376,8 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
                   <TableRow key={link.id} className="hover:bg-muted/30 transition-colors">
                     <TableCell className="pl-6">
                       <div className="flex flex-col">
-                        <span className="font-mono text-xs text-foreground">{link.propertyId.slice(0, 8)}...</span>
-                        <span className="font-mono text-[11px] text-muted-foreground">Unit {link.unitId.slice(0, 8)}...</span>
+                        <span className="text-xs font-semibold text-foreground">Property Parcel</span>
+                        <span className="text-[11px] text-muted-foreground">Registered Unit</span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -463,7 +463,7 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-xs font-mono text-muted-foreground">{payment.bill?.billNumber ?? payment.billId.slice(0, 8)}</TableCell>
+                      <TableCell className="text-xs font-mono text-muted-foreground">{payment.bill?.billNumber ?? 'Bill Ref'}</TableCell>
                       <TableCell className="text-xs font-medium text-foreground">{formatMoney(currency, payment.amount)}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{formatMoney(currency, payment.balanceAtPayment)}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{formatDate(payment.paidAt)}</TableCell>

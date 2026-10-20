@@ -272,7 +272,7 @@ export function ConcessionsDataTable({ data, loading = false }: ConcessionsDataT
                         <div className="flex flex-col">
                           <span className="font-semibold text-xs text-foreground">{row.name}</span>
                           <span className="font-mono text-[11px] text-muted-foreground">
-                            {row.code} • UUID: {row.id.slice(0, 8)}...
+                            {row.code} • Concession Operator
                           </span>
                         </div>
                       </div>
@@ -329,9 +329,9 @@ export function ConcessionsDataTable({ data, loading = false }: ConcessionsDataT
                               <EyeIcon className="size-4 mr-2" />
                               View Details
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => copyToClipboard(row.id, 'UUID')}>
+                            <DropdownMenuItem onClick={() => copyToClipboard(row.code, 'Code')}>
                               <CopyIcon className="size-4 mr-2" />
-                              Copy Database UUID
+                              Copy Concession Code
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem

@@ -304,7 +304,7 @@ export function RegionsDataTable({
                 </InputGroupAddon>
                 <InputGroupInput
                   id="search-region"
-                  placeholder="Search by name, capital, or id..."
+                  placeholder="Search by name, code, or capital..."
                   value={search}
                   onChange={e => {
                     setSearch(e.target.value)
@@ -502,7 +502,7 @@ export function RegionsDataTable({
                               <MapPinIcon className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                             </span>
                             <span className="text-xs text-muted-foreground font-mono truncate">
-                              {row.id.slice(0, 8)}...{row.id.slice(-4)}
+                              {row.code} • Administrative Region
                             </span>
                           </div>
                         </div>
@@ -561,9 +561,9 @@ export function RegionsDataTable({
                                 <PencilIcon className="size-4 mr-2" />
                                 Edit Boundary Points
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => copyToClipboard(row.id, 'UUID')}>
+                              <DropdownMenuItem onClick={() => copyToClipboard(row.code, 'Code')}>
                                 <CopyIcon className="size-4 mr-2" />
-                                Copy Database UUID
+                                Copy Region Code
                               </DropdownMenuItem>
                               {!readOnly && (
                                 <>

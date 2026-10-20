@@ -708,7 +708,7 @@ export function UserDirectoryView() {
                           <div className="flex flex-col">
                             <span className="font-semibold text-xs text-foreground">{row.fullName}</span>
                             <span className="font-mono text-[11px] text-muted-foreground">
-                              {row.code} • UUID: {row.id.slice(0, 8)}...
+                              {row.code} • {getUserRole(row).name}
                             </span>
                           </div>
                         </div>
@@ -831,9 +831,9 @@ export function UserDirectoryView() {
                                 <PencilIcon className="size-4 mr-2" />
                                 Edit Officer Details
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => copyToClipboard(row.id, 'UUID')}>
+                              <DropdownMenuItem onClick={() => copyToClipboard(row.code, 'Code')}>
                                 <CopyIcon className="size-4 mr-2" />
-                                Copy Database UUID
+                                Copy Officer Code
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => copyToClipboard(row.email, 'Email')}>
                                 <MailIcon className="size-4 mr-2" />

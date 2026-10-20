@@ -387,7 +387,7 @@ export function ConcessionDetailView({ concessionId }: ConcessionDetailViewProps
                         <TableCell className="pl-6">
                           <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
                             <LandmarkIcon className="size-3.5 text-primary" />
-                            <span className="font-mono">{a.assemblyId.slice(0, 8)}…</span>
+                            <span>Assigned MMDA</span>
                           </div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">

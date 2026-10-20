@@ -396,7 +396,7 @@ export function GatewaysDataTable({
                               {row.name}
                             </span>
                             <span className="font-mono text-[11px] text-muted-foreground">
-                              {row.code} • UUID: {row.id.slice(0, 8)}...
+                              {row.code} • {type || 'Gateway'}
                             </span>
                           </div>
                         </div>
@@ -524,9 +524,9 @@ export function GatewaysDataTable({
                                 <PencilIcon className="size-4 mr-2" />
                                 Edit Gateway
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => copyToClipboard(row.id, 'UUID')}>
+                              <DropdownMenuItem onClick={() => copyToClipboard(row.code, 'Code')}>
                                 <CopyIcon className="size-4 mr-2" />
-                                Copy Database UUID
+                                Copy Gateway Code
                               </DropdownMenuItem>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem

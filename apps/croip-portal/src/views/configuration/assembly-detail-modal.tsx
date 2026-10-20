@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import dynamic from 'next/dynamic'
 import {
   MapPinIcon,
@@ -138,7 +138,14 @@ export function AssemblyDetailModal({
     if (assembly) {
       setCode(assembly.code || '')
       setName(assembly.name || '')
-      setRegionId(assembly.regionId || '')
+
+      const matched = regions.find(
+        r =>
+          r.id === assembly.regionId ||
+          (assembly.metadata?.region && r.name.toLowerCase() === assembly.metadata.region.toLowerCase()) ||
+          (assembly.metadata?.regionCode && r.code.toLowerCase() === assembly.metadata.regionCode.toLowerCase())
+      )
+      setRegionId(matched ? matched.id : assembly.regionId || '')
 
       const rawCat = (assembly.category || assembly.metadata?.category || 'MUNICIPAL').toUpperCase()
       setCategory(
@@ -149,7 +156,7 @@ export function AssemblyDetailModal({
       setDraftPolygon(initialPoly)
       setPoints(extractRingPoints(initialPoly))
     }
-  }, [assembly])
+  }, [assembly, regions])
 
   const handleMapDraftChange = (newGeoJson: GeoJsonGeometry | null) => {
     setDraftPolygon(newGeoJson)
@@ -237,7 +244,17 @@ export function AssemblyDetailModal({
 
   if (!assembly) return null
 
-  const currentRegion = regions.find(r => r.id === regionId)
+  const currentRegion = useMemo(() => {
+    if (!regionId) return null
+    return (
+      regions.find(
+        r =>
+          r.id === regionId ||
+          r.code?.toLowerCase() === regionId?.toLowerCase() ||
+          r.name?.toLowerCase() === regionId?.toLowerCase()
+      ) || null
+    )
+  }, [regions, regionId])
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -320,7 +337,13 @@ export function AssemblyDetailModal({
                   </Label>
                   <Select value={regionId} onValueChange={(val: string | null) => val && setRegionId(val)}>
                     <SelectTrigger id='assembly-region' className='w-full text-xs'>
-                      <SelectValue placeholder='Select a region' />
+                      <SelectValue placeholder='Select a region'>
+                        {currentRegion
+                          ? `${currentRegion.name} (${currentRegion.code})`
+                          : assembly.metadata?.region
+                          ? `${assembly.metadata.region}`
+                          : 'Select a region'}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent className='max-h-56'>
                       <SelectGroup>
@@ -358,8 +381,8 @@ export function AssemblyDetailModal({
                 </div>
 
                 <div className='text-[11px] text-muted-foreground pt-1 flex items-center justify-between border-t'>
-                  <span>Database ID:</span>
-                  <span className='font-mono text-[10px]'>{assembly.id.slice(0, 8)}...{assembly.id.slice(-4)}</span>
+                  <span>Assembly Code:</span>
+                  <span className='font-mono text-xs font-semibold text-foreground'>{code || assembly.code}</span>
                 </div>
               </div>
             </div>

@@ -434,7 +434,7 @@ export function AssembliesDataTable({
                             <MapPinIcon className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                           </span>
                           <span className="font-mono text-[11px] text-muted-foreground">
-                            {row.code} • UUID: {row.id.slice(0, 8)}...
+                            {row.code} • {category}
                           </span>
                         </div>
                       </TableCell>
@@ -536,9 +536,9 @@ export function AssembliesDataTable({
                                 <PencilIcon className="size-4 mr-2" />
                                 Edit Boundary Points
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => copyToClipboard(row.id, 'UUID')}>
+                              <DropdownMenuItem onClick={() => copyToClipboard(row.code, 'Code')}>
                                 <CopyIcon className="size-4 mr-2" />
-                                Copy Database UUID
+                                Copy Assembly Code
                               </DropdownMenuItem>
                               {!readOnly && (
                                 <>

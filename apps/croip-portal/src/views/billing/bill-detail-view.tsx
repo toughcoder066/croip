@@ -254,8 +254,8 @@ export function BillDetailView({ billNumber }: { billNumber: string }) {
                       <TableCell className="text-xs text-muted-foreground">{formatMoney(bill.currency, p.balanceAtPayment)}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {p.paidByRatepayerId ? (
-                          <span className="font-mono">
-                            {p.paidByRatepayerId.slice(0, 8)}...
+                          <span>
+                            Ratepayer
                             {paidForOther && <span className="ml-1.5 text-[10px] text-amber-700 dark:text-amber-400">(on behalf of another ratepayer)</span>}
                           </span>
                         ) : '—'}
