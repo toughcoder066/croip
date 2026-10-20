@@ -13,7 +13,8 @@ export async function GET(request: Request) {
   try {
     const data = await croipApi.disputes.getQueue({
       status: searchParams.get('status') || undefined,
-      assignedToPersonnelId: searchParams.get('assignedToPersonnelId') || undefined
+      assignedToPersonnelId: searchParams.get('assignedToPersonnelId') || undefined,
+      raisedByRatepayerId: searchParams.get('raisedByRatepayerId') || undefined
     })
     return NextResponse.json({ success: true, data })
   } catch (error) {

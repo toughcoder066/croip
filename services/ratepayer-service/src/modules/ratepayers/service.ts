@@ -454,6 +454,16 @@ export function ratepayerService(app: FastifyInstance) {
 
         return reviewed;
       });
+    },
+
+    async updateStatus(id: string, status: string) {
+      const ratepayer = await app.prisma.ratepayer.findUnique({ where: { id } });
+      if (!ratepayer) throw new NotFoundError('Ratepayer profile not found');
+
+      return app.prisma.ratepayer.update({
+        where: { id },
+        data: { status }
+      });
     }
   };
 }

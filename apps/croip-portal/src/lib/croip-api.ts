@@ -343,6 +343,17 @@ export const croipApi = {
           method: 'PATCH',
           body: JSON.stringify(data),
         }
+      ),
+
+    // CROIP portal: oversight official updates a ratepayer's account status (ACTIVE, SUSPENDED, DEACTIVATED).
+    updateStatus: (id: string, status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED') =>
+      fetchCroipService<any>(
+        CROIP_SERVICES.RATEPAYER_CORE,
+        `/v1/ratepayers/${encodeURIComponent(id)}/status`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ status })
+        }
       )
   },
   billing: {
@@ -433,11 +444,12 @@ export const croipApi = {
   disputes: {
     // CROIP portal: review queue for disputes raised by ratepayers (billing/boundary/valuation).
     // Thin pass-through to dispute-service (:3008) GET /v1/disputes.
-    getQueue: (params: { status?: string; assignedToPersonnelId?: string } = {}) => {
+    getQueue: (params: { status?: string; assignedToPersonnelId?: string; raisedByRatepayerId?: string } = {}) => {
       const query = new URLSearchParams()
 
       if (params.status) query.set('status', params.status)
       if (params.assignedToPersonnelId) query.set('assignedToPersonnelId', params.assignedToPersonnelId)
+      if (params.raisedByRatepayerId) query.set('raisedByRatepayerId', params.raisedByRatepayerId)
       const qs = query.toString()
 
       return fetchCroipService<

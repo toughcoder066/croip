@@ -214,4 +214,31 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
       });
     }
   );
+
+  app.patch<{ Params: { id: string }; Body: { status: string } }>(
+    '/ratepayers/:id/status',
+    {
+      preHandler: app.requirePermissions(['ratepayers:manage']),
+      schema: {
+        tags: ['Ratepayer Admin'],
+        summary: 'CROIP portal: oversight official updates a ratepayer account status (ACTIVE, SUSPENDED, DEACTIVATED)',
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string', format: 'uuid' } }
+        },
+        body: {
+          type: 'object',
+          required: ['status'],
+          properties: {
+            status: { type: 'string', enum: ['ACTIVE', 'SUSPENDED', 'DEACTIVATED'] }
+          }
+        },
+        response: { 200: ratepayerResponseSchema, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
+      }
+    },
+    async (request) => {
+      return service.updateStatus(request.params.id, request.body.status);
+    }
+  );
 };
