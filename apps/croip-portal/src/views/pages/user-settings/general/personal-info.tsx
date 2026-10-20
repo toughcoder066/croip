@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { useUserSession } from '@/context/user-session-context'
 
 export interface CountryOption {
   id?: string
@@ -57,30 +58,26 @@ const PersonalInfo = () => {
   }, [])
 
 
+  const { user: sessionUser, updateUser } = useUserSession()
+
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => {
-        if (data.user) {
-          const user = data.user
-          const parts = (user.fullName || '').split(' ').filter(Boolean)
-          setFirstName(parts[0] || 'CROIP')
-          setLastName(parts.slice(1).join(' ') || 'Super Administrator')
-          setMobile(user.phone || '+233 20 000 0000')
-          setCountry(user.country?.toLowerCase() || 'ghana')
-          setRoleDisplay(user.roleName || user.role || 'Super Administrator')
-          setIsSuperAdmin(
-            user.role === 'SUPER_ADMIN' ||
-              user.code === 'USR-SUPERADMIN' ||
-              user.email === 'superuser@croip.com'
-          )
-          if (user.imageUrl) {
-            setPreview(user.imageUrl)
-          }
-        }
-      })
-      .catch(() => {})
-  }, [])
+    if (sessionUser) {
+      const parts = (sessionUser.fullName || '').split(' ').filter(Boolean)
+      setFirstName(parts[0] || 'CROIP')
+      setLastName(parts.slice(1).join(' ') || 'Super Administrator')
+      setMobile(sessionUser.phone || '+233 20 000 0000')
+      setCountry(sessionUser.country?.toLowerCase() || 'ghana')
+      setRoleDisplay(sessionUser.roleName || sessionUser.role || 'Super Administrator')
+      setIsSuperAdmin(
+        sessionUser.role === 'SUPER_ADMIN' ||
+          sessionUser.code === 'USR-SUPERADMIN' ||
+          sessionUser.email === 'superuser@croip.com'
+      )
+      if (sessionUser.imageUrl) {
+        setPreview(sessionUser.imageUrl)
+      }
+    }
+  }, [sessionUser])
 
   useEffect(() => {
     if (!file) return
@@ -124,6 +121,7 @@ const PersonalInfo = () => {
       const data = await res.json()
       if (data.success && data.url) {
         setPreview(data.url)
+        updateUser({ imageUrl: data.url })
         toast.success('Avatar photo uploaded successfully.')
       } else {
         toast.error(data.error || 'Failed to upload avatar.')
@@ -141,6 +139,7 @@ const PersonalInfo = () => {
   const removeAvatar = async () => {
     const defaultUrl = '/images/avatars/avatar-1.webp'
     setPreview(defaultUrl)
+    updateUser({ imageUrl: defaultUrl })
     if (inputRef.current) inputRef.current.value = ''
 
     try {
@@ -160,6 +159,7 @@ const PersonalInfo = () => {
     setIsSubmitting(true)
 
     try {
+      const resolvedCountry = countries.find(c => c.value === country)?.label || country
       const res = await fetch('/api/user/profile', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -167,7 +167,7 @@ const PersonalInfo = () => {
           firstName,
           lastName,
           phone: mobile,
-          country: countries.find(c => c.value === country)?.label || country,
+          country: resolvedCountry,
           imageUrl: preview
         })
       })
@@ -175,6 +175,13 @@ const PersonalInfo = () => {
       const data = await res.json()
 
       if (data.success) {
+        const updatedFullName = `${firstName} ${lastName}`.trim()
+        updateUser({
+          fullName: updatedFullName,
+          phone: mobile,
+          country: resolvedCountry,
+          imageUrl: preview
+        })
         toast.success('Personal information updated successfully.')
       } else {
         toast.error(data.error || 'Failed to update personal information.')

@@ -273,6 +273,10 @@ export function ratepayerService(app: FastifyInstance) {
     },
 
     async claimProperty(input: ClaimPropertyInput) {
+      if (!input.propertyId || !String(input.propertyId).trim()) {
+        throw new BadRequestError('Property ID is required when claiming a property.');
+      }
+
       function toPropertyUuid(idOrCode: string): string {
         if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrCode)) {
           return idOrCode;

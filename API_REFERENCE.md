@@ -2128,9 +2128,14 @@ Array of:
 
 ### `POST /v1/properties`
 
-Register landed property parcel into national cadastre
+Register landed property parcel into national cadastre.
 
-**Required permission:** `properties:manage`
+**Authorization & Access Rules:**
+- **Authentication Required:** Anonymous requests return `401 Unauthorized`.
+- **Ratepayer Self-Service:** Authenticates via Bearer token (HS256 session token from `ratepayer-service`). Ownership documents are **mandatory**. The property is automatically attributed to the authenticated ratepayer and linked to their profile in `ratepayer-service`. The property boundary must fall inside any registered MMDA boundary in Ghana.
+- **Concession Registration:** Authenticates via Zitadel staff or API client Bearer token (or concession dev credentials with `properties:manage`). **Boundary Constraint:** The property's polygon boundary **cannot** be outside of the concession's assigned MMDA(s) (enforced against Platform Governance assignments).
+
+**Required permission:** `properties:manage` (or ratepayer session token)
 
 **Request body** (required):
 
@@ -2175,6 +2180,33 @@ Register landed property parcel into national cadastre
 | `verificationStatus` | string | yes |  |
 | `polygonGeoJson` | object |  |  |
 | `createdAt` | string | yes | format: date-time |
+
+**Error responses:** `400`, `401`, `403`, `409`, `503` — Standard error body (`application/problem+json`) for every non-2xx response: `type`, `title`, `status`, `code`, `requestId`, optional `details`. See **Standard Error Response** above.
+
+
+### `POST /v1/properties/batch`
+
+Register a batch of landed properties into the national cadastre in a single atomic transaction.
+
+**Authorization & Access Rules:**
+- **Restricted to Concessionaires:** Concession staff or API client with `properties:manage`. Ratepayers cannot use the batch endpoint.
+- **MMDA Boundary Constraint:** Every property in the batch **must** fall inside one of the concession's assigned MMDA(s). If any property falls outside the concession's assigned MMDA boundary, the entire batch is rejected with `403 Forbidden`.
+
+**Required permission:** `properties:manage` (Concessionaire only)
+
+**Request body** (required):
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `properties` | array<object> | yes | Array of 1 to 500 property objects (same format as `POST /v1/properties` body) |
+
+**Response `201`:**
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `success` | boolean | yes |  |
+| `count` | integer | yes | Total number of properties registered |
+| `properties` | array<object> | yes | Array of registered property records |
 
 **Error responses:** `400`, `401`, `403`, `409`, `503` — Standard error body (`application/problem+json`) for every non-2xx response: `type`, `title`, `status`, `code`, `requestId`, optional `details`. See **Standard Error Response** above.
 

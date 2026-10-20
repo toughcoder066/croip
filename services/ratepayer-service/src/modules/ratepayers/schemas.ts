@@ -161,9 +161,10 @@ export const claimDocumentInputSchema = {
 
 export const claimPropertyBodySchema = {
   type: 'object',
+  required: ['propertyId'],
   properties: {
     ratepayerId: { type: 'string' },
-    propertyId: { type: 'string' },
+    propertyId: { type: 'string', minLength: 1 },
     unitId: { type: 'string' },
     relationship: { type: 'string' },
     ownershipType: { type: 'string' },

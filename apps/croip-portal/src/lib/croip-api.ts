@@ -228,10 +228,17 @@ export const croipApi = {
       fetchCroipService<any[]>(CROIP_SERVICES.PROPERTY_REGISTRY, '/v1/properties'),
     getProperty: (id: string) =>
       fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${id}`),
-    createProperty: (data: any) =>
+    createProperty: (data: any, options?: RequestOptions) =>
       fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, '/v1/properties', {
         method: 'POST',
         body: JSON.stringify(data),
+        ...options
+      }),
+    createPropertiesBatch: (properties: any[], options?: RequestOptions) =>
+      fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, '/v1/properties/batch', {
+        method: 'POST',
+        body: JSON.stringify({ properties }),
+        ...options
       }),
     getPropertyDocuments: (code: string) =>
       fetchCroipService<any[]>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${code}/documents`),

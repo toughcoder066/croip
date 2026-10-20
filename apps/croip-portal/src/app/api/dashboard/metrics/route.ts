@@ -42,13 +42,18 @@ async function safe<T>(fn: () => Promise<T>, fallback: T, label: string): Promis
 
 export async function GET() {
   // 1. Fetch live collections from the microservices via API
-  const [propertiesRes, concessionsRes, usersRes, runsRes, exceptionsRes, auditRes, healthResults] = await Promise.all([
+  const [propertiesRes, concessionsRes, usersRes, runsRes, exceptionsRes, auditRes, ratepayersRes, healthResults] = await Promise.all([
     safe(() => croipApi.propertyRegistry.getProperties(), [] as any[], 'properties'),
     safe(() => croipApi.governance.getConcessions(), [] as any[], 'concessions'),
     safe(() => croipApi.governance.getUsers(), [] as any[], 'users'),
     safe(() => croipApi.oversight.getRuns(), [] as any[], 'reconciliation runs'),
     safe(() => croipApi.oversight.getExceptions(), [] as any[], 'exceptions'),
     safe(() => croipApi.audit.getLogs(), [] as any[], 'audit records'),
+    safe(
+      () => croipApi.ratepayers.getSummary(),
+      { totalRatepayers: 0, totalClaims: 0, totalVerifications: 0 },
+      'ratepayers summary'
+    ),
     Promise.all(
       SERVICE_REGISTRY.map(async svc => ({
         ...svc,
@@ -181,6 +186,10 @@ export async function GET() {
     }
   })
 
+  const totalRatepayers = ratepayersRes.data.totalRatepayers ?? 0
+  const totalClaims = ratepayersRes.data.totalClaims ?? 0
+  const totalVerifications = ratepayersRes.data.totalVerifications ?? 0
+
   // 6. Top statistics cards
   const statisticsCards = [
     {
@@ -206,6 +215,14 @@ export async function GET() {
       changePercentage: `GH₵ ${(totalRateableValue / 1_000_000).toFixed(2)}M total`,
       comparisonText: 'Total value across all properties',
       isCurrency: true
+    },
+    {
+      iconName: 'userCheck',
+      title: 'Ratepayer Accounts',
+      value: `${totalRatepayers} Registered`,
+      changePercentage: `${totalClaims} Property Claims`,
+      comparisonText: 'Ratepayer self-service portal',
+      isCurrency: false
     }
   ]
 
@@ -248,8 +265,8 @@ export async function GET() {
         isCurrency: false
       },
       {
-        title: 'Verified Properties',
-        value: `${verified} / ${totalProperties} Verified`,
+        title: 'Ratepayer Accounts',
+        value: `${totalRatepayers} Registered`,
         isCurrency: false
       }
     ],
@@ -281,7 +298,8 @@ export async function GET() {
       propertyRegistry: propertiesRes.ok,
       platformGovernance: concessionsRes.ok && usersRes.ok,
       oversightReconciliation: runsRes.ok && exceptionsRes.ok,
-      auditAssurance: auditRes.ok
+      auditAssurance: auditRes.ok,
+      ratepayerCore: ratepayersRes.ok
     },
     data: {
       statisticsCards,
@@ -307,9 +325,9 @@ export async function GET() {
         users: usersRes.data.length
       },
       ratepayers: {
-        totalRatepayers: 0,
-        totalClaims: 0,
-        totalVerifications: 0
+        totalRatepayers,
+        totalClaims,
+        totalVerifications
       },
       oversight: {
         reconciliationRuns: runsRes.data.length,

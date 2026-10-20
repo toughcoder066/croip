@@ -2,6 +2,7 @@
 """Generates the CROIP Postman collection + environment, organized by API consumer
 (Ratepayer / Concession / CROIP Admin) rather than by backend service."""
 import json
+import os
 import uuid
 
 def item(name, method, url_var, path, body=None, auth=None, description="", query=None):
@@ -82,15 +83,16 @@ ratepayer_folder = folder("1. Ratepayer", [
     ], "ratepayer-service — the only API-level login flow in the platform; everything below needs ratepayer_access_token from 'Login step 2'."),
     folder("My Properties", [
         item("Register a property (self-service)", "POST", "property_registry_url", "/v1/properties", auth="ratepayer", body={
-            "code": "GH0701-SELF-0002", "propertyName": "My Residence", "propertyUse": "RESIDENTIAL",
+            "code": "GH0701-SELF-{{$randomInt}}", "propertyName": "My Residence", "propertyUse": "RESIDENTIAL",
             "documents": [{"documentType": "LAND_TITLE_CERTIFICATE", "documentNumber": "LTC-00982", "mediaUrl": "https://storage.croip.gov.gh/claims/ltc-00982.pdf"}],
             "polygonGeoJson": {"type": "Polygon", "coordinates": [[[-0.2355, 5.5545], [-0.2355, 5.5555], [-0.2345, 5.5555], [-0.2345, 5.5545], [-0.2355, 5.5545]]]}
-        }, description="Ownership documents are mandatory for self-service. assemblyId defaults to the ratepayer's own registered assembly — pass assemblyId explicitly in the body only to put the property somewhere else."),
+        }, description="Strictly requires ratepayer Bearer session token (HS256). Property is attributed to the logged-in ratepayer (createdByRatepayerId) and automatically linked in ratepayer-service. Ownership documents are mandatory."),
         item("Claim an existing property (public)", "POST", "ratepayer_url", "/v1/ratepayers/claims", body={
             "ratepayerId": "{{sample_ratepayer_id}}", "propertyId": "{{sample_property_id}}",
             "ownershipType": "OWNER", "documents": [{"documentType": "INDENTURE", "mediaUrl": "https://storage.croip.gov.gh/claims/indenture.pdf"}]
         }),
         item("Claim a property by code (public)", "POST", "ratepayer_url", "/v1/properties/{{sample_property_code}}/claims", body={
+            "propertyId": "{{sample_property_id}}",
             "documents": [{"documentType": "INDENTURE", "mediaUrl": "https://storage.croip.gov.gh/claims/indenture.pdf"}]
         }),
         item("List my linked properties (public)", "GET", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/properties"),
@@ -116,9 +118,30 @@ collection["item"].append(ratepayer_folder)
 concession_folder = folder("2. Concession", [
     folder("Properties", [
         item("Register a property", "POST", "property_registry_url", "/v1/properties", auth="staff", body={
-            "code": "GH0701-0002", "propertyName": "Sample Commercial Block", "propertyUse": "COMMERCIAL",
+            "code": "GH0701-{{$randomInt}}", "propertyName": "Sample Commercial Block",
+            "propertyClass": "COMMERCIAL_CLASS_1", "buildingStatus": "COMPLETED",
+            "propertyStatus": "ASSESSED", "propertyUse": "COMMERCIAL",
+            "tenureType": "FREEHOLD", "structureType": "CONCRETE",
             "polygonGeoJson": {"type": "Polygon", "coordinates": [[[-0.2355, 5.5545], [-0.2355, 5.5555], [-0.2345, 5.5555], [-0.2345, 5.5545], [-0.2355, 5.5545]]]}
-        }, description="assemblyId/concessionId come from the caller's own Zitadel token context, not the body."),
+        }, description="Requires staff/concessionaire Bearer token. Concessions can only register properties whose polygon falls strictly within their assigned MMDA territory (enforced via Shared Services and Platform Governance). Core classification fields are required; propertyName and documents are optional."),
+        item("Register batch properties", "POST", "property_registry_url", "/v1/properties/batch", auth="staff", body={
+            "properties": [
+                {
+                    "code": "GH0701-B1-{{$randomInt}}", "propertyName": "Sample Commercial Block A",
+                    "propertyClass": "COMMERCIAL_CLASS_1", "buildingStatus": "COMPLETED",
+                    "propertyStatus": "ASSESSED", "propertyUse": "COMMERCIAL",
+                    "tenureType": "FREEHOLD", "structureType": "CONCRETE",
+                    "polygonGeoJson": {"type": "Polygon", "coordinates": [[[-0.2355, 5.5545], [-0.2355, 5.5555], [-0.2345, 5.5555], [-0.2345, 5.5545], [-0.2355, 5.5545]]]}
+                },
+                {
+                    "code": "GH0701-B2-{{$randomInt}}", "propertyName": "Sample Commercial Block B",
+                    "propertyClass": "COMMERCIAL_CLASS_1", "buildingStatus": "COMPLETED",
+                    "propertyStatus": "ASSESSED", "propertyUse": "COMMERCIAL",
+                    "tenureType": "FREEHOLD", "structureType": "CONCRETE",
+                    "polygonGeoJson": {"type": "Polygon", "coordinates": [[[-0.2345, 5.5545], [-0.2345, 5.5555], [-0.2335, 5.5555], [-0.2335, 5.5545], [-0.2345, 5.5545]]]}
+                }
+            ]
+        }, description="Concession batch registration (up to 500 properties). All properties must fall within the concession's assigned MMDA boundary. Core classification fields are required for each property; code is generated if omitted; propertyName and documents are optional."),
         item("Search/list properties in own assembly", "GET", "property_registry_url", "/v1/properties", auth="staff"),
         item("Get property details", "GET", "property_registry_url", "/v1/properties/{{sample_property_id}}", auth="staff"),
         item("Declare sectional sub-unit", "POST", "property_registry_url", "/v1/properties/{{sample_property_id}}/units", auth="staff", body={"unitIdentifier": "SHOP-01", "unitType": "SHOP", "floorLevel": 0}),
@@ -286,9 +309,15 @@ for svc_var in ["reporting_gateway_url", "event_processing_url", "independent_ev
     health_items.append(item(f"{label} — liveness", "GET", svc_var, "/health/live"))
     health_items.append(item(f"{label} — readiness", "GET", svc_var, "/health/ready"))
 collection["item"].append(folder("Platform Health Checks", health_items, "All 11 services — not tied to any persona."))
-
-with open("/tmp/croip-branding/CROIP.postman_collection.json", "w") as f:
+OUTPUT_DIR = os.path.dirname(os.path.abspath(__file__))
+collection_path = os.path.join(OUTPUT_DIR, "CROIP.postman_collection.json")
+with open(collection_path, "w") as f:
     json.dump(collection, f, indent=2)
+print("Saved collection to:", collection_path)
+
+if os.path.isdir("/tmp/croip-branding"):
+    with open("/tmp/croip-branding/CROIP.postman_collection.json", "w") as f:
+        json.dump(collection, f, indent=2)
 
 def count_items(items):
     total = 0
@@ -365,7 +394,13 @@ environment = {
     "_postman_variable_scope": "environment"
 }
 
-with open("/tmp/croip-branding/CROIP.postman_environment.json", "w") as f:
+env_path = os.path.join(OUTPUT_DIR, "CROIP.postman_environment.json")
+with open(env_path, "w") as f:
     json.dump(environment, f, indent=2)
+print("Saved environment to:", env_path)
+
+if os.path.isdir("/tmp/croip-branding"):
+    with open("/tmp/croip-branding/CROIP.postman_environment.json", "w") as f:
+        json.dump(environment, f, indent=2)
 
 print("Environment variables:", len(environment["values"]))

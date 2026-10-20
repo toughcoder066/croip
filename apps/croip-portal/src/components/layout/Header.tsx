@@ -30,21 +30,11 @@ import {
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { SidebarTrigger } from '@/components/ui/sidebar'
+import { useUserSession } from '@/context/user-session-context'
 
 const Header = () => {
   const pathname = usePathname()
-  const [user, setUser] = useState<UserSession | null>(null)
-
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => {
-        if (data.authenticated && data.user) {
-          setUser(data.user)
-        }
-      })
-      .catch(() => {})
-  }, [])
+  const { user } = useUserSession()
 
   const segments = pathname.split('/').filter(Boolean)
 

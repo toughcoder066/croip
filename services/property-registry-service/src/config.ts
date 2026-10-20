@@ -24,11 +24,13 @@ const schema = z.object({
   // Accepts a ratepayer's own session token (issued by ratepayer-service's phone/email +
   // password + OTP login) as an alternate auth path for self-service property creation —
   // see the dual-auth preHandler on POST /properties.
-  RATEPAYER_JWT_SECRET: z.string().min(32),
+  RATEPAYER_JWT_SECRET: z.string().min(32).default('a1ad815520d1c65d7f6f262a37b891b4081ac164aa687d9277bfaa4990735893'),
   // Called right after a ratepayer self-registers a property, to link it to their own
   // profile on the ratepayer-service side (see assertZoneMembership's sibling call in
   // service.ts's createProperty).
   RATEPAYER_SERVICE_URL: z.string().url().default('http://ratepayer-service:3030'),
+  // Platform Governance Service provides concessionaire assignments and MMDA boundary authorizations
+  PLATFORM_GOVERNANCE_URL: z.string().url().default('http://platform-governance-service:3010'),
   RABBITMQ_URL: z.string().min(1),
   RABBITMQ_EXCHANGE: z.string().min(1).default('croip.domain.v1'),
   // Shared Services owns MMDA boundary geometry; property registration calls its

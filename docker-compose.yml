@@ -531,6 +531,7 @@ services:
       # alternate auth path on POST /properties (self-service registration).
       RATEPAYER_JWT_SECRET: "${RATEPAYER_JWT_SECRET:-a1ad815520d1c65d7f6f262a37b891b4081ac164aa687d9277bfaa4990735893}"
       RATEPAYER_SERVICE_URL: http://ratepayer-service:3030
+      PLATFORM_GOVERNANCE_URL: http://platform-governance-service:3010
     ports:
       - "3020:3020"
     depends_on:

@@ -63,9 +63,9 @@ export const propertyDocumentInputSchema = {
 
 export const createPropertyBodySchema = {
   type: 'object',
-  required: ['code', 'polygonGeoJson'],
+  required: ['polygonGeoJson'],
   properties: {
-    code: { type: 'string', minLength: 3, maxLength: 50 },
+    code: { type: 'string', maxLength: 50 },
     accountNumber: { type: 'string', maxLength: 50 },
     propertyName: { type: 'string', maxLength: 150 },
     propertyClass: { type: 'string' },
@@ -87,6 +87,32 @@ export const createPropertyBodySchema = {
       description: 'Mandatory ownership verification documents when registered from ratepayer end'
     },
     polygonGeoJson: { type: 'object' }
+  }
+};
+
+export const createBatchPropertiesBodySchema = {
+  type: 'object',
+  required: ['properties'],
+  properties: {
+    properties: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 500,
+      items: createPropertyBodySchema
+    }
+  }
+};
+
+export const batchPropertiesResponseSchema = {
+  type: 'object',
+  required: ['success', 'count', 'properties'],
+  properties: {
+    success: { type: 'boolean' },
+    count: { type: 'integer' },
+    properties: {
+      type: 'array',
+      items: propertyResponseSchema
+    }
   }
 };
 

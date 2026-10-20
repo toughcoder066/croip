@@ -42,7 +42,11 @@ export async function buildApp(options: BuildOptions): Promise<FastifyInstance> 
   });
   await app.register(swaggerUi, { routePrefix: '/docs', uiConfig: { docExpansion: 'list' } });
   await app.register(metricsPlugin);
-  if (!options.skipInfrastructure) await app.register(prismaPlugin);
+  if (!options.skipInfrastructure) {
+    await app.register(prismaPlugin);
+  } else if (!app.hasDecorator('prisma')) {
+    app.decorate('prisma', {} as any);
+  }
   await app.register(authPlugin, { config });
 
   // setNotFoundHandler/setErrorHandler must be registered BEFORE any child route plugin
@@ -57,9 +61,31 @@ export async function buildApp(options: BuildOptions): Promise<FastifyInstance> 
     code: 'ROUTE_NOT_FOUND', requestId: request.id
   }));
   app.setErrorHandler(async (error, request, reply) => {
-    const frameworkError = error as Error & { statusCode?: number };
-    const status = error instanceof AppError ? error.statusCode : (frameworkError.statusCode ?? 500);
-    const code = error instanceof AppError ? error.code : (status === 400 ? 'VALIDATION_ERROR' : 'INTERNAL_ERROR');
+    const frameworkError = error as Error & { statusCode?: number; code?: string; meta?: { target?: string[] } };
+    const isPrismaP2002 = frameworkError.code === 'P2002';
+    const status = error instanceof AppError
+      ? error.statusCode
+      : isPrismaP2002
+      ? 409
+      : (frameworkError.statusCode ?? 500);
+
+    const defaultCode = status === 400 ? 'VALIDATION_ERROR'
+      : status === 401 ? 'UNAUTHORIZED'
+      : status === 403 ? 'FORBIDDEN'
+      : status === 404 ? 'NOT_FOUND'
+      : status === 409 ? 'CONFLICT'
+      : status === 422 ? 'UNPROCESSABLE_ENTITY'
+      : status === 503 ? 'SERVICE_UNAVAILABLE'
+      : 'INTERNAL_ERROR';
+    const code = error instanceof AppError ? error.code : defaultCode;
+    const title = error instanceof AppError
+      ? error.message
+      : isPrismaP2002
+      ? `A record with this ${frameworkError.meta?.target?.join(', ') ?? 'field'} already exists`
+      : status >= 500
+      ? 'Internal Server Error'
+      : frameworkError.message;
+
     if (status >= 500) request.log.error({ err: error }, 'request failed');
     else request.log.info({ err: error }, 'request rejected');
     // Do not `return` reply.send()'s result: Reply#send() resolves to the Reply instance
@@ -69,7 +95,7 @@ export async function buildApp(options: BuildOptions): Promise<FastifyInstance> 
     // for this status code. Resolving to undefined avoids the double-send.
     reply.code(status).type('application/problem+json').send({
       type: `https://croip.gov.gh/problems/${code.toLowerCase().replaceAll('_', '-')}`,
-      title: status >= 500 ? 'Internal Server Error' : frameworkError.message,
+      title,
       status,
       code,
       requestId: request.id,
@@ -79,7 +105,7 @@ export async function buildApp(options: BuildOptions): Promise<FastifyInstance> 
 
   if (!options.skipInfrastructure) await app.register(healthRoutes, { prefix: '/health' });
   else app.get('/health/live', { config: { public: true } }, async () => ({ status: 'ok' }));
-  if (!options.skipInfrastructure) await app.register(propertyRoutes, { prefix: '/v1' });
+  await app.register(propertyRoutes, { prefix: '/v1' });
 
   return app;
 }

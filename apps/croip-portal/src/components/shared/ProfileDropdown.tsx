@@ -35,20 +35,11 @@ interface UserSession {
   imageUrl?: string
 }
 
-const ProfileDropdown = () => {
-  const [user, setUser] = useState<UserSession | null>(null)
-  const router = useRouter()
+import { useUserSession } from '@/context/user-session-context'
 
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => {
-        if (data.authenticated && data.user) {
-          setUser(data.user)
-        }
-      })
-      .catch(() => {})
-  }, [])
+const ProfileDropdown = () => {
+  const { user } = useUserSession()
+  const router = useRouter()
 
   const fullName = user?.fullName || 'Super Administrator'
   const email = user?.email || 'superuser@croip.com'

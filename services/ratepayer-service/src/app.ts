@@ -79,7 +79,7 @@ export async function buildApp(options: BuildOptions): Promise<FastifyInstance> 
 
   if (!options.skipInfrastructure) await app.register(healthRoutes, { prefix: '/health' });
   else app.get('/health/live', { config: { public: true } }, async () => ({ status: 'ok' }));
-  if (!options.skipInfrastructure) await app.register(ratepayerRoutes, { prefix: '/v1' });
+  await app.register(ratepayerRoutes, { prefix: '/v1' });
 
   return app;
 }

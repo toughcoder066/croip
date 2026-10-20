@@ -1,15 +1,26 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { propertyService, type CreatePropertyInput, type UploadPremisesDocumentInput, type SubmitVerificationInput, type ReviewVerificationInput } from './service.js';
-import { problemSchema, propertyResponseSchema, createPropertyBodySchema, createUnitBodySchema, uploadPremisesDocumentBodySchema, submitVerificationBodySchema, reviewVerificationBodySchema, verificationResponseSchema } from './schemas.js';
+import {
+  problemSchema,
+  propertyResponseSchema,
+  createPropertyBodySchema,
+  createBatchPropertiesBodySchema,
+  batchPropertiesResponseSchema,
+  createUnitBodySchema,
+  uploadPremisesDocumentBodySchema,
+  submitVerificationBodySchema,
+  reviewVerificationBodySchema,
+  verificationResponseSchema
+} from './schemas.js';
 
 export const propertyRoutes: FastifyPluginAsync = async (app) => {
   const service = propertyService(app);
 
-  app.post<{ Body: Omit<CreatePropertyInput, 'concessionId' | 'actorId'> & { assemblyId?: string } }>('/properties', {
+  app.post<{ Body: Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType'> & { assemblyId?: string } }>('/properties', {
     preHandler: app.authenticateStaffOrRatepayer(['properties:manage']),
     schema: {
       tags: ['Property Registry'],
-      summary: 'Register landed property parcel into national cadastre — staff/concession action, or ratepayer self-service with a valid ratepayer session',
+      summary: 'Register landed property parcel into national cadastre — concession action (restricted to assigned MMDA) or ratepayer self-service with bearer token',
       body: createPropertyBodySchema,
       response: {
         201: propertyResponseSchema,
@@ -27,10 +38,11 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       // A ratepayer can only ever register a property as themselves — the body's own
       // createdByRatepayerId/registrationSource are ignored for this actor type so one
       // ratepayer can't claim to be registering on another's behalf.
-      ...(isRatepayer ? { createdByRatepayerId: request.auth.subject, registrationSource: 'RATEPAYER' as const } : {}),
+      ...(isRatepayer ? { createdByRatepayerId: request.auth.subject, registrationSource: 'RATEPAYER' as const } : { registrationSource: 'CONCESSION' as const }),
       concessionId: request.auth.concessionId,
-      assemblyId: (isRatepayer && request.body.assemblyId) || request.auth.assemblyId,
-      actorId: request.auth.subject
+      assemblyId: request.body.assemblyId || request.auth.assemblyId,
+      actorId: request.auth.subject,
+      actorType: request.auth.actorType
     });
 
     if (isRatepayer) {
@@ -43,7 +55,10 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       try {
         const response = await fetch(`${app.config.RATEPAYER_SERVICE_URL}/v1/ratepayers/me/properties/link`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: request.headers.authorization! },
+          headers: {
+            'Content-Type': 'application/json',
+            ...(request.headers.authorization ? { Authorization: request.headers.authorization } : {})
+          },
           body: JSON.stringify({ propertyId: created.id, unitId: created.defaultUnitId }),
           signal: AbortSignal.timeout(5000)
         });
@@ -56,6 +71,40 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
     }
 
     return reply.code(201).send(created);
+  });
+
+  app.post<{ Body: { properties: Array<Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType'>> } }>('/properties/batch', {
+    preHandler: app.authenticateStaffOrRatepayer(['properties:manage']),
+    schema: {
+      tags: ['Property Registry'],
+      summary: 'Concession registers a batch of landed properties within their assigned MMDA territory',
+      body: createBatchPropertiesBodySchema,
+      response: {
+        201: batchPropertiesResponseSchema,
+        400: problemSchema,
+        401: problemSchema,
+        403: problemSchema,
+        409: problemSchema,
+        503: problemSchema
+      }
+    }
+  }, async (request, reply) => {
+    if (request.auth.actorType === 'RATEPAYER') {
+      throw app.httpErrors.forbidden('Batch property registration is only available to concessionaires. Ratepayers can register individual properties.');
+    }
+
+    const createdList = await service.createBatchProperties({
+      properties: request.body.properties,
+      concessionId: request.auth.concessionId,
+      actorId: request.auth.subject,
+      actorType: request.auth.actorType
+    });
+
+    return reply.code(201).send({
+      success: true,
+      count: createdList.length,
+      properties: createdList
+    });
   });
 
   app.get<{ Querystring: { assemblyId?: string } }>('/properties', {

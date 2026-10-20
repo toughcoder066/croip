@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "dc30ae3c-d16e-483d-a5ba-443c7ba706ea",
+    "_postman_id": "cfba6136-28d2-422c-8c81-903fbb8a4604",
     "name": "CROIP Central Platform API",
     "description": "Central Revenue Oversight & Integration Platform \u2014 all 11 microservice APIs, organized by WHO calls them rather than which service owns them:\n\n- **1. Ratepayer** \u2014 citizen self-service: register, log in (password + OTP), complete profile, self-service property registration, own bills/disputes, receipt verification.\n- **2. Concession** \u2014 revenue-collection partner field staff: property registration/verification in the field, billing and payment collection, event reporting, reference-data lookups.\n- **3. CROIP Admin** \u2014 central platform/oversight staff: user & RBAC management, concession onboarding, reconciliation, audit, boundary/reference-data management, review/approval steps.\n- **Platform Health Checks** \u2014 infra liveness/readiness, not tied to any persona.\n\nSome endpoints are genuinely cross-cutting (e.g. a property verification is *submitted* by Concession staff but *reviewed* by CROIP Admin) \u2014 each lives under the persona who actually calls that specific endpoint, with a note where the split matters.\n\n**Auth model**\n- Ratepayer: no auth for register/claims/receipt-verification; phone/email + password + OTP issues `{{ratepayer_access_token}}` (HS256, ratepayer-service). Running 'Verify OTP' auto-saves it.\n- Concession & CROIP Admin: both use the same real Zitadel-issued `{{staff_access_token}}` (RBAC permissions decide what each officer can actually do) \u2014 there's no API-only login by design; sign into the portal (http://localhost:3050) as a real officer and copy the access token (see README).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -269,10 +269,10 @@
                     "properties"
                   ]
                 },
-                "description": "Ownership documents are mandatory for self-service. assemblyId defaults to the ratepayer's own registered assembly \u2014 pass assemblyId explicitly in the body only to put the property somewhere else.",
+                "description": "Strictly requires ratepayer Bearer session token (HS256). Property is attributed to the logged-in ratepayer (createdByRatepayerId) and automatically linked in ratepayer-service. Ownership documents are mandatory.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"code\": \"GH0701-SELF-0002\",\n  \"propertyName\": \"My Residence\",\n  \"propertyUse\": \"RESIDENTIAL\",\n  \"documents\": [\n    {\n      \"documentType\": \"LAND_TITLE_CERTIFICATE\",\n      \"documentNumber\": \"LTC-00982\",\n      \"mediaUrl\": \"https://storage.croip.gov.gh/claims/ltc-00982.pdf\"\n    }\n  ],\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -0.2355,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5545\n        ]\n      ]\n    ]\n  }\n}",
+                  "raw": "{\n  \"code\": \"GH0701-SELF-{{$randomInt}}\",\n  \"propertyName\": \"My Residence\",\n  \"propertyUse\": \"RESIDENTIAL\",\n  \"documents\": [\n    {\n      \"documentType\": \"LAND_TITLE_CERTIFICATE\",\n      \"documentNumber\": \"LTC-00982\",\n      \"mediaUrl\": \"https://storage.croip.gov.gh/claims/ltc-00982.pdf\"\n    }\n  ],\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -0.2355,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5545\n        ]\n      ]\n    ]\n  }\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -351,7 +351,7 @@
                 "description": "",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"documents\": [\n    {\n      \"documentType\": \"INDENTURE\",\n      \"mediaUrl\": \"https://storage.croip.gov.gh/claims/indenture.pdf\"\n    }\n  ]\n}",
+                  "raw": "{\n  \"propertyId\": \"{{sample_property_id}}\",\n  \"documents\": [\n    {\n      \"documentType\": \"INDENTURE\",\n      \"mediaUrl\": \"https://storage.croip.gov.gh/claims/indenture.pdf\"\n    }\n  ]\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -640,10 +640,54 @@
                     "properties"
                   ]
                 },
-                "description": "assemblyId/concessionId come from the caller's own Zitadel token context, not the body.",
+                "description": "Requires staff/concessionaire Bearer token. Concessions can only register properties whose polygon falls strictly within their assigned MMDA territory (enforced via Shared Services and Platform Governance). Core classification fields are required; propertyName and documents are optional.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"code\": \"GH0701-0002\",\n  \"propertyName\": \"Sample Commercial Block\",\n  \"propertyUse\": \"COMMERCIAL\",\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -0.2355,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5545\n        ]\n      ]\n    ]\n  }\n}",
+                  "raw": "{\n  \"code\": \"GH0701-{{$randomInt}}\",\n  \"propertyName\": \"Sample Commercial Block\",\n  \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n  \"buildingStatus\": \"COMPLETED\",\n  \"propertyStatus\": \"ASSESSED\",\n  \"propertyUse\": \"COMMERCIAL\",\n  \"tenureType\": \"FREEHOLD\",\n  \"structureType\": \"CONCRETE\",\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -0.2355,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5545\n        ]\n      ]\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Register batch properties",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/batch",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "batch"
+                  ]
+                },
+                "description": "Concession batch registration (up to 500 properties). All properties must fall within the concession's assigned MMDA boundary. Core classification fields are required for each property; code is generated if omitted; propertyName and documents are optional.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"properties\": [\n    {\n      \"code\": \"GH0701-B1-{{$randomInt}}\",\n      \"propertyName\": \"Sample Commercial Block A\",\n      \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n      \"buildingStatus\": \"COMPLETED\",\n      \"propertyStatus\": \"ASSESSED\",\n      \"propertyUse\": \"COMMERCIAL\",\n      \"tenureType\": \"FREEHOLD\",\n      \"structureType\": \"CONCRETE\",\n      \"polygonGeoJson\": {\n        \"type\": \"Polygon\",\n        \"coordinates\": [\n          [\n            [\n              -0.2355,\n              5.5545\n            ],\n            [\n              -0.2355,\n              5.5555\n            ],\n            [\n              -0.2345,\n              5.5555\n            ],\n            [\n              -0.2345,\n              5.5545\n            ],\n            [\n              -0.2355,\n              5.5545\n            ]\n          ]\n        ]\n      }\n    },\n    {\n      \"code\": \"GH0701-B2-{{$randomInt}}\",\n      \"propertyName\": \"Sample Commercial Block B\",\n      \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n      \"buildingStatus\": \"COMPLETED\",\n      \"propertyStatus\": \"ASSESSED\",\n      \"propertyUse\": \"COMMERCIAL\",\n      \"tenureType\": \"FREEHOLD\",\n      \"structureType\": \"CONCRETE\",\n      \"polygonGeoJson\": {\n        \"type\": \"Polygon\",\n        \"coordinates\": [\n          [\n            [\n              -0.2345,\n              5.5545\n            ],\n            [\n              -0.2345,\n              5.5555\n            ],\n            [\n              -0.2335,\n              5.5555\n            ],\n            [\n              -0.2335,\n              5.5545\n            ],\n            [\n              -0.2345,\n              5.5545\n            ]\n          ]\n        ]\n      }\n    }\n  ]\n}",
                   "options": {
                     "raw": {
                       "language": "json"
