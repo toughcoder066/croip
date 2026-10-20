@@ -285,6 +285,48 @@ export function billingService(app: FastifyInstance) {
       const byId = new Map<string, (typeof ownBills)[number]>();
       for (const bill of [...ownBills, ...paidForBills]) byId.set(bill.id, bill);
       return [...byId.values()];
+    },
+
+    async checkPropertyPaidBills(propertyId: string) {
+      const bills = await app.prisma.propertyBill.findMany({
+        where: { propertyId },
+        include: { payments: true }
+      });
+
+      const paidBills = bills.filter(b =>
+        Number(b.amountPaid) > 0 ||
+        b.payments.length > 0 ||
+        b.paymentStatus === 'PAID' ||
+        b.paymentStatus === 'PARTIALLY_PAID'
+      );
+
+      const totalPaid = paidBills.reduce((acc, b) => acc + Number(b.amountPaid), 0);
+
+      return {
+        propertyId,
+        hasPaidBills: paidBills.length > 0,
+        paidBillsCount: paidBills.length,
+        totalBillsCount: bills.length,
+        totalAmountPaid: totalPaid.toFixed(2)
+      };
+    },
+
+    async purgeBills() {
+      return app.prisma.$transaction(async (tx) => {
+        const deletedPayments = await tx.billPayment.deleteMany({});
+        const deletedLinks = await tx.paymentLink.deleteMany({});
+        const deletedBills = await tx.propertyBill.deleteMany({});
+
+        return {
+          success: true,
+          purged: {
+            payments: deletedPayments.count,
+            paymentLinks: deletedLinks.count,
+            bills: deletedBills.count
+          }
+        };
+      });
     }
   };
 }
+

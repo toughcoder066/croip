@@ -1,6 +1,6 @@
 {
   "info": {
-    "_postman_id": "192456d4-70bc-4369-b4b7-14d736df862f",
+    "_postman_id": "07427078-6693-4b1f-9c5d-414bf49ec021",
     "name": "CROIP Central Platform API",
     "description": "Central Revenue Oversight & Integration Platform \u2014 all 11 microservice APIs, organized by WHO calls them rather than which service owns them:\n\n- **1. Ratepayer** \u2014 citizen self-service: register, log in (password + OTP), complete profile, self-service property registration, own bills/disputes, receipt verification.\n- **2. Concession** \u2014 revenue-collection partner field staff: property registration/verification in the field, billing and payment collection, event reporting, reference-data lookups.\n- **3. CROIP Admin** \u2014 central platform/oversight staff: user & RBAC management, concession onboarding, reconciliation, audit, boundary/reference-data management, review/approval steps.\n- **Platform Health Checks** \u2014 infra liveness/readiness, not tied to any persona.\n\nSome endpoints are genuinely cross-cutting (e.g. a property verification is *submitted* by Concession staff but *reviewed* by CROIP Admin) \u2014 each lives under the persona who actually calls that specific endpoint, with a note where the split matters.\n\n**Auth model**\n- Ratepayer: no auth for register/claims/receipt-verification; phone/email + password + OTP issues `{{ratepayer_access_token}}` (HS256, ratepayer-service). Running 'Verify OTP' auto-saves it.\n- Concession & CROIP Admin: both use the same real Zitadel-issued `{{staff_access_token}}` (RBAC permissions decide what each officer can actually do) \u2014 there's no API-only login by design; sign into the portal (http://localhost:3050) as a real officer and copy the access token (see README).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -13,7 +13,7 @@
       "item": [
         {
           "name": "Auth & Profile",
-          "description": "ratepayer-service \u2014 the only API-level login flow in the platform; everything below needs ratepayer_access_token from 'Login step 2'.",
+          "description": "ratepayer-service \u2014 citizen self-service login and profile completion; accepts either email or phone number for registration and login, with missing info added after.",
           "item": [
             {
               "name": "Register (public)",
@@ -35,10 +35,10 @@
                     "ratepayers"
                   ]
                 },
-                "description": "",
+                "description": "Register citizen/corporate ratepayer profile with minimal credentials: just email or phone number with a password and confirm password. Can accept firstName, middleName, lastName (or legalName) which are assembled into legalName. When registering via email, the OTP is dispatched directly to Mailpit (viewable at http://localhost:8025). Phone OTPs are prepared for Arkasel gateway. The rest of the profile is completed incrementally with dynamic completion metrics (completionPercentage, missingSections, isProfileComplete, hasVerifiedKyc, isEligibleForPropertyCreation).",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"legalName\": \"{{ratepayer_name}}\",\n  \"phone\": \"{{ratepayer_phone}}\",\n  \"email\": \"{{ratepayer_email}}\",\n  \"password\": \"{{ratepayer_password}}\",\n  \"regionId\": \"{{sample_region_id}}\",\n  \"assemblyId\": \"{{sample_assembly_id}}\",\n  \"locationGeo\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n      -0.2351,\n      5.5551\n    ]\n  }\n}",
+                  "raw": "{\n  \"firstName\": \"{{ratepayer_first_name}}\",\n  \"middleName\": \"{{ratepayer_middle_name}}\",\n  \"lastName\": \"{{ratepayer_last_name}}\",\n  \"email\": \"{{ratepayer_email}}\",\n  \"password\": \"{{ratepayer_password}}\",\n  \"confirmPassword\": \"{{ratepayer_password}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -52,7 +52,51 @@
                   "listen": "test",
                   "script": {
                     "exec": [
-                      "if (pm.response.code === 201) { pm.environment.set('sample_ratepayer_id', pm.response.json().id); }"
+                      "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res).to.have.property('completion');\n  pm.expect(res.completion).to.have.property('completionPercentage');\n}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Register with phone number (public)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers"
+                  ]
+                },
+                "description": "Register with phone number alone. Verification OTP is routed to Arkasel stub. Missing info (email, address, pinpoint coordinates) can be added after.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"number\": \"{{ratepayer_phone}}\",\n  \"password\": \"{{ratepayer_password}}\",\n  \"confirmPassword\": \"{{ratepayer_password}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res.completion.missingSections).to.include('EMAIL_ADDRESS');\n}"
                     ],
                     "type": "text/javascript"
                   }
@@ -80,10 +124,10 @@
                     "login"
                   ]
                 },
-                "description": "devOtpCode is only present because no SMS provider is configured in this dev environment \u2014 a production deployment sends it by SMS instead and drops the field.",
+                "description": "Email OTPs are dispatched to Mailpit (http://localhost:8025). Phone OTPs are routed to Arkasel stub. devOtpCode is also included in dev response.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"identifier\": \"{{ratepayer_phone}}\",\n  \"password\": \"{{ratepayer_password}}\"\n}",
+                  "raw": "{\n  \"identifier\": \"{{ratepayer_email}}\",\n  \"password\": \"{{ratepayer_password}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -128,7 +172,7 @@
                 "description": "",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"identifier\": \"{{ratepayer_phone}}\",\n  \"otpCode\": \"{{ratepayer_otp_code}}\"\n}",
+                  "raw": "{\n  \"identifier\": \"{{ratepayer_email}}\",\n  \"otpCode\": \"{{ratepayer_otp_code}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -180,7 +224,7 @@
               "response": []
             },
             {
-              "name": "Complete / update my profile",
+              "name": "Update my own profile (using Bearer token)",
               "request": {
                 "method": "PATCH",
                 "header": [
@@ -200,10 +244,55 @@
                     "me"
                   ]
                 },
-                "description": "",
+                "description": "Update any individual field of own profile using the ratepayer Bearer session token. Any field can be updated without having to provide others.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"legalName\": \"{{ratepayer_name}} Jr.\",\n  \"email\": \"{{ratepayer_email}}\"\n}",
+                  "raw": "{\n  \"phone\": \"{{ratepayer_phone}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Verify KYC for own profile (Bearer token)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/me/verifications",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "me",
+                    "verifications"
+                  ]
+                },
+                "description": "Verify KYC on own signed-in account using Bearer token. Supported providers: GHANA_CARD, PASSPORT, DRIVERS_LICENSE. Choosing a new provider archives previous verifications for audit trail.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"GHANA_CARD\",\n  \"autoVerify\": true\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -242,6 +331,176 @@
                 "description": ""
               },
               "response": []
+            },
+            {
+              "name": "Update profile (granular / any field by ID)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}"
+                  ]
+                },
+                "description": "Update any individual part of the profile independently without having to send or update other fields. For example, updating address and coordinates auto-detects MMDA zone without requiring name or contact fields. Similarly, updating firstName/middleName/lastName re-assembles legalName without touching address. Authenticated via ratepayer Bearer token, staff token, or ratepayer ID.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"address\": \"14 Independence Avenue, Accra\",\n  \"latitude\": 5.6037,\n  \"longitude\": -0.187\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {\n  const j = pm.response.json();\n  pm.expect(j).to.have.property('completion');\n}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Verify KYC - 1. Ghana Card",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/verifications",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}",
+                    "verifications"
+                  ]
+                },
+                "description": "Verify ratepayer using Ghana Card (NIA). Format: GHA-XXXXXXXXX-X. Choosing a new provider archives any previous active verification.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"GHANA_CARD\",\n  \"autoVerify\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Verify KYC - 2. Passport (archives previous)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/verifications",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}",
+                    "verifications"
+                  ]
+                },
+                "description": "Verify ratepayer using Passport. Format: GXXXXXXXX. Archives previous Ghana Card verification for audit trail.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"PASSPORT\",\n  \"autoVerify\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Verify KYC - 3. Driver's License (archives previous)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/verifications",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}",
+                    "verifications"
+                  ]
+                },
+                "description": "Verify ratepayer using Driver's License (DVLA). Format: DL-XXXXXXXX-X. Archives previous Passport verification for audit trail.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"DRIVERS_LICENSE\",\n  \"autoVerify\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete ratepayer profile",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}"
+                  ]
+                },
+                "description": "Delete an individual ratepayer profile. Strictly rejected with 400 Bad Request if the ratepayer has linked properties. To delete a ratepayer, first sever all property links or delete unbilled properties."
+              },
+              "response": []
             }
           ]
         },
@@ -269,7 +528,7 @@
                     "properties"
                   ]
                 },
-                "description": "Strictly requires ratepayer Bearer session token (HS256). Property is attributed to the logged-in ratepayer (createdByRatepayerId) and automatically linked in ratepayer-service. Ownership documents are mandatory. Spatial restriction: polygons cannot overlap or contain another property parcel if property uses and ownership match (prevents duplicate residential house registrations).",
+                "description": "Strictly requires ratepayer Bearer session token (HS256). Property creation requires that the ratepayer has completed their profile (including Address & Pinpoint Location) and has an approved KYC verification (isEligibleForPropertyCreation == true). Rejects with 400 Bad Request if KYC is unverified or profile is incomplete. Property is attributed to the logged-in ratepayer (createdByRatepayerId) and automatically linked in ratepayer-service. Ownership documents are mandatory. Spatial restriction: polygons cannot overlap or contain another property parcel if property uses and ownership match.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"code\": \"GH0701-SELF-{{$randomInt}}\",\n  \"propertyName\": \"My Residence\",\n  \"propertyUse\": \"RESIDENTIAL\",\n  \"documents\": [\n    {\n      \"documentType\": \"LAND_TITLE_CERTIFICATE\",\n      \"documentNumber\": \"LTC-00982\",\n      \"mediaUrl\": \"https://storage.croip.gov.gh/claims/ltc-00982.pdf\"\n    }\n  ],\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -0.2355,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5545\n        ]\n      ]\n    ]\n  }\n}",
@@ -379,6 +638,28 @@
                   ]
                 },
                 "description": ""
+              },
+              "response": []
+            },
+            {
+              "name": "Sever link to a property",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/properties/{{sample_property_id}}",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}",
+                    "properties",
+                    "{{sample_property_id}}"
+                  ]
+                },
+                "description": "Sever the ownership or tenancy link between a ratepayer and an individual property parcel without deleting the property."
               },
               "response": []
             }
@@ -962,6 +1243,36 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "Delete individual property parcel",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{sample_property_id}}"
+                  ]
+                },
+                "description": "Delete an individual property parcel. Strictly rejected with 400 Bad Request if any bills on this property have been paid (in which case only ratepayer links can be severed). If eligible for deletion, automatically severs all ratepayer links in ratepayer-service and cascades units, valuations, documents, and photos.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
             }
           ]
         },
@@ -1029,6 +1340,37 @@
                   ]
                 },
                 "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Check property billing payment status",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{billing_payments_url}}/v1/bills/property-payment-status/{{sample_property_id}}",
+                  "host": [
+                    "{{billing_payments_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "bills",
+                    "property-payment-status",
+                    "{{sample_property_id}}"
+                  ]
+                },
+                "description": "Check whether any bills on this property have recorded payments. Returns hasPaidBills, paidBillsCount, and totalAmountPaid.",
                 "auth": {
                   "type": "bearer",
                   "bearer": [
@@ -2066,37 +2408,6 @@
               "response": []
             },
             {
-              "name": "Provision M2M credentials for a concessionaire",
-              "request": {
-                "method": "POST",
-                "header": [],
-                "url": {
-                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}/api-clients",
-                  "host": [
-                    "{{platform_governance_url}}"
-                  ],
-                  "path": [
-                    "v1",
-                    "concessions",
-                    "{{sample_concession_id}}",
-                    "api-clients"
-                  ]
-                },
-                "description": "",
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{staff_access_token}}",
-                      "type": "string"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
               "name": "Register a concessionaire's field personnel",
               "request": {
                 "method": "POST",
@@ -2175,6 +2486,233 @@
           ]
         },
         {
+          "name": "Ratepayer Oversight",
+          "description": "ratepayer-service \u2014 administrative oversight, directory search, KYC verification, link severing, and deletion of ratepayers.",
+          "item": [
+            {
+              "name": "Ratepayer directory (paginated & searchable)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/directory?page=1&pageSize=20",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "directory"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get a ratepayer profile",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update ratepayer profile (administrative)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}"
+                  ]
+                },
+                "description": "Administers granular updates to any individual field of a ratepayer profile without touching other fields.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"address\": \"14 Independence Avenue, Accra\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Verify KYC (administrative verification: GHANA_CARD, PASSPORT, DRIVERS_LICENSE)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/verifications",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}",
+                    "verifications"
+                  ]
+                },
+                "description": "Administers ratepayer KYC verification. Exactly 3 allowed providers: GHANA_CARD, PASSPORT, DRIVERS_LICENSE. Setting a new provider archives previous verifications for audit trail.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"GHANA_CARD\",\n  \"autoVerify\": true\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Sever ratepayer link to a property",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/properties/{{sample_property_id}}",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}",
+                    "properties",
+                    "{{sample_property_id}}"
+                  ]
+                },
+                "description": "Sever link between a ratepayer and an individual property.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete individual ratepayer profile",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}"
+                  ]
+                },
+                "description": "Delete ratepayer profile. Blocked with 400 Bad Request if linked properties exist.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
           "name": "Property Oversight",
           "description": "property-registry-service \u2014 the approval step after a concession agent submits a field verification.",
           "item": [
@@ -2210,6 +2748,36 @@
                     }
                   }
                 },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete individual property parcel",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{sample_property_id}}"
+                  ]
+                },
+                "description": "Administrative deletion of an individual property parcel. Blocked if paid bills exist; severs all ratepayer links if unbilled.",
                 "auth": {
                   "type": "bearer",
                   "bearer": [
@@ -2298,6 +2866,37 @@
                   ]
                 },
                 "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Check property billing payment status",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{billing_payments_url}}/v1/bills/property-payment-status/{{sample_property_id}}",
+                  "host": [
+                    "{{billing_payments_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "bills",
+                    "property-payment-status",
+                    "{{sample_property_id}}"
+                  ]
+                },
+                "description": "Check whether any bills on this property have recorded payments.",
                 "auth": {
                   "type": "bearer",
                   "bearer": [
@@ -3669,6 +4268,162 @@
                     }
                   }
                 },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Admin Purge Operations",
+          "description": "High-privilege admin purge operations. Permanently erases domain data while strictly preserving regions, MMDA boundaries, and superuser accounts.",
+          "item": [
+            {
+              "name": "Purge all properties",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/purge",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "purge"
+                  ]
+                },
+                "description": "Admin purge all registered property parcels, units, valuations, photos, documents, and verifications across all assemblies. Ghana regions and MMDA boundaries remain completely untouched.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Purge all concessions",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/purge",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "purge"
+                  ]
+                },
+                "description": "Admin purge all partner concessionaires, assigned contracts, field personnel, and API clients. Strictly preserves the superuser account (superuser@croip.com) and SUPER_ADMIN RBAC role.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Purge all ratepayers",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/purge",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "purge"
+                  ]
+                },
+                "description": "Admin purge all citizen & corporate ratepayer profiles, verifications, OTPs, and property claims. MMDA boundaries remain completely untouched.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Purge all bills & payments",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{billing_payments_url}}/v1/bills/purge",
+                  "host": [
+                    "{{billing_payments_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "bills",
+                    "purge"
+                  ]
+                },
+                "description": "Admin purge all property bills, payment links, and payment transaction records.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Purge all disputes",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{dispute_url}}/v1/disputes/purge",
+                  "host": [
+                    "{{dispute_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "disputes",
+                    "purge"
+                  ]
+                },
+                "description": "Admin purge all disputes, evidence files, and comments.",
                 "auth": {
                   "type": "bearer",
                   "bearer": [

@@ -153,4 +153,15 @@ export const disputeRoutes: FastifyPluginAsync = async (app) => {
     });
     return reply.code(201).send(comment);
   });
+
+  app.post('/disputes/purge', {
+    preHandler: app.requirePermissions(['disputes:review']),
+    schema: {
+      tags: ['Disputes'],
+      summary: 'Admin purge all disputes, evidence, and comments'
+    }
+  }, async () => {
+    return service.purgeDisputes();
+  });
 };
+

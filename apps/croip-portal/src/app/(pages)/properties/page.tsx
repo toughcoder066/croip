@@ -1,9 +1,10 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageLoader } from '@/components/ui/spinner'
+import { PurgeConfirmDialog } from '@/components/admin/purge-confirm-dialog'
 import { PropertiesDataTable, type PropertyRecord, type AssemblyLookup } from '@/views/properties/properties-data-table'
 
 export default function PropertiesRegistryPage() {
@@ -11,8 +12,7 @@ export default function PropertiesRegistryPage() {
   const [assemblies, setAssemblies] = useState<AssemblyLookup[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    let cancelled = false
+  const fetchProperties = useCallback(() => {
     setLoading(true)
 
     Promise.all([
@@ -22,7 +22,6 @@ export default function PropertiesRegistryPage() {
         .catch(() => ({ success: false, data: [] }))
     ])
       .then(([propsRes, assembliesRes]) => {
-        if (cancelled) return
         if (propsRes.success && Array.isArray(propsRes.data)) {
           setProperties(propsRes.data)
         } else {
@@ -33,20 +32,19 @@ export default function PropertiesRegistryPage() {
         }
       })
       .catch(err => {
-        if (cancelled) return
         console.error('Failed to load property registry:', err)
         toast.error('Failed to load property registry')
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        setLoading(false)
       })
-
-    return () => {
-      cancelled = true
-    }
   }, [])
 
-  if (loading) {
+  useEffect(() => {
+    fetchProperties()
+  }, [fetchProperties])
+
+  if (loading && properties.length === 0) {
     return <PageLoader />
   }
 
@@ -59,9 +57,17 @@ export default function PropertiesRegistryPage() {
             National cadastre of landed properties registered across all assemblies via property-registry-service (:3020).
           </p>
         </div>
+
+        <div className="flex items-center gap-2 self-stretch sm:self-auto">
+          <PurgeConfirmDialog
+            target="properties"
+            onSuccess={fetchProperties}
+          />
+        </div>
       </div>
 
       <PropertiesDataTable data={properties} assemblies={assemblies} loading={loading} />
     </div>
   )
 }
+

@@ -11,43 +11,82 @@ export const problemSchema = {
   }
 };
 
+export const completionSchema = {
+  type: 'object',
+  properties: {
+    completionPercentage: { type: 'integer' },
+    isProfileComplete: { type: 'boolean' },
+    hasVerifiedKyc: { type: 'boolean' },
+    isEligibleForPropertyCreation: { type: 'boolean' },
+    missingSections: { type: 'array', items: { type: 'string' } }
+  }
+};
+
 export const ratepayerResponseSchema = {
   type: 'object',
-  required: ['id', 'code', 'ratepayerType', 'legalName', 'phone', 'regionId', 'assemblyId', 'createdAt'],
+  required: ['id', 'code', 'ratepayerType', 'status', 'createdAt'],
   properties: {
     id: { type: 'string', format: 'uuid' },
     code: { type: 'string' },
     ratepayerType: { type: 'string' },
-    legalName: { type: 'string' },
-    phone: { type: 'string' },
+    firstName: { type: ['string', 'null'] },
+    middleName: { type: ['string', 'null'] },
+    lastName: { type: ['string', 'null'] },
+    legalName: { type: ['string', 'null'] },
+    phone: { type: ['string', 'null'] },
     email: { type: ['string', 'null'] },
-    regionId: { type: 'string', format: 'uuid' },
-    assemblyId: { type: 'string', format: 'uuid' },
+    address: { type: ['string', 'null'] },
+    regionId: { type: ['string', 'null'], format: 'uuid' },
+    assemblyId: { type: ['string', 'null'], format: 'uuid' },
+    locationGeo: { type: ['object', 'null'] },
     status: { type: 'string' },
-    createdAt: { type: 'string', format: 'date-time' }
+    createdAt: { type: 'string', format: 'date-time' },
+    completion: completionSchema,
+    otp: {
+      type: 'object',
+      properties: {
+        status: { type: 'string' },
+        channel: { type: 'string' },
+        destination: { type: 'string' },
+        expiresInSeconds: { type: 'integer' },
+        devOtpCode: { type: 'string' }
+      }
+    }
   }
 };
 
 export const registerRatepayerBodySchema = {
   type: 'object',
-  required: ['legalName', 'phone', 'regionId', 'assemblyId', 'locationGeo', 'password'],
+  required: ['password'],
   properties: {
     ratepayerType: { type: 'string', enum: ['INDIVIDUAL', 'ORGANIZATION'], default: 'INDIVIDUAL' },
-    legalName: { type: 'string', minLength: 2, maxLength: 200 },
-    phone: { type: 'string', minLength: 9, maxLength: 30 },
+    firstName: { type: 'string', maxLength: 100 },
+    middleName: { type: 'string', maxLength: 100 },
+    lastName: { type: 'string', maxLength: 100 },
+    legalName: { type: 'string', maxLength: 200 },
+    phone: { type: 'string', minLength: 7, maxLength: 30 },
+    number: { type: 'string', minLength: 7, maxLength: 30, description: 'Alias for phone number' },
+    identifier: { type: 'string', description: 'Email address or phone number' },
     email: { type: 'string', format: 'email' },
     password: { type: 'string', minLength: 8, maxLength: 100, description: 'Sets the login password for phone/email + password + OTP self-service login' },
+    confirmPassword: { type: 'string', minLength: 8, maxLength: 100 },
+    address: { type: 'string', maxLength: 255 },
     regionId: { type: 'string', format: 'uuid' },
     assemblyId: { type: 'string', format: 'uuid' },
-    locationGeo: { type: 'object' }
+    locationGeo: { type: 'object' },
+    latitude: { type: 'number' },
+    longitude: { type: 'number' }
   }
 };
 
 export const loginBodySchema = {
   type: 'object',
-  required: ['identifier', 'password'],
+  required: ['password'],
   properties: {
     identifier: { type: 'string', description: 'Phone or email used at registration' },
+    email: { type: 'string', description: 'Email used at registration' },
+    phone: { type: 'string', description: 'Phone number used at registration' },
+    number: { type: 'string', description: 'Phone number alias' },
     password: { type: 'string' }
   }
 };
@@ -57,7 +96,7 @@ export const otpRequiredResponseSchema = {
   required: ['status', 'destination', 'expiresInSeconds'],
   properties: {
     status: { type: 'string', enum: ['OTP_REQUIRED'] },
-    destination: { type: 'string', description: 'Masked phone number the OTP was sent to' },
+    destination: { type: 'string', description: 'Masked destination the OTP was sent to' },
     expiresInSeconds: { type: 'integer' },
     devOtpCode: { type: 'string', description: 'Dev-only: the real OTP, returned since no SMS provider is configured. Never present in production.' }
   }
@@ -65,9 +104,12 @@ export const otpRequiredResponseSchema = {
 
 export const verifyOtpBodySchema = {
   type: 'object',
-  required: ['identifier', 'otpCode'],
+  required: ['otpCode'],
   properties: {
-    identifier: { type: 'string' },
+    identifier: { type: 'string', description: 'Email or phone number' },
+    email: { type: 'string' },
+    phone: { type: 'string' },
+    number: { type: 'string' },
     otpCode: { type: 'string', minLength: 6, maxLength: 6 }
   }
 };
@@ -86,9 +128,19 @@ export const authTokenResponseSchema = {
 export const updateProfileBodySchema = {
   type: 'object',
   properties: {
-    legalName: { type: 'string', minLength: 2, maxLength: 200 },
+    firstName: { type: 'string', maxLength: 100 },
+    middleName: { type: 'string', maxLength: 100 },
+    lastName: { type: 'string', maxLength: 100 },
+    legalName: { type: 'string', maxLength: 200 },
     email: { type: 'string', format: 'email' },
-    locationGeo: { type: 'object' }
+    phone: { type: 'string', minLength: 7, maxLength: 30 },
+    number: { type: 'string', minLength: 7, maxLength: 30, description: 'Phone number alias' },
+    address: { type: 'string', maxLength: 255 },
+    regionId: { type: 'string', format: 'uuid' },
+    assemblyId: { type: 'string', format: 'uuid' },
+    locationGeo: { type: 'object' },
+    latitude: { type: 'number' },
+    longitude: { type: 'number' }
   }
 };
 
@@ -142,6 +194,15 @@ export const reviewVerificationBodySchema = {
   required: ['verificationStatus'],
   properties: {
     verificationStatus: { type: 'string', enum: ['VERIFIED', 'REJECTED'] }
+  }
+};
+
+export const createVerificationBodySchema = {
+  type: 'object',
+  properties: {
+    provider: { type: 'string' },
+    providerReference: { type: 'string' },
+    autoVerify: { type: 'boolean', default: true }
   }
 };
 

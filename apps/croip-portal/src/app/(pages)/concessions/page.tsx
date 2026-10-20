@@ -7,6 +7,7 @@ import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { PageLoader } from '@/components/ui/spinner'
+import { PurgeConfirmDialog } from '@/components/admin/purge-confirm-dialog'
 
 import { ConcessionsDataTable, type ConcessionRecord } from '@/views/concessions/concessions-data-table'
 import { CreateConcessionWizard } from '@/views/concessions/create-concession-wizard'
@@ -35,7 +36,7 @@ export default function ConcessionsRegistryPage() {
     fetchConcessions()
   }, [])
 
-  if (loading) {
+  if (loading && concessions.length === 0) {
     return <PageLoader />
   }
 
@@ -51,12 +52,17 @@ export default function ConcessionsRegistryPage() {
         </div>
 
         <div className="flex items-center gap-2 self-stretch sm:self-auto">
+          <PurgeConfirmDialog
+            target="concessions"
+            onSuccess={fetchConcessions}
+          />
           <Button size="sm" className="text-xs" onClick={() => setWizardOpen(true)}>
             <PlusIcon className="size-3.5 mr-1.5" />
             Onboard Concession
           </Button>
         </div>
       </div>
+
 
       <ConcessionsDataTable data={concessions} loading={loading} />
 

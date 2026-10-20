@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { domainEvent } from '../../events/envelope.js';
 import { appendOutboxEvent } from '../../events/outbox.js';
@@ -338,6 +339,59 @@ export function propertyService(app: FastifyInstance) {
         input.actorType === 'RATEPAYER' ||
         input.registrationSource === 'RATEPAYER' ||
         Boolean(input.createdByRatepayerId);
+
+      const targetRatepayerId =
+        input.createdByRatepayerId || (input.actorType === 'RATEPAYER' ? input.actorId : undefined);
+
+      if (targetRatepayerId) {
+        try {
+          const rpRes = await fetch(`${app.config.RATEPAYER_SERVICE_URL}/v1/ratepayers/${targetRatepayerId}`, {
+            signal: AbortSignal.timeout(5000)
+          });
+          if (rpRes.ok) {
+            const rpData = (await rpRes.json()) as {
+              legalName?: string;
+              phone?: string;
+              email?: string;
+              address?: string;
+              regionId?: string;
+              assemblyId?: string;
+              locationGeo?: unknown;
+              verifications?: Array<{ verificationStatus: string }>;
+              completion?: {
+                isProfileComplete?: boolean;
+                hasVerifiedKyc?: boolean;
+                isEligibleForPropertyCreation?: boolean;
+                missingSections?: string[];
+              };
+            };
+
+            const isProfileComplete =
+              rpData.completion?.isProfileComplete ??
+              Boolean(rpData.legalName && (rpData.phone || rpData.email) && rpData.regionId && rpData.assemblyId && (rpData.address || rpData.locationGeo));
+
+            const hasVerifiedKyc =
+              rpData.completion?.hasVerifiedKyc ??
+              Boolean(rpData.verifications && rpData.verifications.some((v) => v.verificationStatus === 'VERIFIED'));
+
+            if (!isProfileComplete) {
+              const missing = rpData.completion?.missingSections?.join(', ') || 'personal details, address, or MMDA location';
+              throw new BadRequestError(
+                `Cannot create property: Ratepayer profile is incomplete (missing: ${missing}). The ratepayer must complete their full profile and address before registering a property.`
+              );
+            }
+
+            if (!hasVerifiedKyc) {
+              throw new BadRequestError(
+                'Cannot create property: Ratepayer KYC verification is not approved. A verified identity (KYC) is required before registering a property.'
+              );
+            }
+          }
+        } catch (err: any) {
+          if (err instanceof BadRequestError) throw err;
+          app.log.warn({ err }, 'Failed to check ratepayer completion from ratepayer-service, proceeding with registration');
+        }
+      }
 
       if (isRatepayerCreation) {
         // Business Rule: For ratepayer registration, propertyName and ownership verification documents are strictly required
@@ -901,6 +955,103 @@ export function propertyService(app: FastifyInstance) {
       return app.prisma.propertyDocument.findMany({
         where: { propertyId: property.id },
         orderBy: { createdAt: 'desc' }
+      });
+    },
+
+    // Deletes an individual property parcel and severs all links to ratepayers.
+    // Business rule: if that ratepayer (or any ratepayer) has paid bills on that property,
+    // you CANNOT delete that property; you can only sever the link.
+    async deleteProperty(propertyId: string, actorId: string) {
+      const property = await app.prisma.property.findUnique({
+        where: { id: propertyId }
+      });
+      if (!property) throw new NotFoundError('Property record not found');
+
+      // Check with billing service if any bills have been paid on this property
+      let hasPaidBills = false;
+      try {
+        const checkRes = await fetch(`${app.config.BILLING_SERVICE_URL}/v1/bills/property-payment-status/${propertyId}`, {
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(5000)
+        });
+        if (checkRes.ok) {
+          const data = await checkRes.json() as { hasPaidBills: boolean; totalAmountPaid?: string };
+          hasPaidBills = data.hasPaidBills;
+        }
+      } catch (err) {
+        app.log.warn({ err, propertyId }, 'Could not contact billing-payments-service to verify paid bills; proceeding with caution');
+      }
+
+      if (hasPaidBills) {
+        throw new BadRequestError('Cannot delete property with paid bills. You can only sever the link to the ratepayer.');
+      }
+
+      // Sever all ratepayer links for this property in ratepayer-service
+      try {
+        await fetch(`${app.config.RATEPAYER_SERVICE_URL}/v1/properties/${propertyId}/links`, {
+          method: 'DELETE',
+          signal: AbortSignal.timeout(5000)
+        });
+      } catch (err) {
+        app.log.warn({ err, propertyId }, 'Failed to notify ratepayer-service to sever links for property');
+      }
+
+      // Delete the property and its associated records
+      return app.prisma.$transaction(async (tx) => {
+        await tx.propertyVerification.deleteMany({ where: { propertyId } });
+        await tx.propertyValuation.deleteMany({ where: { propertyId } });
+        await tx.propertyPhoto.deleteMany({ where: { propertyId } });
+        await tx.propertyDocument.deleteMany({ where: { propertyId } });
+        await tx.propertyUnit.deleteMany({ where: { propertyId } });
+        await tx.property.delete({ where: { id: propertyId } });
+
+        const evt = domainEvent({
+          eventType: 'PropertyDeleted',
+          eventVersion: 1,
+          producer: app.serviceInfo.name,
+          aggregateType: 'Property',
+          aggregateId: propertyId,
+          aggregateVersion: 1,
+          concessionId: property.registeredByConcessionId || '00000000-0000-0000-0000-000000000000',
+          assemblyId: property.assemblyId,
+          correlationId: crypto.randomUUID(),
+          data: { propertyId, code: property.code, actorId }
+        });
+        await appendOutboxEvent(tx, 'revenue.property.deleted.v1', evt);
+
+        app.log.info({ propertyId, code: property.code, actorId }, 'Property deleted and ratepayer links severed');
+
+        return {
+          success: true,
+          message: `Property ${property.code} deleted and all ratepayer links severed successfully`
+        };
+      });
+    },
+
+    async purgeProperties(actorId: string) {
+      return app.prisma.$transaction(async (tx) => {
+        const deletedVerifications = await tx.propertyVerification.deleteMany({});
+        const deletedValuations = await tx.propertyValuation.deleteMany({});
+        const deletedPhotos = await tx.propertyPhoto.deleteMany({});
+        const deletedDocs = await tx.propertyDocument.deleteMany({});
+        const deletedUnits = await tx.propertyUnit.deleteMany({});
+        const deletedProperties = await tx.property.deleteMany({});
+        const deletedValuationLists = await tx.valuationList.deleteMany({});
+
+        app.log.warn({ actorId, deletedProperties: deletedProperties.count }, 'Admin purged all properties');
+
+        return {
+          success: true,
+          purged: {
+            properties: deletedProperties.count,
+            units: deletedUnits.count,
+            documents: deletedDocs.count,
+            photos: deletedPhotos.count,
+            valuations: deletedValuations.count,
+            verifications: deletedVerifications.count,
+            valuationLists: deletedValuationLists.count
+          }
+        };
       });
     }
   };

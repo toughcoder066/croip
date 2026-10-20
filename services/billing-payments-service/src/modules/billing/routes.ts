@@ -129,4 +129,26 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
   }, async (request) => {
     return service.listMyBills(request.auth.subject);
   });
+
+  app.post('/bills/purge', {
+    preHandler: app.requirePermissions(['billing:write']),
+    schema: {
+      tags: ['Billing & Payments'],
+      summary: 'Admin purge all property bills, payment links, and payment records'
+    }
+  }, async () => {
+    return service.purgeBills();
+  });
+
+  app.get<{ Params: { propertyId: string } }>('/bills/property-payment-status/:propertyId', {
+    schema: {
+      tags: ['Billing & Payments'],
+      summary: 'Internal/admin check if any bills have been paid on a property',
+      params: { type: 'object', required: ['propertyId'], properties: { propertyId: { type: 'string', format: 'uuid' } } },
+      response: { 200: { type: 'object', additionalProperties: true } }
+    }
+  }, async (request) => {
+    return service.checkPropertyPaidBills(request.params.propertyId);
+  });
 };
+

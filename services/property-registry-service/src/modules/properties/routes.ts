@@ -231,4 +231,26 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       assemblyId: request.auth.assemblyId
     });
   });
+
+  app.delete<{ Params: { id: string } }>('/properties/:id', {
+    schema: {
+      tags: ['Property Registry'],
+      summary: 'Delete individual property parcel and sever all ratepayer links (rejected if property has paid bills)',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+      response: { 200: { type: 'object', additionalProperties: true }, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
+    }
+  }, async (request) => {
+    return service.deleteProperty(request.params.id, request.auth?.subject ?? 'portal-admin');
+  });
+
+  app.post('/properties/purge', {
+    preHandler: app.requirePermissions(['properties:manage']),
+    schema: {
+      tags: ['Property Registry'],
+      summary: 'Admin purge all registered property records, units, valuations, and verifications',
+      response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema }
+    }
+  }, async (request) => {
+    return service.purgeProperties(request.auth.subject);
+  });
 };

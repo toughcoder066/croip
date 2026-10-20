@@ -22,7 +22,8 @@ import {
   verifyOtpBodySchema,
   authTokenResponseSchema,
   updateProfileBodySchema,
-  linkOwnPropertyBodySchema
+  linkOwnPropertyBodySchema,
+  createVerificationBodySchema
 } from './schemas.js';
 
 export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
@@ -101,11 +102,28 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
     return service.getRatepayer(request.ratepayerAuth.sub);
   });
 
+  app.post<{ Body: { provider?: string; providerReference?: string; autoVerify?: boolean } }>(
+    '/ratepayers/me/verifications',
+    {
+      preHandler: app.authenticateRatepayer,
+      schema: {
+        tags: ['Ratepayer Self-Service'],
+        summary: 'Submit or dummy-verify KYC for own authenticated ratepayer profile (GHANA_CARD, PASSPORT, DRIVERS_LICENSE; archives previous)',
+        body: createVerificationBodySchema,
+        response: { 201: verificationResponseSchema, 400: problemSchema, 401: problemSchema }
+      }
+    },
+    async (request, reply) => {
+      const verification = await service.verifyKyc(request.ratepayerAuth.sub, request.body ?? {});
+      return reply.code(201).send(verification);
+    }
+  );
+
   app.get<{ Params: { id: string } }>('/ratepayers/:id', {
     schema: {
       tags: ['Ratepayer Self-Service'],
       summary: 'Get ratepayer KYC profile, verification status, and linked properties',
-      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
       // additionalProperties:true is required here: a bare { type: 'object' } with no declared
       // properties tells fast-json-stringify there is nothing to serialize, and it emits {}
       // regardless of what the handler actually returns.
@@ -113,6 +131,18 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
     }
   }, async (request) => {
     return service.getRatepayer(request.params.id);
+  });
+
+  app.patch<{ Params: { id: string }; Body: UpdateProfileInput }>('/ratepayers/:id', {
+    schema: {
+      tags: ['Ratepayer Self-Service'],
+      summary: 'Update ratepayer profile, address, and pinpoint location by ID or Code',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+      body: updateProfileBodySchema,
+      response: { 200: { type: 'object', additionalProperties: true }, 404: problemSchema }
+    }
+  }, async (request) => {
+    return service.updateProfile(request.params.id, request.body);
   });
 
   app.post<{ Body: ClaimPropertyInput }>('/ratepayers/claims', {
@@ -215,6 +245,84 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
     }
   );
 
+  app.post<{ Params: { id: string }; Body: { provider?: string; providerReference?: string; autoVerify?: boolean } }>(
+    '/ratepayers/:id/verifications',
+    {
+      schema: {
+        tags: ['Ratepayer Self-Service', 'Ratepayer Admin'],
+        summary: 'Submit or dummy-verify KYC for a ratepayer',
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string', format: 'uuid' } }
+        },
+        body: createVerificationBodySchema,
+        response: { 201: verificationResponseSchema, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
+      }
+    },
+    async (request, reply) => {
+      const verification = await service.verifyKyc(request.params.id, request.body ?? {});
+      return reply.code(201).send(verification);
+    }
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    '/ratepayers/:id',
+    {
+      schema: {
+        tags: ['Ratepayer Admin'],
+        summary: 'Delete individual ratepayer profile (rejected if linked properties exist)',
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string', format: 'uuid' } }
+        },
+        response: { 200: { type: 'object', additionalProperties: true }, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
+      }
+    },
+    async (request) => {
+      return service.deleteRatepayer(request.params.id);
+    }
+  );
+
+  app.delete<{ Params: { id: string; propertyId: string } }>(
+    '/ratepayers/:id/properties/:propertyId',
+    {
+      schema: {
+        tags: ['Ratepayer Admin'],
+        summary: 'Sever link between a ratepayer and an individual property',
+        params: {
+          type: 'object',
+          required: ['id', 'propertyId'],
+          properties: { id: { type: 'string', format: 'uuid' }, propertyId: { type: 'string', format: 'uuid' } }
+        },
+        response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema, 404: problemSchema }
+      }
+    },
+    async (request) => {
+      return service.severPropertyLink(request.params.id, request.params.propertyId);
+    }
+  );
+
+  app.delete<{ Params: { propertyId: string } }>(
+    '/properties/:propertyId/links',
+    {
+      schema: {
+        tags: ['Ratepayer Admin'],
+        summary: 'Internal/admin: sever all ratepayer links for a property (called on property deletion)',
+        params: {
+          type: 'object',
+          required: ['propertyId'],
+          properties: { propertyId: { type: 'string', format: 'uuid' } }
+        },
+        response: { 200: { type: 'object', additionalProperties: true } }
+      }
+    },
+    async (request) => {
+      return service.severAllLinksForProperty(request.params.propertyId);
+    }
+  );
+
   app.patch<{ Params: { id: string }; Body: { status: string } }>(
     '/ratepayers/:id/status',
     {
@@ -239,6 +347,20 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request) => {
       return service.updateStatus(request.params.id, request.body.status);
+    }
+  );
+
+  app.post(
+    '/ratepayers/purge',
+    {
+      schema: {
+        tags: ['Ratepayer Admin'],
+        summary: 'Admin purge all ratepayer profiles, verifications, OTPs, and links',
+        response: { 200: { type: 'object', additionalProperties: true } }
+      }
+    },
+    async () => {
+      return service.purgeRatepayers();
     }
   );
 };

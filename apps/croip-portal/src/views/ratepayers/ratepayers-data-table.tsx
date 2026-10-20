@@ -52,6 +52,9 @@ export interface RatepayerDirectoryRecord {
   id: string
   code: string
   ratepayerType: string
+  firstName?: string | null
+  middleName?: string | null
+  lastName?: string | null
   legalName: string
   phone: string
   email?: string | null

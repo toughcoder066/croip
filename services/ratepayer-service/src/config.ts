@@ -21,6 +21,12 @@ const schema = z.object({
   // verification. property-registry-service holds the same secret to accept it for
   // self-service property creation.
   RATEPAYER_JWT_SECRET: z.string().min(32).default('a1ad815520d1c65d7f6f262a37b891b4081ac164aa687d9277bfaa4990735893'),
+  SHARED_SERVICES_URL: z.string().url().default(process.env.SHARED_SERVICES_API_URL || 'http://shared-services:3004'),
+  ZITADEL_TOKEN_URL: z.string().url().default(process.env.ZITADEL_TOKEN_URL || 'http://zitadel:8080/oauth/v2/token'),
+  ZITADEL_CLIENT_ID: z.string().default(process.env.ZITADEL_CLIENT_ID || 'property-registry-service'),
+  ZITADEL_CLIENT_SECRET: z.string().default(process.env.ZITADEL_CLIENT_SECRET || 'rRhsZrPCjk4jq3PfK0ue2uGG8gNVYbaYcAiQhPvkkjTpHsoocrt5W3khItWyDRpn'),
+  MAILPIT_API_URL: z.string().default(process.env.MAILPIT_API_URL || 'http://mailpit:8025'),
+
   RABBITMQ_URL: z.string().min(1),
   RABBITMQ_EXCHANGE: z.string().min(1).default('croip.domain.v1'),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(100).default(500),

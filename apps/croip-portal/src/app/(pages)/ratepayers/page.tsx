@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageLoader } from '@/components/ui/spinner'
+import { PurgeConfirmDialog } from '@/components/admin/purge-confirm-dialog'
 import { RatepayersDataTable, type RatepayerDirectoryRecord } from '@/views/ratepayers/ratepayers-data-table'
 
 const PAGE_SIZE = 10
@@ -72,6 +73,12 @@ export default function RatepayersDirectoryPage() {
             Citizen and corporate ratepayer profiles registered across all assemblies via ratepayer-service (:3030).
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <PurgeConfirmDialog
+            target="ratepayers"
+            onSuccess={fetchDirectory}
+          />
+        </div>
       </div>
 
       <RatepayersDataTable
@@ -90,3 +97,4 @@ export default function RatepayersDirectoryPage() {
     </div>
   )
 }
+
