@@ -3,6 +3,7 @@ import { domainEvent } from '../../events/envelope.js';
 import { appendOutboxEvent } from '../../events/outbox.js';
 import { NotFoundError, BadRequestError, ForbiddenError, ConflictError, ServiceUnavailableError } from '../../lib/errors.js';
 import { getServiceAccessToken } from '../../lib/zitadel-client.js';
+import { doPolygonsOverlap } from '../../lib/geo.js';
 
 interface DetectZoneForPolygonResult {
   status: 'MATCHED' | 'NO_MATCH' | 'CONFLICT';
@@ -218,6 +219,59 @@ async function assertZoneMembership(
 }
 
 /**
+ * Asserts that the candidate property polygon does not spatially overlap or nest within an
+ * existing property's boundary when the property uses are matching or when either property is
+ * a residential house / whole parcel.
+ */
+async function assertNoConflictingOverlap(
+  tx: any,
+  polygonGeoJson: Record<string, unknown>,
+  details: {
+    propertyUse?: string | undefined;
+    assemblyId: string;
+    propertyCode?: string | undefined;
+    excludePropertyId?: string | undefined;
+  }
+) {
+  const existingProperties = await tx.property.findMany({
+    where: {
+      assemblyId: details.assemblyId,
+      ...(details.excludePropertyId ? { id: { not: details.excludePropertyId } } : {})
+    },
+    select: {
+      id: true,
+      code: true,
+      propertyName: true,
+      propertyUse: true,
+      propertyClass: true,
+      polygonGeoJson: true
+    }
+  });
+
+  const candidateUse = (details.propertyUse || 'RESIDENTIAL').toUpperCase();
+
+  for (const existing of existingProperties) {
+    if (!existing.polygonGeoJson) continue;
+
+    if (doPolygonsOverlap(polygonGeoJson, existing.polygonGeoJson)) {
+      const existingUse = (existing.propertyUse || 'RESIDENTIAL').toUpperCase();
+      const hasMatchingUse = candidateUse === existingUse;
+      const isResidentialConflict = candidateUse === 'RESIDENTIAL' || existingUse === 'RESIDENTIAL';
+
+      if (hasMatchingUse || isResidentialConflict) {
+        const propDesc = existing.propertyName
+          ? `"${existing.propertyName}" (${existing.code})`
+          : `property ${existing.code}`;
+
+        throw new ConflictError(
+          `Property boundary conflict: The specified polygon overlaps with or is within the boundary of existing registered ${propDesc} with matching use "${existing.propertyUse}". Properties of matching use cannot share or overlap the same parcel footprint.`
+        );
+      }
+    }
+  }
+}
+
+/**
  * Generates the next sequential property code for an MMDA:
  * - Ratepayer: ${assemblyCode}-SELF-XXXX (e.g. GH0701-SELF-0004)
  * - Concession: ${assemblyCode}-XXXX (e.g. GH0701-0003)
@@ -328,6 +382,13 @@ export function propertyService(app: FastifyInstance) {
 
       try {
         return await app.prisma.$transaction(async (tx) => {
+          // Spatial constraint: verify candidate polygon does not overlap any existing property of matching use
+          await assertNoConflictingOverlap(tx, input.polygonGeoJson, {
+            propertyUse: input.propertyUse,
+            assemblyId: effectiveAssemblyId,
+            propertyCode: input.code
+          });
+
           const code = input.code?.trim() || (await generatePropertyCode(tx, matchedAssembly.code, isRatepayerCreation));
           const effectivePropertyStatus = isRatepayerCreation ? 'UNASSESSED' : input.propertyStatus!;
 
@@ -475,6 +536,26 @@ export function propertyService(app: FastifyInstance) {
           const reservedCodes = new Set<string>();
 
           for (const { property: item, assembly } of validatedList) {
+            // Spatial constraint: check against existing database properties in this MMDA
+            await assertNoConflictingOverlap(tx, item.polygonGeoJson, {
+              propertyUse: item.propertyUse,
+              assemblyId: assembly.id,
+              propertyCode: item.code
+            });
+
+            // Check against previously created properties in the same batch
+            for (const prev of createdList) {
+              if (doPolygonsOverlap(item.polygonGeoJson, prev.polygonGeoJson)) {
+                const prevUse = (prev.propertyUse || 'RESIDENTIAL').toUpperCase();
+                const currUse = (item.propertyUse || 'RESIDENTIAL').toUpperCase();
+                if (currUse === prevUse || currUse === 'RESIDENTIAL' || prevUse === 'RESIDENTIAL') {
+                  throw new ConflictError(
+                    `Batch boundary conflict: Property "${item.code || 'item'}" overlaps with another property in this batch ("${prev.code}") with matching use "${prev.propertyUse}".`
+                  );
+                }
+              }
+            }
+
             const code = item.code?.trim() || (await generatePropertyCode(tx, assembly.code, false, reservedCodes));
 
             const property = await tx.property.create({
