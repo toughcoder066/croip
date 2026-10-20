@@ -170,6 +170,7 @@ export default function RegionsConfigPage() {
           country: 'Ghana',
           zone: REGION_ZONE[r.code] || 'Middle Belt'
         },
+        polygonGeoJson: r.polygonGeoJson,
         createdAt: r.createdAt
       })),
     [regions, assemblyCountByRegion]
@@ -315,7 +316,7 @@ export default function RegionsConfigPage() {
       </div>
 
       {/* UI Component: Data Table with Filters matching Screenshot & DB Headers */}
-      <RegionsDataTable data={regionsWithDerivedMmdas} loading={loading} onRefresh={fetchRegions} readOnly />
+      <RegionsDataTable data={regionsWithDerivedMmdas} loading={loading} onRefresh={fetchRegions} />
     </div>
   )
 }

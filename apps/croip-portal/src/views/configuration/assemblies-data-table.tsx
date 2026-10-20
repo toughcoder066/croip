@@ -17,6 +17,7 @@ import {
   Building2Icon
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { AssemblyDetailModal } from './assembly-detail-modal'
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -60,8 +61,11 @@ import {
 
 export interface AssemblyDbRecord {
   id: string
+  regionId?: string
   code: string
   name: string
+  category?: 'METROPOLITAN' | 'MUNICIPAL' | 'DISTRICT'
+  polygonGeoJson?: any
   metadata?: {
     region?: string
     regionCode?: string
@@ -74,23 +78,16 @@ export interface AssemblyDbRecord {
 
 interface AssembliesDataTableProps {
   data: AssemblyDbRecord[]
+  regions?: Array<{ id: string; code: string; name: string }>
   loading?: boolean
   onDelete?: (id: string, name: string) => Promise<void>
   onRefresh?: () => void
-
-  /**
-   * True when `data` comes from the authoritative GIS boundary dataset (Shared Services'
-   * MunicipalAssembly model, sourced from the real COD-AB import) rather than the legacy flat
-   * ReferenceDataItem table this component's built-in Edit dialog PATCHes. Editing a
-   * government-sourced MMDA's name/code here would silently write nowhere (there's no
-   * ReferenceDataItem row with that id), so in read-only mode Edit/Delete are hidden and only
-   * inspection actions (copy UUID) remain — manage the boundary itself from Zones & Boundaries.
-   */
   readOnly?: boolean
 }
 
 export function AssembliesDataTable({
   data,
+  regions = [],
   loading = false,
   onDelete,
   onRefresh,
@@ -98,6 +95,15 @@ export function AssembliesDataTable({
 }: AssembliesDataTableProps) {
   // Row selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  // Detail & Map Modal
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [selectedAssemblyForDetail, setSelectedAssemblyForDetail] = useState<AssemblyDbRecord | null>(null)
+
+  const handleOpenDetail = (row: AssemblyDbRecord) => {
+    setSelectedAssemblyForDetail(row)
+    setDetailModalOpen(true)
+  }
 
   // Filters
   const [filterRegion, setFilterRegion] = useState<string>('all')
@@ -418,9 +424,14 @@ export function AssembliesDataTable({
 
                       {/* Assembly Name & Code */}
                       <TableCell>
-                        <div className="flex flex-col">
-                          <span className="font-semibold text-xs text-foreground">
+                        <div
+                          className="flex flex-col cursor-pointer group"
+                          onClick={() => handleOpenDetail(row)}
+                          title="Click to view & edit details and boundary map"
+                        >
+                          <span className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
                             {row.name}
+                            <MapPinIcon className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                           </span>
                           <span className="font-mono text-[11px] text-muted-foreground">
                             {row.code} • UUID: {row.id.slice(0, 8)}...
@@ -493,17 +504,15 @@ export function AssembliesDataTable({
                       {/* Actions */}
                       <TableCell className="text-center pr-6">
                         <div className="flex items-center justify-center gap-1">
-                          {!readOnly && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleStartEdit(row)}
-                              className="size-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                              title="Edit Assembly"
-                            >
-                              <PencilIcon className="size-4" />
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenDetail(row)}
+                            className="size-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                            title="View & Edit Assembly Details and Boundary Map"
+                          >
+                            <PencilIcon className="size-4" />
+                          </Button>
 
                           <DropdownMenu>
                             <DropdownMenuTrigger
@@ -518,13 +527,15 @@ export function AssembliesDataTable({
                             >
                               <EllipsisVerticalIcon className="size-4" />
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              {!readOnly && (
-                                <DropdownMenuItem onClick={() => handleStartEdit(row)}>
-                                  <PencilIcon className="size-4 mr-2" />
-                                  Edit Assembly
-                                </DropdownMenuItem>
-                              )}
+                            <DropdownMenuContent align="end" className="w-52">
+                              <DropdownMenuItem onClick={() => handleOpenDetail(row)}>
+                                <MapPinIcon className="size-4 mr-2" />
+                                View Details &amp; Map
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleOpenDetail(row)}>
+                                <PencilIcon className="size-4 mr-2" />
+                                Edit Boundary Points
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => copyToClipboard(row.id, 'UUID')}>
                                 <CopyIcon className="size-4 mr-2" />
                                 Copy Database UUID
@@ -730,6 +741,15 @@ export function AssembliesDataTable({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Full GIS Assembly Detail & Boundary Points Editor Modal */}
+      <AssemblyDetailModal
+        open={detailModalOpen}
+        onOpenChange={setDetailModalOpen}
+        assembly={selectedAssemblyForDetail as any}
+        regions={regions}
+        onSaved={onRefresh}
+      />
     </div>
   )
 }

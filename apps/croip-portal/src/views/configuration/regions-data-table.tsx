@@ -12,9 +12,12 @@ import {
   XIcon,
   CheckCircle2Icon,
   ClockIcon,
-  XCircleIcon
+  XCircleIcon,
+  EyeIcon,
+  MapPinIcon
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { RegionDetailModal } from './region-detail-modal'
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -72,6 +75,7 @@ export interface RegionDbRecord {
     countryCode?: string
     [key: string]: any
   }
+  polygonGeoJson?: any
   createdAt: string
 }
 
@@ -101,6 +105,15 @@ export function RegionsDataTable({
 }: RegionsDataTableProps) {
   // Selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  // Detail & Map Modal
+  const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [selectedRegionForDetail, setSelectedRegionForDetail] = useState<RegionDbRecord | null>(null)
+
+  const handleOpenDetail = (row: RegionDbRecord) => {
+    setSelectedRegionForDetail(row)
+    setDetailModalOpen(true)
+  }
 
   // Filters (shadcn Select dropdowns, "Select Plan" removed per user request)
   const [filterZone, setFilterZone] = useState<string>('all')
@@ -475,13 +488,18 @@ export function RegionsDataTable({
 
                       {/* name (formatted with circle avatar + bold name + subtext) */}
                       <TableCell>
-                        <div className="flex items-center gap-3">
-                          <div className="size-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-xs text-primary shrink-0">
+                        <div
+                          className="flex items-center gap-3 cursor-pointer group"
+                          onClick={() => handleOpenDetail(row)}
+                          title="Click to view & edit details and boundary map"
+                        >
+                          <div className="size-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-xs text-primary shrink-0 group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
                             {row.name.slice(0, 2).toUpperCase()}
                           </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="font-semibold text-sm text-foreground truncate">
+                            <span className="font-semibold text-sm text-foreground truncate group-hover:text-primary transition-colors flex items-center gap-1.5">
                               {row.name}
+                              <MapPinIcon className="size-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                             </span>
                             <span className="text-xs text-muted-foreground font-mono truncate">
                               {row.id.slice(0, 8)}...{row.id.slice(-4)}
@@ -510,17 +528,15 @@ export function RegionsDataTable({
                       {/* actions (Edit, 3-dots) */}
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-1">
-                          {!readOnly && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleStartEdit(row)}
-                              className="size-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                              title="Edit Region"
-                            >
-                              <PencilIcon className="size-4" />
-                            </Button>
-                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleOpenDetail(row)}
+                            className="size-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                            title="View & Edit Region and Boundary Map"
+                          >
+                            <PencilIcon className="size-4" />
+                          </Button>
 
                           {/* Three Dots Menu */}
                           <DropdownMenu>
@@ -536,13 +552,15 @@ export function RegionsDataTable({
                             >
                               <EllipsisVerticalIcon className="size-4" />
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-48">
-                              {!readOnly && (
-                                <DropdownMenuItem onClick={() => handleStartEdit(row)}>
-                                  <PencilIcon className="size-4 mr-2" />
-                                  Edit Region
-                                </DropdownMenuItem>
-                              )}
+                            <DropdownMenuContent align="end" className="w-52">
+                              <DropdownMenuItem onClick={() => handleOpenDetail(row)}>
+                                <MapPinIcon className="size-4 mr-2" />
+                                View Details &amp; Map
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleOpenDetail(row)}>
+                                <PencilIcon className="size-4 mr-2" />
+                                Edit Boundary Points
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => copyToClipboard(row.id, 'UUID')}>
                                 <CopyIcon className="size-4 mr-2" />
                                 Copy Database UUID
@@ -792,6 +810,14 @@ export function RegionsDataTable({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Full GIS Region Detail & Boundary Points Editor Modal */}
+      <RegionDetailModal
+        open={detailModalOpen}
+        onOpenChange={setDetailModalOpen}
+        region={selectedRegionForDetail as any}
+        onSaved={onRefresh}
+      />
     </div>
   )
 }

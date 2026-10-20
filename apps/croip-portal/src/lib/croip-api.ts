@@ -539,9 +539,24 @@ export const croipApi = {
           updatedAt?: string
         }>
       >(CROIP_SERVICES.SHARED_SERVICES, '/v1/regions'),
+    getRegion: (id: string) =>
+      fetchCroipService<{
+        id: string
+        code: string
+        name: string
+        polygonGeoJson: Record<string, any> | null
+        createdAt: string
+        updatedAt?: string
+        assemblies?: Array<{ id: string; code: string; name: string; category: string }>
+      }>(CROIP_SERVICES.SHARED_SERVICES, `/v1/regions/${encodeURIComponent(id)}`),
     createRegion: (data: { code: string; name: string; polygonGeoJson?: Record<string, any> }) =>
       fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, '/v1/regions', {
         method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateRegion: (id: string, data: { code?: string; name?: string; polygonGeoJson?: Record<string, any> | null }) =>
+      fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, `/v1/regions/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
         body: JSON.stringify(data),
       }),
     updateRegionBoundary: (id: string, polygonGeoJson: Record<string, any>) =>
@@ -565,6 +580,18 @@ export const croipApi = {
         CROIP_SERVICES.SHARED_SERVICES,
         regionId ? `/v1/assemblies?regionId=${encodeURIComponent(regionId)}` : '/v1/assemblies'
       ),
+    getAssembly: (id: string) =>
+      fetchCroipService<{
+        id: string
+        regionId: string
+        code: string
+        name: string
+        category: 'METROPOLITAN' | 'MUNICIPAL' | 'DISTRICT'
+        polygonGeoJson: Record<string, any> | null
+        createdAt: string
+        updatedAt?: string
+        region?: { id: string; code: string; name: string }
+      }>(CROIP_SERVICES.SHARED_SERVICES, `/v1/assemblies/${encodeURIComponent(id)}`),
     createAssembly: (data: {
       regionId: string
       code: string
@@ -574,6 +601,20 @@ export const croipApi = {
     }) =>
       fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, '/v1/assemblies', {
         method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateAssembly: (
+      id: string,
+      data: {
+        regionId?: string
+        code?: string
+        name?: string
+        category?: 'METROPOLITAN' | 'MUNICIPAL' | 'DISTRICT'
+        polygonGeoJson?: Record<string, any> | null
+      }
+    ) =>
+      fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, `/v1/assemblies/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
         body: JSON.stringify(data),
       }),
     updateAssemblyBoundary: (id: string, polygonGeoJson: Record<string, any>) =>

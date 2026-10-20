@@ -97,8 +97,11 @@ export default function AssembliesConfigPage() {
     () =>
       assemblies.map(a => ({
         id: a.id,
+        regionId: a.regionId,
         code: a.code,
         name: a.name,
+        category: a.category,
+        polygonGeoJson: a.polygonGeoJson,
         metadata: {
           region: regionById.get(a.regionId)?.name,
           regionCode: regionById.get(a.regionId)?.code,
@@ -248,7 +251,7 @@ export default function AssembliesConfigPage() {
       </div>
 
       {/* Assemblies Data Table */}
-      <AssembliesDataTable data={tableData} loading={loading} onRefresh={fetchAll} readOnly />
+      <AssembliesDataTable data={tableData} regions={regions} loading={loading} onRefresh={fetchAll} />
     </div>
   )
 }

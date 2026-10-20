@@ -49,6 +49,18 @@ export const createRegionBodySchema = {
   }
 };
 
+export const updateRegionBodySchema = {
+  type: 'object',
+  properties: {
+    code: { type: 'string', minLength: 1, maxLength: 20 },
+    name: { type: 'string', minLength: 1, maxLength: 100 },
+    polygonGeoJson: {
+      type: 'object',
+      properties: { type: { type: 'string', enum: ['Polygon', 'MultiPolygon'] }, coordinates: { type: 'array' } }
+    }
+  }
+};
+
 export const updateRegionBoundaryBodySchema = {
   type: 'object',
   required: ['polygonGeoJson'],
@@ -56,6 +68,20 @@ export const updateRegionBoundaryBodySchema = {
     polygonGeoJson: {
       type: 'object',
       required: ['type', 'coordinates'],
+      properties: { type: { type: 'string', enum: ['Polygon', 'MultiPolygon'] }, coordinates: { type: 'array' } }
+    }
+  }
+};
+
+export const updateAssemblyBodySchema = {
+  type: 'object',
+  properties: {
+    regionId: { type: 'string', format: 'uuid' },
+    code: { type: 'string', minLength: 1, maxLength: 50 },
+    name: { type: 'string', minLength: 1, maxLength: 150 },
+    category: { type: 'string', enum: ['METROPOLITAN', 'MUNICIPAL', 'DISTRICT'] },
+    polygonGeoJson: {
+      type: 'object',
       properties: { type: { type: 'string', enum: ['Polygon', 'MultiPolygon'] }, coordinates: { type: 'array' } }
     }
   }

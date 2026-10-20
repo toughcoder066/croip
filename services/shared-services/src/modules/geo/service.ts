@@ -16,6 +16,20 @@ export interface CreateAssemblyInput {
   polygonGeoJson?: Record<string, unknown>;
 }
 
+export interface UpdateRegionInput {
+  code?: string;
+  name?: string;
+  polygonGeoJson?: Record<string, unknown> | null;
+}
+
+export interface UpdateAssemblyInput {
+  regionId?: string;
+  code?: string;
+  name?: string;
+  category?: string;
+  polygonGeoJson?: Record<string, unknown> | null;
+}
+
 export interface UpdateBoundaryInput {
   polygonGeoJson: Record<string, unknown>;
 }
@@ -26,9 +40,31 @@ export function geoService(app: FastifyInstance) {
       return app.prisma.region.findMany({ orderBy: { name: 'asc' } });
     },
 
+    async getRegion(id: string) {
+      const region = await app.prisma.region.findUnique({
+        where: { id },
+        include: { assemblies: { select: { id: true, code: true, name: true, category: true } } }
+      });
+      if (!region) throw new NotFoundError('Region not found');
+      return region;
+    },
+
     async createRegion(input: CreateRegionInput) {
       return app.prisma.region.create({
         data: { code: input.code, name: input.name, polygonGeoJson: (input.polygonGeoJson as any) ?? null }
+      });
+    },
+
+    async updateRegion(id: string, input: UpdateRegionInput) {
+      const region = await app.prisma.region.findUnique({ where: { id } });
+      if (!region) throw new NotFoundError('Region not found');
+      return app.prisma.region.update({
+        where: { id },
+        data: {
+          ...(input.code ? { code: input.code.toUpperCase().trim() } : {}),
+          ...(input.name ? { name: input.name.trim() } : {}),
+          ...(input.polygonGeoJson !== undefined ? { polygonGeoJson: input.polygonGeoJson as any } : {})
+        }
       });
     },
 
@@ -45,6 +81,15 @@ export function geoService(app: FastifyInstance) {
       });
     },
 
+    async getAssembly(id: string) {
+      const assembly = await app.prisma.municipalAssembly.findUnique({
+        where: { id },
+        include: { region: true }
+      });
+      if (!assembly) throw new NotFoundError('Municipal assembly not found');
+      return assembly;
+    },
+
     async createAssembly(input: CreateAssemblyInput) {
       const region = await app.prisma.region.findUnique({ where: { id: input.regionId } });
       if (!region) throw new BadRequestError(`Region '${input.regionId}' does not exist`);
@@ -56,6 +101,25 @@ export function geoService(app: FastifyInstance) {
           name: input.name,
           category: input.category ?? 'DISTRICT',
           polygonGeoJson: (input.polygonGeoJson as any) ?? null
+        }
+      });
+    },
+
+    async updateAssembly(id: string, input: UpdateAssemblyInput) {
+      const assembly = await app.prisma.municipalAssembly.findUnique({ where: { id } });
+      if (!assembly) throw new NotFoundError('Municipal assembly not found');
+      if (input.regionId && input.regionId !== assembly.regionId) {
+        const region = await app.prisma.region.findUnique({ where: { id: input.regionId } });
+        if (!region) throw new BadRequestError(`Region '${input.regionId}' does not exist`);
+      }
+      return app.prisma.municipalAssembly.update({
+        where: { id },
+        data: {
+          ...(input.regionId ? { regionId: input.regionId } : {}),
+          ...(input.code ? { code: input.code.toUpperCase().trim() } : {}),
+          ...(input.name ? { name: input.name.trim() } : {}),
+          ...(input.category ? { category: input.category } : {}),
+          ...(input.polygonGeoJson !== undefined ? { polygonGeoJson: input.polygonGeoJson as any } : {})
         }
       });
     },
