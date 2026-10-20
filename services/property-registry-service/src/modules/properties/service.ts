@@ -570,7 +570,7 @@ export function propertyService(app: FastifyInstance) {
     // silently break those, so this fix stays local to how these two routes query.
     async listProperties(assemblyId?: string) {
       return app.prisma.property.findMany({
-        where: assemblyId ? { assemblyId } : {},
+        where: assemblyId && assemblyId !== '*' ? { assemblyId } : {},
         include: { documents: true },
         orderBy: { createdAt: 'desc' },
         take: 50
@@ -579,7 +579,7 @@ export function propertyService(app: FastifyInstance) {
 
     async getProperty(id: string, assemblyId?: string) {
       const prop = await app.prisma.property.findFirst({
-        where: assemblyId ? { id, assemblyId } : { id },
+        where: assemblyId && assemblyId !== '*' ? { id, assemblyId } : { id },
         include: {
           units: true,
           documents: true,
@@ -591,7 +591,10 @@ export function propertyService(app: FastifyInstance) {
     },
 
     async addUnit(propertyId: string, unitIdentifier: string, unitType: string, floorLevel: number, assemblyId: string) {
-      const prop = await app.prisma.property.findFirst({ where: { id: propertyId, assemblyId } });
+      const isScoped = assemblyId && assemblyId !== '*';
+      const prop = await app.prisma.property.findFirst({
+        where: isScoped ? { id: propertyId, assemblyId } : { id: propertyId }
+      });
       if (!prop) throw new NotFoundError('Property not found');
 
       return app.prisma.propertyUnit.create({
@@ -677,8 +680,9 @@ export function propertyService(app: FastifyInstance) {
     // Concessionaire agent submits a field verification; it does not move the property's
     // cached verificationStatus until a concessionaire officer reviews it (see reviewVerification).
     async submitVerification(input: SubmitVerificationInput) {
+      const isScoped = input.assemblyId && input.assemblyId !== '*';
       const property = await app.prisma.property.findFirst({
-        where: { id: input.propertyId, assemblyId: input.assemblyId }
+        where: isScoped ? { id: input.propertyId, assemblyId: input.assemblyId } : { id: input.propertyId }
       });
       if (!property) throw new NotFoundError('Property not found');
 
@@ -779,11 +783,21 @@ export function propertyService(app: FastifyInstance) {
     },
 
     async listVerifications(propertyId: string, assemblyId: string) {
-      const property = await app.prisma.property.findFirst({ where: { id: propertyId, assemblyId } });
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propertyId);
+      const isScoped = assemblyId && assemblyId !== '*';
+      const whereClause: Record<string, unknown> = isUuid
+        ? { OR: [{ id: propertyId }, { code: propertyId }] }
+        : { code: propertyId };
+
+      if (isScoped) {
+        whereClause.assemblyId = assemblyId;
+      }
+
+      const property = await app.prisma.property.findFirst({ where: whereClause });
       if (!property) throw new NotFoundError('Property not found');
 
       return app.prisma.propertyVerification.findMany({
-        where: { propertyId },
+        where: { propertyId: property.id },
         orderBy: { capturedAt: 'desc' }
       });
     },
