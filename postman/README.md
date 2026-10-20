@@ -1,6 +1,6 @@
 # CROIP Postman Collection
 
-Covers all 11 CROIP microservices (113 requests), organized by **who calls the API** rather than which service owns it:
+Covers all 11 CROIP microservices (120 requests), organized by **who calls the API** rather than which service owns it:
 
 - **1. Ratepayer** — citizen self-service: register, log in (password + OTP), complete profile, self-service property registration, own bills/disputes, receipt verification.
 - **2. Concession** — revenue-collection partner field staff: property registration/verification in the field, billing and payment collection, event reporting, reference-data lookups.

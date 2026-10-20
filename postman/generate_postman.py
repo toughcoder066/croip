@@ -86,7 +86,7 @@ ratepayer_folder = folder("1. Ratepayer", [
             "code": "GH0701-SELF-{{$randomInt}}", "propertyName": "My Residence", "propertyUse": "RESIDENTIAL",
             "documents": [{"documentType": "LAND_TITLE_CERTIFICATE", "documentNumber": "LTC-00982", "mediaUrl": "https://storage.croip.gov.gh/claims/ltc-00982.pdf"}],
             "polygonGeoJson": {"type": "Polygon", "coordinates": [[[-0.2355, 5.5545], [-0.2355, 5.5555], [-0.2345, 5.5555], [-0.2345, 5.5545], [-0.2355, 5.5545]]]}
-        }, description="Strictly requires ratepayer Bearer session token (HS256). Property is attributed to the logged-in ratepayer (createdByRatepayerId) and automatically linked in ratepayer-service. Ownership documents are mandatory."),
+        }, description="Strictly requires ratepayer Bearer session token (HS256). Property is attributed to the logged-in ratepayer (createdByRatepayerId) and automatically linked in ratepayer-service. Ownership documents are mandatory. Spatial restriction: polygons cannot overlap or contain another property parcel if property uses and ownership match (prevents duplicate residential house registrations)."),
         item("Claim an existing property (public)", "POST", "ratepayer_url", "/v1/ratepayers/claims", body={
             "ratepayerId": "{{sample_ratepayer_id}}", "propertyId": "{{sample_property_id}}",
             "ownershipType": "OWNER", "documents": [{"documentType": "INDENTURE", "mediaUrl": "https://storage.croip.gov.gh/claims/indenture.pdf"}]
@@ -123,7 +123,7 @@ concession_folder = folder("2. Concession", [
             "propertyStatus": "ASSESSED", "propertyUse": "COMMERCIAL",
             "tenureType": "FREEHOLD", "structureType": "CONCRETE",
             "polygonGeoJson": {"type": "Polygon", "coordinates": [[[-0.2355, 5.5545], [-0.2355, 5.5555], [-0.2345, 5.5555], [-0.2345, 5.5545], [-0.2355, 5.5545]]]}
-        }, description="Requires staff/concessionaire Bearer token. Concessions can only register properties whose polygon falls strictly within their assigned MMDA territory (enforced via Shared Services and Platform Governance). Core classification fields are required; propertyName and documents are optional."),
+        }, description="Requires staff/concessionaire Bearer token. Concessions can only register properties whose polygon falls strictly within their assigned MMDA territory (enforced via Shared Services and Platform Governance). Spatial non-overlap restriction: polygons cannot overlap or contain another property parcel when property uses and ownership percentage match. Core classification fields are required; propertyName and documents are optional."),
         item("Register batch properties", "POST", "property_registry_url", "/v1/properties/batch", auth="staff", body={
             "properties": [
                 {
@@ -221,10 +221,13 @@ admin_folder = folder("3. CROIP Admin", [
     ], "property-registry-service — the approval step after a concession agent submits a field verification."),
     folder("Billing Oversight", [
         item("Bill directory (all concessions/ratepayers)", "GET", "billing_payments_url", "/v1/bills", auth="staff", query={"page": "1", "pageSize": "20"}),
+        item("List bills by ratepayer", "GET", "billing_payments_url", "/v1/bills", auth="staff", query={"ratepayerId": "{{sample_ratepayer_id}}", "page": "1", "pageSize": "20"}),
         item("Payment ledger (all concessions/ratepayers)", "GET", "billing_payments_url", "/v1/payments", auth="staff", query={"page": "1", "pageSize": "20"}),
+        item("List payments by ratepayer", "GET", "billing_payments_url", "/v1/payments", auth="staff", query={"paidByRatepayerId": "{{sample_ratepayer_id}}", "page": "1", "pageSize": "20"}),
     ], "billing-payments-service — the platform-wide view, distinct from a single concession's own billing operations."),
     folder("Dispute Review", [
         item("Review queue", "GET", "dispute_url", "/v1/disputes", auth="staff", query={"status": "OPEN"}),
+        item("List disputes by ratepayer", "GET", "dispute_url", "/v1/disputes", auth="staff", query={"raisedByRatepayerId": "{{sample_ratepayer_id}}"}),
         item("Get a dispute", "GET", "dispute_url", "/v1/disputes/{{sample_dispute_code}}", auth="staff"),
         item("Transition dispute status", "PATCH", "dispute_url", "/v1/disputes/{{sample_dispute_code}}/status", auth="staff", body={"status": "RESOLVED", "resolution": "Bill amount corrected to match published rate."}),
     ], "dispute-service — an officer reviewing/resolving disputes a ratepayer raised (see Ratepayer folder for raising one)."),
@@ -271,8 +274,11 @@ admin_folder = folder("3. CROIP Admin", [
     folder("Ratepayer Oversight", [
         item("Ratepayer summary metrics (public)", "GET", "ratepayer_url", "/v1/ratepayers"),
         item("Ratepayer directory", "GET", "ratepayer_url", "/v1/ratepayers/directory", auth="staff", query={"page": "1", "pageSize": "20"}),
+        item("Get a ratepayer profile", "GET", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}", auth="staff"),
+        item("List ratepayer linked properties", "GET", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/properties", auth="staff"),
+        item("Update ratepayer account status", "PATCH", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/status", auth="staff", body={"status": "SUSPENDED"}, description="CROIP portal / oversight official updates a ratepayer's account status (ACTIVE, SUSPENDED, DEACTIVATED)."),
         item("Review a KYC verification", "PATCH", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/verifications/{{sample_verification_id}}", auth="staff", body={"verificationStatus": "VERIFIED"}),
-    ], "ratepayer-service — oversight-wide views and the KYC approval step, distinct from a ratepayer's own self-service endpoints."),
+    ], "ratepayer-service — oversight-wide views, account status management, and the KYC approval step, distinct from a ratepayer's own self-service endpoints."),
     folder("Zitadel Dev Tools", [
         item("Machine-to-machine token (client_credentials)", "POST", "zitadel_issuer", "/oauth/v2/token", description="Grant type: client_credentials. Use for service accounts (e.g. property-registry-service's own machine user). Body is form-urlencoded — see Body tab."),
     ], "Minting a staff access token for Postman testing itself (not a platform API) — real officers sign in through the portal's browser-based Zitadel login."),
