@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import { toast } from 'sonner'
 import {
@@ -29,6 +30,18 @@ import {
   VerificationReviewDialog,
   type PendingVerification
 } from '@/views/properties/verification-review-dialog'
+
+const PropertyPolygonMap = dynamic(() => import('@/views/properties/property-polygon-map'), {
+  ssr: false,
+  loading: () => (
+    <div className='flex h-[360px] w-full items-center justify-center bg-muted/20 rounded-lg border'>
+      <div className='flex flex-col items-center gap-2 text-muted-foreground'>
+        <Spinner className='size-6 text-primary' />
+        <span className='text-xs'>Loading cadastral map...</span>
+      </div>
+    </div>
+  )
+})
 
 interface PropertyDetail {
   id: string
@@ -170,6 +183,7 @@ function OverviewField({ label, value }: { label: string; value: React.ReactNode
 export function PropertyDetailView({ propertyId }: { propertyId: string }) {
   const [property, setProperty] = useState<PropertyDetail | null>(null)
   const [verifications, setVerifications] = useState<VerificationRecord[]>([])
+  const [assemblies, setAssemblies] = useState<Array<{ id: string; code: string; name: string }>>([])
   const [loading, setLoading] = useState(true)
   const [verificationsLoading, setVerificationsLoading] = useState(true)
   const [reviewerId, setReviewerId] = useState('')
@@ -215,6 +229,15 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
   useEffect(() => {
     fetchProperty()
     fetchVerifications()
+
+    fetch('/api/geo/assemblies')
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && Array.isArray(res.data)) {
+          setAssemblies(res.data)
+        }
+      })
+      .catch(() => {})
 
     // Reviewer identity: in this admin portal context the reviewing "personnel" is the
     // logged-in oversight officer. property-registry-service stores reviewedByPersonnelId
@@ -266,6 +289,7 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
   }
 
   const pendingCount = verifications.filter(v => (v.reviewStatus || 'PENDING').toUpperCase() === 'PENDING').length
+  const assembly = assemblies.find(a => a.id === property.assemblyId)
 
   return (
     <div className="flex flex-col gap-6">
@@ -349,9 +373,48 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
                   </Badge>
                 }
               />
-              <OverviewField label="Assembly ID" value={<span className="font-mono text-xs">{property.assemblyId}</span>} />
+              <OverviewField
+                label="Assigned MMDA"
+                value={
+                  assembly ? (
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-xs text-foreground">{assembly.name}</span>
+                      <span className="font-mono text-[11px] text-muted-foreground">{assembly.code}</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground">Local Assembly</span>
+                  )
+                }
+              />
               <OverviewField label="Registered" value={formatDate(property.createdAt)} />
               <OverviewField label="Last Updated" value={formatDate(property.updatedAt)} />
+            </CardContent>
+          </Card>
+
+          {/* Interactive Cadastral Boundary Map */}
+          <Card className="shadow-2xs mt-5 overflow-hidden">
+            <CardHeader className="border-b py-3 px-4 bg-muted/20">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <MapPinIcon className="size-4 text-primary" />
+                  Cadastral Boundary Map
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 text-xs font-medium">
+                    <CheckCircle2Icon className="size-3 mr-1" />
+                    GIS Boundary
+                  </Badge>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="p-4">
+              <PropertyPolygonMap
+                polygonGeoJson={property.polygonGeoJson}
+                propertyName={property.propertyName}
+                propertyCode={property.code}
+                assemblyName={assembly ? `${assembly.name} (${assembly.code})` : undefined}
+                verificationStatus={property.verificationStatus}
+              />
             </CardContent>
           </Card>
 
@@ -359,8 +422,8 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
             <Collapsible className="group/polygon">
               <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 p-4 text-left">
                 <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <MapPinIcon className="size-4 text-primary" />
-                  Property Boundary (GeoJSON)
+                  <LayersIcon className="size-4 text-primary" />
+                  Raw Boundary Coordinates (GeoJSON)
                 </span>
                 <ChevronDownIcon className="size-4 text-muted-foreground transition-transform duration-200 group-data-open/polygon:rotate-180" />
               </CollapsibleTrigger>
