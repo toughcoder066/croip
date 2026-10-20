@@ -6,7 +6,7 @@
 
 import { cookies } from 'next/headers'
 
-import { getTokenSession } from './token-store'
+import { touchTokenSession } from './token-store'
 
 export const CROIP_SERVICES = {
   REPORTING_GATEWAY: process.env.REPORTING_GATEWAY_API_URL || 'http://localhost:3001',
@@ -32,7 +32,12 @@ export interface RequestOptions extends RequestInit {
   accessToken?: string
 }
 
-/** Resolves the current request's real Zitadel access token from the session cookie. */
+/**
+ * Resolves the current request's real Zitadel access token from the session cookie.
+ * Every call here counts as activity (see touchTokenSession) — an officer who keeps
+ * using the portal stays silently signed in via the refresh token; one who stops gets
+ * logged out after 5 idle minutes regardless of the access token's own lifetime.
+ */
 async function resolveSessionAccessToken(): Promise<string | null> {
   try {
     const cookieStore = await cookies()
@@ -41,8 +46,9 @@ async function resolveSessionAccessToken(): Promise<string | null> {
     if (!sessionCookie?.value) return null
 
     const session = JSON.parse(sessionCookie.value)
+    const tokens = await touchTokenSession(session.tokenSessionId)
 
-    return getTokenSession(session.tokenSessionId)?.accessToken ?? null
+    return tokens?.accessToken ?? null
   } catch {
     return null
   }
@@ -222,10 +228,17 @@ export const croipApi = {
       fetchCroipService<any[]>(CROIP_SERVICES.PROPERTY_REGISTRY, '/v1/properties'),
     getProperty: (id: string) =>
       fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${id}`),
-    createProperty: (data: any) =>
+    createProperty: (data: any, options?: RequestOptions) =>
       fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, '/v1/properties', {
         method: 'POST',
         body: JSON.stringify(data),
+        ...options
+      }),
+    createPropertiesBatch: (properties: any[], options?: RequestOptions) =>
+      fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, '/v1/properties/batch', {
+        method: 'POST',
+        body: JSON.stringify({ properties }),
+        ...options
       }),
     getPropertyDocuments: (code: string) =>
       fetchCroipService<any[]>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${code}/documents`),
@@ -330,6 +343,17 @@ export const croipApi = {
           method: 'PATCH',
           body: JSON.stringify(data),
         }
+      ),
+
+    // CROIP portal: oversight official updates a ratepayer's account status (ACTIVE, SUSPENDED, DEACTIVATED).
+    updateStatus: (id: string, status: 'ACTIVE' | 'SUSPENDED' | 'DEACTIVATED') =>
+      fetchCroipService<any>(
+        CROIP_SERVICES.RATEPAYER_CORE,
+        `/v1/ratepayers/${encodeURIComponent(id)}/status`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify({ status })
+        }
       )
   },
   billing: {
@@ -420,11 +444,12 @@ export const croipApi = {
   disputes: {
     // CROIP portal: review queue for disputes raised by ratepayers (billing/boundary/valuation).
     // Thin pass-through to dispute-service (:3008) GET /v1/disputes.
-    getQueue: (params: { status?: string; assignedToPersonnelId?: string } = {}) => {
+    getQueue: (params: { status?: string; assignedToPersonnelId?: string; raisedByRatepayerId?: string } = {}) => {
       const query = new URLSearchParams()
 
       if (params.status) query.set('status', params.status)
       if (params.assignedToPersonnelId) query.set('assignedToPersonnelId', params.assignedToPersonnelId)
+      if (params.raisedByRatepayerId) query.set('raisedByRatepayerId', params.raisedByRatepayerId)
       const qs = query.toString()
 
       return fetchCroipService<
@@ -526,9 +551,24 @@ export const croipApi = {
           updatedAt?: string
         }>
       >(CROIP_SERVICES.SHARED_SERVICES, '/v1/regions'),
+    getRegion: (id: string) =>
+      fetchCroipService<{
+        id: string
+        code: string
+        name: string
+        polygonGeoJson: Record<string, any> | null
+        createdAt: string
+        updatedAt?: string
+        assemblies?: Array<{ id: string; code: string; name: string; category: string }>
+      }>(CROIP_SERVICES.SHARED_SERVICES, `/v1/regions/${encodeURIComponent(id)}`),
     createRegion: (data: { code: string; name: string; polygonGeoJson?: Record<string, any> }) =>
       fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, '/v1/regions', {
         method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateRegion: (id: string, data: { code?: string; name?: string; polygonGeoJson?: Record<string, any> | null }) =>
+      fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, `/v1/regions/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
         body: JSON.stringify(data),
       }),
     updateRegionBoundary: (id: string, polygonGeoJson: Record<string, any>) =>
@@ -552,6 +592,18 @@ export const croipApi = {
         CROIP_SERVICES.SHARED_SERVICES,
         regionId ? `/v1/assemblies?regionId=${encodeURIComponent(regionId)}` : '/v1/assemblies'
       ),
+    getAssembly: (id: string) =>
+      fetchCroipService<{
+        id: string
+        regionId: string
+        code: string
+        name: string
+        category: 'METROPOLITAN' | 'MUNICIPAL' | 'DISTRICT'
+        polygonGeoJson: Record<string, any> | null
+        createdAt: string
+        updatedAt?: string
+        region?: { id: string; code: string; name: string }
+      }>(CROIP_SERVICES.SHARED_SERVICES, `/v1/assemblies/${encodeURIComponent(id)}`),
     createAssembly: (data: {
       regionId: string
       code: string
@@ -561,6 +613,20 @@ export const croipApi = {
     }) =>
       fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, '/v1/assemblies', {
         method: 'POST',
+        body: JSON.stringify(data),
+      }),
+    updateAssembly: (
+      id: string,
+      data: {
+        regionId?: string
+        code?: string
+        name?: string
+        category?: 'METROPOLITAN' | 'MUNICIPAL' | 'DISTRICT'
+        polygonGeoJson?: Record<string, any> | null
+      }
+    ) =>
+      fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, `/v1/assemblies/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
         body: JSON.stringify(data),
       }),
     updateAssemblyBoundary: (id: string, polygonGeoJson: Record<string, any>) =>

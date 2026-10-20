@@ -5,8 +5,10 @@ import {
   regionResponseSchema,
   assemblyResponseSchema,
   createRegionBodySchema,
+  updateRegionBodySchema,
   updateRegionBoundaryBodySchema,
   createAssemblyBodySchema,
+  updateAssemblyBodySchema,
   updateAssemblyBoundaryBodySchema,
   detectZoneBodySchema,
   detectZoneResponseSchema,
@@ -39,6 +41,27 @@ export const geoRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(201).send(region);
   });
 
+  app.get<{ Params: { id: string } }>('/regions/:id', {
+    preHandler: app.requirePermissions(['reference:read']),
+    schema: {
+      tags: ['Geography'],
+      summary: 'Get a single region by ID',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+      response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema, 404: problemSchema }
+    }
+  }, async (request) => service.getRegion(request.params.id));
+
+  app.patch<{ Params: { id: string }; Body: { code?: string; name?: string; polygonGeoJson?: Record<string, unknown> } }>('/regions/:id', {
+    preHandler: app.requirePermissions(['reference:manage']),
+    schema: {
+      tags: ['Geography'],
+      summary: 'Update region name, code, or boundary',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+      body: updateRegionBodySchema,
+      response: { 200: regionResponseSchema, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
+    }
+  }, async (request) => service.updateRegion(request.params.id, request.body));
+
   app.patch<{ Params: { id: string }; Body: { polygonGeoJson: Record<string, unknown> } }>('/regions/:id/boundary', {
     preHandler: app.requirePermissions(['reference:manage']),
     schema: {
@@ -60,6 +83,16 @@ export const geoRoutes: FastifyPluginAsync = async (app) => {
     }
   }, async (request) => service.listAssemblies(request.query?.regionId));
 
+  app.get<{ Params: { id: string } }>('/assemblies/:id', {
+    preHandler: app.requirePermissions(['reference:read']),
+    schema: {
+      tags: ['Geography'],
+      summary: 'Get a single municipal assembly (MMDA) by ID',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+      response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema, 404: problemSchema }
+    }
+  }, async (request) => service.getAssembly(request.params.id));
+
   app.post<{ Body: CreateAssemblyInput }>('/assemblies', {
     preHandler: app.requirePermissions(['reference:manage']),
     schema: {
@@ -72,6 +105,17 @@ export const geoRoutes: FastifyPluginAsync = async (app) => {
     const assembly = await service.createAssembly(request.body);
     return reply.code(201).send(assembly);
   });
+
+  app.patch<{ Params: { id: string }; Body: { regionId?: string; code?: string; name?: string; category?: string; polygonGeoJson?: Record<string, unknown> } }>('/assemblies/:id', {
+    preHandler: app.requirePermissions(['reference:manage']),
+    schema: {
+      tags: ['Geography'],
+      summary: 'Update municipal assembly name, code, region, category, or boundary',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+      body: updateAssemblyBodySchema,
+      response: { 200: assemblyResponseSchema, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
+    }
+  }, async (request) => service.updateAssembly(request.params.id, request.body));
 
   app.patch<{ Params: { id: string }; Body: { polygonGeoJson: Record<string, unknown> } }>('/assemblies/:id/boundary', {
     preHandler: app.requirePermissions(['reference:manage']),

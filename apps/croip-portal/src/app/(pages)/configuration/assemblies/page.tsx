@@ -97,8 +97,11 @@ export default function AssembliesConfigPage() {
     () =>
       assemblies.map(a => ({
         id: a.id,
+        regionId: a.regionId,
         code: a.code,
         name: a.name,
+        category: a.category,
+        polygonGeoJson: a.polygonGeoJson,
         metadata: {
           region: regionById.get(a.regionId)?.name,
           regionCode: regionById.get(a.regionId)?.code,
@@ -204,20 +207,27 @@ export default function AssembliesConfigPage() {
                   </div>
                   <div className='grid gap-1.5'>
                     <label className='text-xs font-medium text-foreground'>Region</label>
-                    <Select value={formRegionId || null} onValueChange={(val: string | null) => val && setFormRegionId(val)}>
-                      <SelectTrigger className='w-full text-xs'>
-                        <SelectValue placeholder={regions.length ? 'Select a region' : 'No regions in database'} />
-                      </SelectTrigger>
-                      <SelectContent className='max-h-60'>
-                        <SelectGroup>
-                          {regions.map(r => (
-                            <SelectItem key={r.id} value={r.id}>
-                              {r.name} ({r.code})
-                            </SelectItem>
-                          ))}
-                        </SelectGroup>
-                      </SelectContent>
-                    </Select>
+                    {(() => {
+                      const selectedFormRegion = regions.find(r => r.id === formRegionId)
+                      return (
+                        <Select value={formRegionId || null} onValueChange={(val: string | null) => val && setFormRegionId(val)}>
+                          <SelectTrigger className='w-full text-xs'>
+                            <SelectValue placeholder={regions.length ? 'Select a region' : 'No regions in database'}>
+                              {selectedFormRegion ? `${selectedFormRegion.name} (${selectedFormRegion.code})` : undefined}
+                            </SelectValue>
+                          </SelectTrigger>
+                          <SelectContent className='max-h-60'>
+                            <SelectGroup>
+                              {regions.map(r => (
+                                <SelectItem key={r.id} value={r.id}>
+                                  {r.name} ({r.code})
+                                </SelectItem>
+                              ))}
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                      )
+                    })()}
                   </div>
                   <div className='grid gap-1.5'>
                     <label className='text-xs font-medium text-foreground'>Governance Tier</label>
@@ -248,7 +258,7 @@ export default function AssembliesConfigPage() {
       </div>
 
       {/* Assemblies Data Table */}
-      <AssembliesDataTable data={tableData} loading={loading} onRefresh={fetchAll} readOnly />
+      <AssembliesDataTable data={tableData} regions={regions} loading={loading} onRefresh={fetchAll} />
     </div>
   )
 }

@@ -15,6 +15,7 @@ model Ratepayer {
   legalName     String   @map("legal_name") @db.VarChar(200)
   phone         String   @db.VarChar(30)
   email         String?  @db.VarChar(255)
+  passwordHash  String?  @map("password_hash") @db.VarChar(255)
   regionId      String   @map("region_id") @db.Uuid
   assemblyId    String   @map("assembly_id") @db.Uuid
   locationGeo   Json     @map("location_geo")
@@ -24,10 +25,27 @@ model Ratepayer {
 
   verifications RatepayerVerification[]
   propertyLinks PropertyRatepayerLink[]
+  otps          RatepayerOtp[]
 
   @@index([assemblyId, status])
   @@index([phone])
   @@map("ratepayers")
+}
+
+model RatepayerOtp {
+  id          String    @id @default(uuid()) @db.Uuid
+  ratepayerId String    @map("ratepayer_id") @db.Uuid
+  purpose     String    @db.VarChar(30)
+  codeHash    String    @map("code_hash") @db.VarChar(255)
+  expiresAt   DateTime  @map("expires_at") @db.Timestamptz
+  consumedAt  DateTime? @map("consumed_at") @db.Timestamptz
+  attempts    Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  ratepayer Ratepayer @relation(fields: [ratepayerId], references: [id], onDelete: Cascade)
+
+  @@index([ratepayerId, purpose, consumedAt])
+  @@map("ratepayer_otps")
 }
 
 model RatepayerVerification {

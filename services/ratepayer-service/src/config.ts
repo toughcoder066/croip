@@ -16,6 +16,11 @@ const schema = z.object({
   ZITADEL_JWKS_URI: z.string().url().optional(),
   ZITADEL_ROLES_CLAIM: z.string().default('urn:zitadel:iam:org:project:roles'),
   IDARMS_CONTEXT_CLAIM: z.string().default('urn:idarms:context'),
+  // Ratepayer self-service auth (phone/email + password + OTP) is separate from staff
+  // Zitadel auth — this signs/verifies the HS256 session token issued after OTP
+  // verification. property-registry-service holds the same secret to accept it for
+  // self-service property creation.
+  RATEPAYER_JWT_SECRET: z.string().min(32).default('a1ad815520d1c65d7f6f262a37b891b4081ac164aa687d9277bfaa4990735893'),
   RABBITMQ_URL: z.string().min(1),
   RABBITMQ_EXCHANGE: z.string().min(1).default('croip.domain.v1'),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(100).default(500),

@@ -27,6 +27,9 @@ export const propertyResponseSchema = {
     tenureType: { type: 'string' },
     structureType: { type: 'string' },
     verificationStatus: { type: 'string' },
+    registrationSource: { type: 'string', enum: ['CONCESSION', 'RATEPAYER'] },
+    registeredByConcessionId: { type: ['string', 'null'], format: 'uuid' },
+    createdByRatepayerId: { type: ['string', 'null'], format: 'uuid' },
     polygonGeoJson: { type: 'object', additionalProperties: true },
     createdAt: { type: 'string', format: 'date-time' }
   }
@@ -60,9 +63,9 @@ export const propertyDocumentInputSchema = {
 
 export const createPropertyBodySchema = {
   type: 'object',
-  required: ['code', 'polygonGeoJson'],
+  required: ['polygonGeoJson'],
   properties: {
-    code: { type: 'string', minLength: 3, maxLength: 50 },
+    code: { type: 'string', maxLength: 50 },
     accountNumber: { type: 'string', maxLength: 50 },
     propertyName: { type: 'string', maxLength: 150 },
     propertyClass: { type: 'string' },
@@ -73,12 +76,43 @@ export const createPropertyBodySchema = {
     structureType: { type: 'string' },
     registrationSource: { type: 'string', enum: ['CONCESSION', 'RATEPAYER'], default: 'CONCESSION' },
     createdByRatepayerId: { type: 'string', format: 'uuid' },
+    assemblyId: {
+      type: 'string',
+      format: 'uuid',
+      description: 'Ratepayer self-service only — overrides the ratepayer\'s own registered assembly if the property is elsewhere. Ignored (and taken from the caller\'s own context) for staff/concession requests.'
+    },
     documents: {
       type: 'array',
       items: propertyDocumentInputSchema,
       description: 'Mandatory ownership verification documents when registered from ratepayer end'
     },
     polygonGeoJson: { type: 'object' }
+  }
+};
+
+export const createBatchPropertiesBodySchema = {
+  type: 'object',
+  required: ['properties'],
+  properties: {
+    properties: {
+      type: 'array',
+      minItems: 1,
+      maxItems: 500,
+      items: createPropertyBodySchema
+    }
+  }
+};
+
+export const batchPropertiesResponseSchema = {
+  type: 'object',
+  required: ['success', 'count', 'properties'],
+  properties: {
+    success: { type: 'boolean' },
+    count: { type: 'integer' },
+    properties: {
+      type: 'array',
+      items: propertyResponseSchema
+    }
   }
 };
 

@@ -199,7 +199,7 @@ export function PaymentsDataTable({
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="text-xs font-mono text-muted-foreground">{row.bill?.billNumber ?? row.billId.slice(0, 8)}</TableCell>
+                      <TableCell className="text-xs font-mono text-muted-foreground">{row.bill?.billNumber ?? 'Bill Ref'}</TableCell>
                       <TableCell className="text-xs font-medium text-foreground">{formatMoney(currency, row.amount)}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{formatMoney(currency, row.balanceAtPayment)}</TableCell>
                       <TableCell>

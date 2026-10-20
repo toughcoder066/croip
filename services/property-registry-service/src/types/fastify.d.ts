@@ -10,6 +10,7 @@ declare module 'fastify' {
     config: AppConfig;
     authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
     requirePermissions: (permissions: string[]) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
+    authenticateStaffOrRatepayer: (permissions: string[]) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
   }
 
   interface FastifyRequest {

@@ -527,6 +527,11 @@ services:
       ZITADEL_TOKEN_URL: http://zitadel:8080/oauth/v2/token
       ZITADEL_CLIENT_ID: property-registry-service
       ZITADEL_CLIENT_SECRET: "${ZITADEL_PROPERTY_REGISTRY_CLIENT_SECRET:-rRhsZrPCjk4jq3PfK0ue2uGG8gNVYbaYcAiQhPvkkjTpHsoocrt5W3khItWyDRpn}"
+      # Shared with ratepayer-service — accepts a ratepayer's own session token as an
+      # alternate auth path on POST /properties (self-service registration).
+      RATEPAYER_JWT_SECRET: "${RATEPAYER_JWT_SECRET:-a1ad815520d1c65d7f6f262a37b891b4081ac164aa687d9277bfaa4990735893}"
+      RATEPAYER_SERVICE_URL: http://ratepayer-service:3030
+      PLATFORM_GOVERNANCE_URL: http://platform-governance-service:3010
     ports:
       - "3020:3020"
     depends_on:
@@ -575,6 +580,7 @@ services:
       ZITADEL_JWKS_URI: http://zitadel:8080/oauth/v2/keys
       ZITADEL_AUDIENCE: "395706197476376592"
       JWT_ALLOWED_CLOCK_SKEW_SECONDS: "5"
+      RATEPAYER_JWT_SECRET: "${RATEPAYER_JWT_SECRET:-a1ad815520d1c65d7f6f262a37b891b4081ac164aa687d9277bfaa4990735893}"
     ports:
       - "3030:3030"
     depends_on:

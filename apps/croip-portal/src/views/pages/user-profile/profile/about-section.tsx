@@ -50,30 +50,23 @@ type SectionData = {
   items: AboutItem[]
 }
 
-function AboutSection() {
-  const [user, setUser] = useState<UserSession>({
-    fullName: 'CROIP Super Administrator',
-    status: 'ACTIVE',
-    roleName: 'Super Administrator',
-    department: 'Executive Oversight & Platform Governance',
-    code: 'USR-SUPERADMIN',
-    country: 'Ghana',
-    languages: 'English, Twi',
-    phone: '+233 20 000 0000',
-    email: 'superuser@croip.com',
-    permissions: ['*']
-  })
+import { useUserSession } from '@/context/user-session-context'
 
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => {
-        if (data.user) {
-          setUser(prev => ({ ...prev, ...data.user }))
-        }
-      })
-      .catch(() => {})
-  }, [])
+function AboutSection() {
+  const { user: sessionUser } = useUserSession()
+
+  const user = {
+    fullName: sessionUser?.fullName || 'CROIP Super Administrator',
+    status: sessionUser?.status || 'ACTIVE',
+    roleName: sessionUser?.roleName || sessionUser?.role || 'Super Administrator',
+    department: sessionUser?.department || 'Executive Oversight & Platform Governance',
+    code: sessionUser?.code || 'USR-SUPERADMIN',
+    country: sessionUser?.country || 'Ghana',
+    languages: sessionUser?.languages || 'English, Twi',
+    phone: sessionUser?.phone || '+233 20 000 0000',
+    email: sessionUser?.email || 'superuser@croip.com',
+    permissions: sessionUser?.permissions || ['*']
+  }
 
   const sections: SectionData[] = [
     {

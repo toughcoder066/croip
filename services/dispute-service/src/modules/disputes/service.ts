@@ -24,6 +24,7 @@ export interface RaiseDisputeInput {
 export interface ListDisputesFilter {
   status?: string;
   assignedToPersonnelId?: string;
+  raisedByRatepayerId?: string;
 }
 
 export interface UpdateDisputeStatusInput {
@@ -127,7 +128,8 @@ export function disputeService(app: FastifyInstance) {
       return app.prisma.dispute.findMany({
         where: {
           ...(filter.status ? { status: filter.status } : {}),
-          ...(filter.assignedToPersonnelId ? { assignedToPersonnelId: filter.assignedToPersonnelId } : {})
+          ...(filter.assignedToPersonnelId ? { assignedToPersonnelId: filter.assignedToPersonnelId } : {}),
+          ...(filter.raisedByRatepayerId ? { raisedByRatepayerId: filter.raisedByRatepayerId } : {})
         },
         orderBy: [{ slaDueAt: 'asc' }, { createdAt: 'desc' }]
       });

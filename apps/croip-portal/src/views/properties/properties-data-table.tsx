@@ -346,7 +346,7 @@ export function PropertiesDataTable({ data, assemblies = [], loading = false }: 
                     <TableCell>
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <LandmarkIcon className="size-3.5 text-primary" />
-                        <span>{assembly ? `${assembly.name}` : `${row.assemblyId.slice(0, 8)}...`}</span>
+                        <span>{assembly ? `${assembly.name}` : 'Local Assembly'}</span>
                       </div>
                     </TableCell>
 

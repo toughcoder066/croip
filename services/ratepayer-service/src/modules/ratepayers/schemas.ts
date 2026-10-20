@@ -30,15 +30,75 @@ export const ratepayerResponseSchema = {
 
 export const registerRatepayerBodySchema = {
   type: 'object',
-  required: ['legalName', 'phone', 'regionId', 'assemblyId', 'locationGeo'],
+  required: ['legalName', 'phone', 'regionId', 'assemblyId', 'locationGeo', 'password'],
   properties: {
     ratepayerType: { type: 'string', enum: ['INDIVIDUAL', 'ORGANIZATION'], default: 'INDIVIDUAL' },
     legalName: { type: 'string', minLength: 2, maxLength: 200 },
     phone: { type: 'string', minLength: 9, maxLength: 30 },
     email: { type: 'string', format: 'email' },
+    password: { type: 'string', minLength: 8, maxLength: 100, description: 'Sets the login password for phone/email + password + OTP self-service login' },
     regionId: { type: 'string', format: 'uuid' },
     assemblyId: { type: 'string', format: 'uuid' },
     locationGeo: { type: 'object' }
+  }
+};
+
+export const loginBodySchema = {
+  type: 'object',
+  required: ['identifier', 'password'],
+  properties: {
+    identifier: { type: 'string', description: 'Phone or email used at registration' },
+    password: { type: 'string' }
+  }
+};
+
+export const otpRequiredResponseSchema = {
+  type: 'object',
+  required: ['status', 'destination', 'expiresInSeconds'],
+  properties: {
+    status: { type: 'string', enum: ['OTP_REQUIRED'] },
+    destination: { type: 'string', description: 'Masked phone number the OTP was sent to' },
+    expiresInSeconds: { type: 'integer' },
+    devOtpCode: { type: 'string', description: 'Dev-only: the real OTP, returned since no SMS provider is configured. Never present in production.' }
+  }
+};
+
+export const verifyOtpBodySchema = {
+  type: 'object',
+  required: ['identifier', 'otpCode'],
+  properties: {
+    identifier: { type: 'string' },
+    otpCode: { type: 'string', minLength: 6, maxLength: 6 }
+  }
+};
+
+export const authTokenResponseSchema = {
+  type: 'object',
+  required: ['accessToken', 'tokenType', 'expiresInSeconds', 'ratepayer'],
+  properties: {
+    accessToken: { type: 'string' },
+    tokenType: { type: 'string', enum: ['Bearer'] },
+    expiresInSeconds: { type: 'integer' },
+    ratepayer: ratepayerResponseSchema
+  }
+};
+
+export const updateProfileBodySchema = {
+  type: 'object',
+  properties: {
+    legalName: { type: 'string', minLength: 2, maxLength: 200 },
+    email: { type: 'string', format: 'email' },
+    locationGeo: { type: 'object' }
+  }
+};
+
+export const linkOwnPropertyBodySchema = {
+  type: 'object',
+  required: ['propertyId', 'unitId'],
+  properties: {
+    propertyId: { type: 'string', format: 'uuid' },
+    unitId: { type: 'string', format: 'uuid' },
+    ownershipType: { type: 'string', default: 'OWNER' }
   }
 };
 
@@ -101,9 +161,10 @@ export const claimDocumentInputSchema = {
 
 export const claimPropertyBodySchema = {
   type: 'object',
+  required: ['propertyId'],
   properties: {
     ratepayerId: { type: 'string' },
-    propertyId: { type: 'string' },
+    propertyId: { type: 'string', minLength: 1 },
     unitId: { type: 'string' },
     relationship: { type: 'string' },
     ownershipType: { type: 'string' },

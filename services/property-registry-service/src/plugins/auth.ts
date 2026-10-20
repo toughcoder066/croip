@@ -4,10 +4,24 @@ import fp from 'fastify-plugin';
 import { createLocalJWKSet, jwtVerify, type JWTPayload, type JSONWebKeySet } from 'jose';
 import type { AppConfig } from '../config.js';
 import { ForbiddenError } from '../lib/errors.js';
+import { verifyRatepayerToken } from '../lib/ratepayer-jwt.js';
+
+// Zitadel issues RS256 (asymmetric, JWKS-verified) tokens; ratepayer-service issues
+// HS256 (shared-secret) tokens. Peeking at the unverified header's `alg` is enough to
+// route to the right verifier — neither verifier trusts this value itself, it only
+// decides which one to try.
+function peekAlg(token: string): string | undefined {
+  try {
+    const headerJson = Buffer.from(token.split('.')[0] ?? '', 'base64url').toString('utf8');
+    return (JSON.parse(headerJson) as { alg?: string }).alg;
+  } catch {
+    return undefined;
+  }
+}
 
 export interface AuthContext {
   subject: string;
-  actorType: 'USER' | 'SERVICE';
+  actorType: 'USER' | 'SERVICE' | 'RATEPAYER' | 'CONCESSION';
   concessionId: string;
   assemblyId: string;
   permissions: string[];
@@ -140,5 +154,114 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
     if (!required.every((permission) => request.auth.permissions.includes(permission))) {
       throw new ForbiddenError(`Required permissions: ${required.join(', ')}`);
     }
+  });
+
+  // Property registration requires authentication:
+  // - A ratepayer authenticates with their Bearer session token (HS256) issued by ratepayer-service
+  // - A concessionaire authenticates with their staff or service Zitadel Bearer token (RS256)
+  // Anonymous / unauthenticated callers are rejected with 401 Unauthorized.
+  app.decorate('authenticateStaffOrRatepayer', (required: string[]) => async (request, reply) => {
+    const authorization = request.headers.authorization;
+
+    // 1. Check for Bearer token
+    if (authorization?.startsWith('Bearer ')) {
+      const token = authorization.slice(7);
+      const alg = peekAlg(token);
+
+      // HS256 indicates a ratepayer self-service session token issued by ratepayer-service
+      if (alg === 'HS256') {
+        try {
+          const claims = await verifyRatepayerToken(token, config.RATEPAYER_JWT_SECRET);
+          request.auth = {
+            subject: claims.sub,
+            actorType: 'RATEPAYER',
+            concessionId: '00000000-0000-0000-0000-000000000000',
+            assemblyId: claims.assemblyId,
+            permissions: ['properties:manage'],
+            claims: {}
+          };
+          return;
+        } catch (error) {
+          request.log.warn({ err: error }, 'ratepayer access token rejected');
+          throw app.httpErrors.unauthorized('Invalid or expired access token');
+        }
+      }
+
+      // RS256 / Zitadel staff or machine token
+      if (config.AUTH_MODE === 'zitadel') {
+        try {
+          const { payload } = await jwtVerify(token, await getJwks(), {
+            issuer: config.ZITADEL_ISSUER!,
+            audience: config.ZITADEL_AUDIENCE!
+          });
+          const tenant = payload[config.IDARMS_CONTEXT_CLAIM];
+          if (!tenant || typeof tenant !== 'object') throw new Error('Missing iDARMS context claim');
+          const context = tenant as Record<string, unknown>;
+          if (typeof context.concessionId !== 'string' || typeof context.assemblyId !== 'string') {
+            throw new Error('Invalid iDARMS context claim');
+          }
+          request.auth = {
+            subject: payload.sub ?? 'unknown',
+            actorType: 'CONCESSION',
+            concessionId: context.concessionId,
+            assemblyId: context.assemblyId,
+            permissions: [
+              ...new Set([
+                ...stringArray(payload.scope),
+                ...stringArray(payload[config.ZITADEL_ROLES_CLAIM]),
+                ...stringArray(payload['urn:idarms:service-roles'])
+              ])
+            ],
+            claims: payload
+          };
+
+          if (!required.every((permission) => request.auth.permissions.includes(permission))) {
+            throw new ForbiddenError(`Required permissions: ${required.join(', ')}`);
+          }
+          return;
+        } catch (error) {
+          if (error instanceof ForbiddenError) throw error;
+          request.log.warn({ err: error }, 'access token rejected');
+          throw app.httpErrors.unauthorized('Invalid or expired access token');
+        }
+      }
+    }
+
+    // 2. In local dev mode (AUTH_MODE=disabled), permit explicit developer headers
+    if (config.AUTH_MODE === 'disabled') {
+      const devActorType = request.headers['x-dev-actor-type'] as string | undefined;
+      const devSubject = request.headers['x-dev-subject'] as string | undefined;
+      const devConcessionId = request.headers['x-dev-concession-id'] as string | undefined;
+
+      if (devActorType === 'RATEPAYER' || (!devConcessionId && devSubject?.startsWith('ratepayer'))) {
+        request.auth = {
+          subject: String(devSubject ?? '00000000-0000-0000-0000-000000000001'),
+          actorType: 'RATEPAYER',
+          concessionId: '00000000-0000-0000-0000-000000000000',
+          assemblyId: String(request.headers['x-dev-assembly-id'] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9'),
+          permissions: ['properties:manage'],
+          claims: {}
+        };
+        return;
+      }
+
+      if (devActorType === 'CONCESSION' || devConcessionId || devSubject) {
+        request.auth = {
+          subject: String(devSubject ?? 'local-developer'),
+          actorType: 'CONCESSION',
+          concessionId: String(devConcessionId ?? '81fdc8f3-fcad-481a-b7fa-e916d5e97d9e'),
+          assemblyId: String(request.headers['x-dev-assembly-id'] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9'),
+          permissions: String(request.headers['x-dev-permissions'] ?? 'properties:manage properties:read').split(' '),
+          claims: {}
+        };
+        if (!required.every((permission) => request.auth.permissions.includes(permission))) {
+          throw new ForbiddenError(`Required permissions: ${required.join(', ')}`);
+        }
+        return;
+      }
+    }
+
+    // 3. Reject unauthenticated requests
+    throw app.httpErrors.unauthorized('Bearer token required to register properties');
   });
 }, { name: 'auth' });

@@ -19,6 +19,11 @@ export type PrismaPromise<T> = $Public.PrismaPromise<T>
  */
 export type Ratepayer = $Result.DefaultSelection<Prisma.$RatepayerPayload>
 /**
+ * Model RatepayerOtp
+ * 
+ */
+export type RatepayerOtp = $Result.DefaultSelection<Prisma.$RatepayerOtpPayload>
+/**
  * Model RatepayerVerification
  * 
  */
@@ -181,6 +186,16 @@ export class PrismaClient<
     * ```
     */
   get ratepayer(): Prisma.RatepayerDelegate<ExtArgs, ClientOptions>;
+
+  /**
+   * `prisma.ratepayerOtp`: Exposes CRUD operations for the **RatepayerOtp** model.
+    * Example usage:
+    * ```ts
+    * // Fetch zero or more RatepayerOtps
+    * const ratepayerOtps = await prisma.ratepayerOtp.findMany()
+    * ```
+    */
+  get ratepayerOtp(): Prisma.RatepayerOtpDelegate<ExtArgs, ClientOptions>;
 
   /**
    * `prisma.ratepayerVerification`: Exposes CRUD operations for the **RatepayerVerification** model.
@@ -693,6 +708,7 @@ export namespace Prisma {
 
   export const ModelName: {
     Ratepayer: 'Ratepayer',
+    RatepayerOtp: 'RatepayerOtp',
     RatepayerVerification: 'RatepayerVerification',
     PropertyRatepayerLink: 'PropertyRatepayerLink',
     PropertyClaimDocument: 'PropertyClaimDocument',
@@ -718,7 +734,7 @@ export namespace Prisma {
       omit: GlobalOmitOptions
     }
     meta: {
-      modelProps: "ratepayer" | "ratepayerVerification" | "propertyRatepayerLink" | "propertyClaimDocument" | "outboxEvent" | "inboxMessage" | "idempotencyRecord" | "auditRecord"
+      modelProps: "ratepayer" | "ratepayerOtp" | "ratepayerVerification" | "propertyRatepayerLink" | "propertyClaimDocument" | "outboxEvent" | "inboxMessage" | "idempotencyRecord" | "auditRecord"
       txIsolationLevel: Prisma.TransactionIsolationLevel
     }
     model: {
@@ -793,6 +809,80 @@ export namespace Prisma {
           count: {
             args: Prisma.RatepayerCountArgs<ExtArgs>
             result: $Utils.Optional<RatepayerCountAggregateOutputType> | number
+          }
+        }
+      }
+      RatepayerOtp: {
+        payload: Prisma.$RatepayerOtpPayload<ExtArgs>
+        fields: Prisma.RatepayerOtpFieldRefs
+        operations: {
+          findUnique: {
+            args: Prisma.RatepayerOtpFindUniqueArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RatepayerOtpPayload> | null
+          }
+          findUniqueOrThrow: {
+            args: Prisma.RatepayerOtpFindUniqueOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RatepayerOtpPayload>
+          }
+          findFirst: {
+            args: Prisma.RatepayerOtpFindFirstArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RatepayerOtpPayload> | null
+          }
+          findFirstOrThrow: {
+            args: Prisma.RatepayerOtpFindFirstOrThrowArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RatepayerOtpPayload>
+          }
+          findMany: {
+            args: Prisma.RatepayerOtpFindManyArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RatepayerOtpPayload>[]
+          }
+          create: {
+            args: Prisma.RatepayerOtpCreateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RatepayerOtpPayload>
+          }
+          createMany: {
+            args: Prisma.RatepayerOtpCreateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          createManyAndReturn: {
+            args: Prisma.RatepayerOtpCreateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RatepayerOtpPayload>[]
+          }
+          delete: {
+            args: Prisma.RatepayerOtpDeleteArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RatepayerOtpPayload>
+          }
+          update: {
+            args: Prisma.RatepayerOtpUpdateArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RatepayerOtpPayload>
+          }
+          deleteMany: {
+            args: Prisma.RatepayerOtpDeleteManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateMany: {
+            args: Prisma.RatepayerOtpUpdateManyArgs<ExtArgs>
+            result: BatchPayload
+          }
+          updateManyAndReturn: {
+            args: Prisma.RatepayerOtpUpdateManyAndReturnArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RatepayerOtpPayload>[]
+          }
+          upsert: {
+            args: Prisma.RatepayerOtpUpsertArgs<ExtArgs>
+            result: $Utils.PayloadToResult<Prisma.$RatepayerOtpPayload>
+          }
+          aggregate: {
+            args: Prisma.RatepayerOtpAggregateArgs<ExtArgs>
+            result: $Utils.Optional<AggregateRatepayerOtp>
+          }
+          groupBy: {
+            args: Prisma.RatepayerOtpGroupByArgs<ExtArgs>
+            result: $Utils.Optional<RatepayerOtpGroupByOutputType>[]
+          }
+          count: {
+            args: Prisma.RatepayerOtpCountArgs<ExtArgs>
+            result: $Utils.Optional<RatepayerOtpCountAggregateOutputType> | number
           }
         }
       }
@@ -1411,6 +1501,7 @@ export namespace Prisma {
   }
   export type GlobalOmitConfig = {
     ratepayer?: RatepayerOmit
+    ratepayerOtp?: RatepayerOtpOmit
     ratepayerVerification?: RatepayerVerificationOmit
     propertyRatepayerLink?: PropertyRatepayerLinkOmit
     propertyClaimDocument?: PropertyClaimDocumentOmit
@@ -1500,11 +1591,13 @@ export namespace Prisma {
   export type RatepayerCountOutputType = {
     verifications: number
     propertyLinks: number
+    otps: number
   }
 
   export type RatepayerCountOutputTypeSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     verifications?: boolean | RatepayerCountOutputTypeCountVerificationsArgs
     propertyLinks?: boolean | RatepayerCountOutputTypeCountPropertyLinksArgs
+    otps?: boolean | RatepayerCountOutputTypeCountOtpsArgs
   }
 
   // Custom InputTypes
@@ -1530,6 +1623,13 @@ export namespace Prisma {
    */
   export type RatepayerCountOutputTypeCountPropertyLinksArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     where?: PropertyRatepayerLinkWhereInput
+  }
+
+  /**
+   * RatepayerCountOutputType without action
+   */
+  export type RatepayerCountOutputTypeCountOtpsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RatepayerOtpWhereInput
   }
 
 
@@ -1585,6 +1685,7 @@ export namespace Prisma {
     legalName: string | null
     phone: string | null
     email: string | null
+    passwordHash: string | null
     regionId: string | null
     assemblyId: string | null
     status: string | null
@@ -1599,6 +1700,7 @@ export namespace Prisma {
     legalName: string | null
     phone: string | null
     email: string | null
+    passwordHash: string | null
     regionId: string | null
     assemblyId: string | null
     status: string | null
@@ -1613,6 +1715,7 @@ export namespace Prisma {
     legalName: number
     phone: number
     email: number
+    passwordHash: number
     regionId: number
     assemblyId: number
     locationGeo: number
@@ -1630,6 +1733,7 @@ export namespace Prisma {
     legalName?: true
     phone?: true
     email?: true
+    passwordHash?: true
     regionId?: true
     assemblyId?: true
     status?: true
@@ -1644,6 +1748,7 @@ export namespace Prisma {
     legalName?: true
     phone?: true
     email?: true
+    passwordHash?: true
     regionId?: true
     assemblyId?: true
     status?: true
@@ -1658,6 +1763,7 @@ export namespace Prisma {
     legalName?: true
     phone?: true
     email?: true
+    passwordHash?: true
     regionId?: true
     assemblyId?: true
     locationGeo?: true
@@ -1746,6 +1852,7 @@ export namespace Prisma {
     legalName: string
     phone: string
     email: string | null
+    passwordHash: string | null
     regionId: string
     assemblyId: string
     locationGeo: JsonValue
@@ -1778,6 +1885,7 @@ export namespace Prisma {
     legalName?: boolean
     phone?: boolean
     email?: boolean
+    passwordHash?: boolean
     regionId?: boolean
     assemblyId?: boolean
     locationGeo?: boolean
@@ -1786,6 +1894,7 @@ export namespace Prisma {
     updatedAt?: boolean
     verifications?: boolean | Ratepayer$verificationsArgs<ExtArgs>
     propertyLinks?: boolean | Ratepayer$propertyLinksArgs<ExtArgs>
+    otps?: boolean | Ratepayer$otpsArgs<ExtArgs>
     _count?: boolean | RatepayerCountOutputTypeDefaultArgs<ExtArgs>
   }, ExtArgs["result"]["ratepayer"]>
 
@@ -1796,6 +1905,7 @@ export namespace Prisma {
     legalName?: boolean
     phone?: boolean
     email?: boolean
+    passwordHash?: boolean
     regionId?: boolean
     assemblyId?: boolean
     locationGeo?: boolean
@@ -1811,6 +1921,7 @@ export namespace Prisma {
     legalName?: boolean
     phone?: boolean
     email?: boolean
+    passwordHash?: boolean
     regionId?: boolean
     assemblyId?: boolean
     locationGeo?: boolean
@@ -1826,6 +1937,7 @@ export namespace Prisma {
     legalName?: boolean
     phone?: boolean
     email?: boolean
+    passwordHash?: boolean
     regionId?: boolean
     assemblyId?: boolean
     locationGeo?: boolean
@@ -1834,10 +1946,11 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type RatepayerOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "ratepayerType" | "legalName" | "phone" | "email" | "regionId" | "assemblyId" | "locationGeo" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["ratepayer"]>
+  export type RatepayerOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "ratepayerType" | "legalName" | "phone" | "email" | "passwordHash" | "regionId" | "assemblyId" | "locationGeo" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["ratepayer"]>
   export type RatepayerInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     verifications?: boolean | Ratepayer$verificationsArgs<ExtArgs>
     propertyLinks?: boolean | Ratepayer$propertyLinksArgs<ExtArgs>
+    otps?: boolean | Ratepayer$otpsArgs<ExtArgs>
     _count?: boolean | RatepayerCountOutputTypeDefaultArgs<ExtArgs>
   }
   export type RatepayerIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {}
@@ -1848,6 +1961,7 @@ export namespace Prisma {
     objects: {
       verifications: Prisma.$RatepayerVerificationPayload<ExtArgs>[]
       propertyLinks: Prisma.$PropertyRatepayerLinkPayload<ExtArgs>[]
+      otps: Prisma.$RatepayerOtpPayload<ExtArgs>[]
     }
     scalars: $Extensions.GetPayloadResult<{
       id: string
@@ -1856,6 +1970,7 @@ export namespace Prisma {
       legalName: string
       phone: string
       email: string | null
+      passwordHash: string | null
       regionId: string
       assemblyId: string
       locationGeo: Prisma.JsonValue
@@ -2258,6 +2373,7 @@ export namespace Prisma {
     readonly [Symbol.toStringTag]: "PrismaPromise"
     verifications<T extends Ratepayer$verificationsArgs<ExtArgs> = {}>(args?: Subset<T, Ratepayer$verificationsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RatepayerVerificationPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     propertyLinks<T extends Ratepayer$propertyLinksArgs<ExtArgs> = {}>(args?: Subset<T, Ratepayer$propertyLinksArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$PropertyRatepayerLinkPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
+    otps<T extends Ratepayer$otpsArgs<ExtArgs> = {}>(args?: Subset<T, Ratepayer$otpsArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RatepayerOtpPayload<ExtArgs>, T, "findMany", GlobalOmitOptions> | Null>
     /**
      * Attaches callbacks for the resolution and/or rejection of the Promise.
      * @param onfulfilled The callback to execute when the Promise is resolved.
@@ -2293,6 +2409,7 @@ export namespace Prisma {
     readonly legalName: FieldRef<"Ratepayer", 'String'>
     readonly phone: FieldRef<"Ratepayer", 'String'>
     readonly email: FieldRef<"Ratepayer", 'String'>
+    readonly passwordHash: FieldRef<"Ratepayer", 'String'>
     readonly regionId: FieldRef<"Ratepayer", 'String'>
     readonly assemblyId: FieldRef<"Ratepayer", 'String'>
     readonly locationGeo: FieldRef<"Ratepayer", 'Json'>
@@ -2735,6 +2852,30 @@ export namespace Prisma {
   }
 
   /**
+   * Ratepayer.otps
+   */
+  export type Ratepayer$otpsArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RatepayerOtp
+     */
+    select?: RatepayerOtpSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RatepayerOtp
+     */
+    omit?: RatepayerOtpOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RatepayerOtpInclude<ExtArgs> | null
+    where?: RatepayerOtpWhereInput
+    orderBy?: RatepayerOtpOrderByWithRelationInput | RatepayerOtpOrderByWithRelationInput[]
+    cursor?: RatepayerOtpWhereUniqueInput
+    take?: number
+    skip?: number
+    distinct?: RatepayerOtpScalarFieldEnum | RatepayerOtpScalarFieldEnum[]
+  }
+
+  /**
    * Ratepayer without action
    */
   export type RatepayerDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
@@ -2750,6 +2891,1137 @@ export namespace Prisma {
      * Choose, which related nodes to fetch as well
      */
     include?: RatepayerInclude<ExtArgs> | null
+  }
+
+
+  /**
+   * Model RatepayerOtp
+   */
+
+  export type AggregateRatepayerOtp = {
+    _count: RatepayerOtpCountAggregateOutputType | null
+    _avg: RatepayerOtpAvgAggregateOutputType | null
+    _sum: RatepayerOtpSumAggregateOutputType | null
+    _min: RatepayerOtpMinAggregateOutputType | null
+    _max: RatepayerOtpMaxAggregateOutputType | null
+  }
+
+  export type RatepayerOtpAvgAggregateOutputType = {
+    attempts: number | null
+  }
+
+  export type RatepayerOtpSumAggregateOutputType = {
+    attempts: number | null
+  }
+
+  export type RatepayerOtpMinAggregateOutputType = {
+    id: string | null
+    ratepayerId: string | null
+    purpose: string | null
+    codeHash: string | null
+    expiresAt: Date | null
+    consumedAt: Date | null
+    attempts: number | null
+    createdAt: Date | null
+  }
+
+  export type RatepayerOtpMaxAggregateOutputType = {
+    id: string | null
+    ratepayerId: string | null
+    purpose: string | null
+    codeHash: string | null
+    expiresAt: Date | null
+    consumedAt: Date | null
+    attempts: number | null
+    createdAt: Date | null
+  }
+
+  export type RatepayerOtpCountAggregateOutputType = {
+    id: number
+    ratepayerId: number
+    purpose: number
+    codeHash: number
+    expiresAt: number
+    consumedAt: number
+    attempts: number
+    createdAt: number
+    _all: number
+  }
+
+
+  export type RatepayerOtpAvgAggregateInputType = {
+    attempts?: true
+  }
+
+  export type RatepayerOtpSumAggregateInputType = {
+    attempts?: true
+  }
+
+  export type RatepayerOtpMinAggregateInputType = {
+    id?: true
+    ratepayerId?: true
+    purpose?: true
+    codeHash?: true
+    expiresAt?: true
+    consumedAt?: true
+    attempts?: true
+    createdAt?: true
+  }
+
+  export type RatepayerOtpMaxAggregateInputType = {
+    id?: true
+    ratepayerId?: true
+    purpose?: true
+    codeHash?: true
+    expiresAt?: true
+    consumedAt?: true
+    attempts?: true
+    createdAt?: true
+  }
+
+  export type RatepayerOtpCountAggregateInputType = {
+    id?: true
+    ratepayerId?: true
+    purpose?: true
+    codeHash?: true
+    expiresAt?: true
+    consumedAt?: true
+    attempts?: true
+    createdAt?: true
+    _all?: true
+  }
+
+  export type RatepayerOtpAggregateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RatepayerOtp to aggregate.
+     */
+    where?: RatepayerOtpWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RatepayerOtps to fetch.
+     */
+    orderBy?: RatepayerOtpOrderByWithRelationInput | RatepayerOtpOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the start position
+     */
+    cursor?: RatepayerOtpWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RatepayerOtps from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RatepayerOtps.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Count returned RatepayerOtps
+    **/
+    _count?: true | RatepayerOtpCountAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to average
+    **/
+    _avg?: RatepayerOtpAvgAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to sum
+    **/
+    _sum?: RatepayerOtpSumAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the minimum value
+    **/
+    _min?: RatepayerOtpMinAggregateInputType
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/aggregations Aggregation Docs}
+     * 
+     * Select which fields to find the maximum value
+    **/
+    _max?: RatepayerOtpMaxAggregateInputType
+  }
+
+  export type GetRatepayerOtpAggregateType<T extends RatepayerOtpAggregateArgs> = {
+        [P in keyof T & keyof AggregateRatepayerOtp]: P extends '_count' | 'count'
+      ? T[P] extends true
+        ? number
+        : GetScalarType<T[P], AggregateRatepayerOtp[P]>
+      : GetScalarType<T[P], AggregateRatepayerOtp[P]>
+  }
+
+
+
+
+  export type RatepayerOtpGroupByArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    where?: RatepayerOtpWhereInput
+    orderBy?: RatepayerOtpOrderByWithAggregationInput | RatepayerOtpOrderByWithAggregationInput[]
+    by: RatepayerOtpScalarFieldEnum[] | RatepayerOtpScalarFieldEnum
+    having?: RatepayerOtpScalarWhereWithAggregatesInput
+    take?: number
+    skip?: number
+    _count?: RatepayerOtpCountAggregateInputType | true
+    _avg?: RatepayerOtpAvgAggregateInputType
+    _sum?: RatepayerOtpSumAggregateInputType
+    _min?: RatepayerOtpMinAggregateInputType
+    _max?: RatepayerOtpMaxAggregateInputType
+  }
+
+  export type RatepayerOtpGroupByOutputType = {
+    id: string
+    ratepayerId: string
+    purpose: string
+    codeHash: string
+    expiresAt: Date
+    consumedAt: Date | null
+    attempts: number
+    createdAt: Date
+    _count: RatepayerOtpCountAggregateOutputType | null
+    _avg: RatepayerOtpAvgAggregateOutputType | null
+    _sum: RatepayerOtpSumAggregateOutputType | null
+    _min: RatepayerOtpMinAggregateOutputType | null
+    _max: RatepayerOtpMaxAggregateOutputType | null
+  }
+
+  type GetRatepayerOtpGroupByPayload<T extends RatepayerOtpGroupByArgs> = Prisma.PrismaPromise<
+    Array<
+      PickEnumerable<RatepayerOtpGroupByOutputType, T['by']> &
+        {
+          [P in ((keyof T) & (keyof RatepayerOtpGroupByOutputType))]: P extends '_count'
+            ? T[P] extends boolean
+              ? number
+              : GetScalarType<T[P], RatepayerOtpGroupByOutputType[P]>
+            : GetScalarType<T[P], RatepayerOtpGroupByOutputType[P]>
+        }
+      >
+    >
+
+
+  export type RatepayerOtpSelect<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    ratepayerId?: boolean
+    purpose?: boolean
+    codeHash?: boolean
+    expiresAt?: boolean
+    consumedAt?: boolean
+    attempts?: boolean
+    createdAt?: boolean
+    ratepayer?: boolean | RatepayerDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["ratepayerOtp"]>
+
+  export type RatepayerOtpSelectCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    ratepayerId?: boolean
+    purpose?: boolean
+    codeHash?: boolean
+    expiresAt?: boolean
+    consumedAt?: boolean
+    attempts?: boolean
+    createdAt?: boolean
+    ratepayer?: boolean | RatepayerDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["ratepayerOtp"]>
+
+  export type RatepayerOtpSelectUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetSelect<{
+    id?: boolean
+    ratepayerId?: boolean
+    purpose?: boolean
+    codeHash?: boolean
+    expiresAt?: boolean
+    consumedAt?: boolean
+    attempts?: boolean
+    createdAt?: boolean
+    ratepayer?: boolean | RatepayerDefaultArgs<ExtArgs>
+  }, ExtArgs["result"]["ratepayerOtp"]>
+
+  export type RatepayerOtpSelectScalar = {
+    id?: boolean
+    ratepayerId?: boolean
+    purpose?: boolean
+    codeHash?: boolean
+    expiresAt?: boolean
+    consumedAt?: boolean
+    attempts?: boolean
+    createdAt?: boolean
+  }
+
+  export type RatepayerOtpOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "ratepayerId" | "purpose" | "codeHash" | "expiresAt" | "consumedAt" | "attempts" | "createdAt", ExtArgs["result"]["ratepayerOtp"]>
+  export type RatepayerOtpInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    ratepayer?: boolean | RatepayerDefaultArgs<ExtArgs>
+  }
+  export type RatepayerOtpIncludeCreateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    ratepayer?: boolean | RatepayerDefaultArgs<ExtArgs>
+  }
+  export type RatepayerOtpIncludeUpdateManyAndReturn<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    ratepayer?: boolean | RatepayerDefaultArgs<ExtArgs>
+  }
+
+  export type $RatepayerOtpPayload<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    name: "RatepayerOtp"
+    objects: {
+      ratepayer: Prisma.$RatepayerPayload<ExtArgs>
+    }
+    scalars: $Extensions.GetPayloadResult<{
+      id: string
+      ratepayerId: string
+      purpose: string
+      codeHash: string
+      expiresAt: Date
+      consumedAt: Date | null
+      attempts: number
+      createdAt: Date
+    }, ExtArgs["result"]["ratepayerOtp"]>
+    composites: {}
+  }
+
+  type RatepayerOtpGetPayload<S extends boolean | null | undefined | RatepayerOtpDefaultArgs> = $Result.GetResult<Prisma.$RatepayerOtpPayload, S>
+
+  type RatepayerOtpCountArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> =
+    Omit<RatepayerOtpFindManyArgs, 'select' | 'include' | 'distinct' | 'omit'> & {
+      select?: RatepayerOtpCountAggregateInputType | true
+    }
+
+  export interface RatepayerOtpDelegate<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> {
+    [K: symbol]: { types: Prisma.TypeMap<ExtArgs>['model']['RatepayerOtp'], meta: { name: 'RatepayerOtp' } }
+    /**
+     * Find zero or one RatepayerOtp that matches the filter.
+     * @param {RatepayerOtpFindUniqueArgs} args - Arguments to find a RatepayerOtp
+     * @example
+     * // Get one RatepayerOtp
+     * const ratepayerOtp = await prisma.ratepayerOtp.findUnique({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUnique<T extends RatepayerOtpFindUniqueArgs>(args: SelectSubset<T, RatepayerOtpFindUniqueArgs<ExtArgs>>): Prisma__RatepayerOtpClient<$Result.GetResult<Prisma.$RatepayerOtpPayload<ExtArgs>, T, "findUnique", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find one RatepayerOtp that matches the filter or throw an error with `error.code='P2025'`
+     * if no matches were found.
+     * @param {RatepayerOtpFindUniqueOrThrowArgs} args - Arguments to find a RatepayerOtp
+     * @example
+     * // Get one RatepayerOtp
+     * const ratepayerOtp = await prisma.ratepayerOtp.findUniqueOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findUniqueOrThrow<T extends RatepayerOtpFindUniqueOrThrowArgs>(args: SelectSubset<T, RatepayerOtpFindUniqueOrThrowArgs<ExtArgs>>): Prisma__RatepayerOtpClient<$Result.GetResult<Prisma.$RatepayerOtpPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first RatepayerOtp that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RatepayerOtpFindFirstArgs} args - Arguments to find a RatepayerOtp
+     * @example
+     * // Get one RatepayerOtp
+     * const ratepayerOtp = await prisma.ratepayerOtp.findFirst({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirst<T extends RatepayerOtpFindFirstArgs>(args?: SelectSubset<T, RatepayerOtpFindFirstArgs<ExtArgs>>): Prisma__RatepayerOtpClient<$Result.GetResult<Prisma.$RatepayerOtpPayload<ExtArgs>, T, "findFirst", GlobalOmitOptions> | null, null, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find the first RatepayerOtp that matches the filter or
+     * throw `PrismaKnownClientError` with `P2025` code if no matches were found.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RatepayerOtpFindFirstOrThrowArgs} args - Arguments to find a RatepayerOtp
+     * @example
+     * // Get one RatepayerOtp
+     * const ratepayerOtp = await prisma.ratepayerOtp.findFirstOrThrow({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     */
+    findFirstOrThrow<T extends RatepayerOtpFindFirstOrThrowArgs>(args?: SelectSubset<T, RatepayerOtpFindFirstOrThrowArgs<ExtArgs>>): Prisma__RatepayerOtpClient<$Result.GetResult<Prisma.$RatepayerOtpPayload<ExtArgs>, T, "findFirstOrThrow", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Find zero or more RatepayerOtps that matches the filter.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RatepayerOtpFindManyArgs} args - Arguments to filter and select certain fields only.
+     * @example
+     * // Get all RatepayerOtps
+     * const ratepayerOtps = await prisma.ratepayerOtp.findMany()
+     * 
+     * // Get first 10 RatepayerOtps
+     * const ratepayerOtps = await prisma.ratepayerOtp.findMany({ take: 10 })
+     * 
+     * // Only select the `id`
+     * const ratepayerOtpWithIdOnly = await prisma.ratepayerOtp.findMany({ select: { id: true } })
+     * 
+     */
+    findMany<T extends RatepayerOtpFindManyArgs>(args?: SelectSubset<T, RatepayerOtpFindManyArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RatepayerOtpPayload<ExtArgs>, T, "findMany", GlobalOmitOptions>>
+
+    /**
+     * Create a RatepayerOtp.
+     * @param {RatepayerOtpCreateArgs} args - Arguments to create a RatepayerOtp.
+     * @example
+     * // Create one RatepayerOtp
+     * const RatepayerOtp = await prisma.ratepayerOtp.create({
+     *   data: {
+     *     // ... data to create a RatepayerOtp
+     *   }
+     * })
+     * 
+     */
+    create<T extends RatepayerOtpCreateArgs>(args: SelectSubset<T, RatepayerOtpCreateArgs<ExtArgs>>): Prisma__RatepayerOtpClient<$Result.GetResult<Prisma.$RatepayerOtpPayload<ExtArgs>, T, "create", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Create many RatepayerOtps.
+     * @param {RatepayerOtpCreateManyArgs} args - Arguments to create many RatepayerOtps.
+     * @example
+     * // Create many RatepayerOtps
+     * const ratepayerOtp = await prisma.ratepayerOtp.createMany({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     *     
+     */
+    createMany<T extends RatepayerOtpCreateManyArgs>(args?: SelectSubset<T, RatepayerOtpCreateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Create many RatepayerOtps and returns the data saved in the database.
+     * @param {RatepayerOtpCreateManyAndReturnArgs} args - Arguments to create many RatepayerOtps.
+     * @example
+     * // Create many RatepayerOtps
+     * const ratepayerOtp = await prisma.ratepayerOtp.createManyAndReturn({
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Create many RatepayerOtps and only return the `id`
+     * const ratepayerOtpWithIdOnly = await prisma.ratepayerOtp.createManyAndReturn({
+     *   select: { id: true },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    createManyAndReturn<T extends RatepayerOtpCreateManyAndReturnArgs>(args?: SelectSubset<T, RatepayerOtpCreateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RatepayerOtpPayload<ExtArgs>, T, "createManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Delete a RatepayerOtp.
+     * @param {RatepayerOtpDeleteArgs} args - Arguments to delete one RatepayerOtp.
+     * @example
+     * // Delete one RatepayerOtp
+     * const RatepayerOtp = await prisma.ratepayerOtp.delete({
+     *   where: {
+     *     // ... filter to delete one RatepayerOtp
+     *   }
+     * })
+     * 
+     */
+    delete<T extends RatepayerOtpDeleteArgs>(args: SelectSubset<T, RatepayerOtpDeleteArgs<ExtArgs>>): Prisma__RatepayerOtpClient<$Result.GetResult<Prisma.$RatepayerOtpPayload<ExtArgs>, T, "delete", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Update one RatepayerOtp.
+     * @param {RatepayerOtpUpdateArgs} args - Arguments to update one RatepayerOtp.
+     * @example
+     * // Update one RatepayerOtp
+     * const ratepayerOtp = await prisma.ratepayerOtp.update({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    update<T extends RatepayerOtpUpdateArgs>(args: SelectSubset<T, RatepayerOtpUpdateArgs<ExtArgs>>): Prisma__RatepayerOtpClient<$Result.GetResult<Prisma.$RatepayerOtpPayload<ExtArgs>, T, "update", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+    /**
+     * Delete zero or more RatepayerOtps.
+     * @param {RatepayerOtpDeleteManyArgs} args - Arguments to filter RatepayerOtps to delete.
+     * @example
+     * // Delete a few RatepayerOtps
+     * const { count } = await prisma.ratepayerOtp.deleteMany({
+     *   where: {
+     *     // ... provide filter here
+     *   }
+     * })
+     * 
+     */
+    deleteMany<T extends RatepayerOtpDeleteManyArgs>(args?: SelectSubset<T, RatepayerOtpDeleteManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more RatepayerOtps.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RatepayerOtpUpdateManyArgs} args - Arguments to update one or more rows.
+     * @example
+     * // Update many RatepayerOtps
+     * const ratepayerOtp = await prisma.ratepayerOtp.updateMany({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: {
+     *     // ... provide data here
+     *   }
+     * })
+     * 
+     */
+    updateMany<T extends RatepayerOtpUpdateManyArgs>(args: SelectSubset<T, RatepayerOtpUpdateManyArgs<ExtArgs>>): Prisma.PrismaPromise<BatchPayload>
+
+    /**
+     * Update zero or more RatepayerOtps and returns the data updated in the database.
+     * @param {RatepayerOtpUpdateManyAndReturnArgs} args - Arguments to update many RatepayerOtps.
+     * @example
+     * // Update many RatepayerOtps
+     * const ratepayerOtp = await prisma.ratepayerOtp.updateManyAndReturn({
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * 
+     * // Update zero or more RatepayerOtps and only return the `id`
+     * const ratepayerOtpWithIdOnly = await prisma.ratepayerOtp.updateManyAndReturn({
+     *   select: { id: true },
+     *   where: {
+     *     // ... provide filter here
+     *   },
+     *   data: [
+     *     // ... provide data here
+     *   ]
+     * })
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * 
+     */
+    updateManyAndReturn<T extends RatepayerOtpUpdateManyAndReturnArgs>(args: SelectSubset<T, RatepayerOtpUpdateManyAndReturnArgs<ExtArgs>>): Prisma.PrismaPromise<$Result.GetResult<Prisma.$RatepayerOtpPayload<ExtArgs>, T, "updateManyAndReturn", GlobalOmitOptions>>
+
+    /**
+     * Create or update one RatepayerOtp.
+     * @param {RatepayerOtpUpsertArgs} args - Arguments to update or create a RatepayerOtp.
+     * @example
+     * // Update or create a RatepayerOtp
+     * const ratepayerOtp = await prisma.ratepayerOtp.upsert({
+     *   create: {
+     *     // ... data to create a RatepayerOtp
+     *   },
+     *   update: {
+     *     // ... in case it already exists, update
+     *   },
+     *   where: {
+     *     // ... the filter for the RatepayerOtp we want to update
+     *   }
+     * })
+     */
+    upsert<T extends RatepayerOtpUpsertArgs>(args: SelectSubset<T, RatepayerOtpUpsertArgs<ExtArgs>>): Prisma__RatepayerOtpClient<$Result.GetResult<Prisma.$RatepayerOtpPayload<ExtArgs>, T, "upsert", GlobalOmitOptions>, never, ExtArgs, GlobalOmitOptions>
+
+
+    /**
+     * Count the number of RatepayerOtps.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RatepayerOtpCountArgs} args - Arguments to filter RatepayerOtps to count.
+     * @example
+     * // Count the number of RatepayerOtps
+     * const count = await prisma.ratepayerOtp.count({
+     *   where: {
+     *     // ... the filter for the RatepayerOtps we want to count
+     *   }
+     * })
+    **/
+    count<T extends RatepayerOtpCountArgs>(
+      args?: Subset<T, RatepayerOtpCountArgs>,
+    ): Prisma.PrismaPromise<
+      T extends $Utils.Record<'select', any>
+        ? T['select'] extends true
+          ? number
+          : GetScalarType<T['select'], RatepayerOtpCountAggregateOutputType>
+        : number
+    >
+
+    /**
+     * Allows you to perform aggregations operations on a RatepayerOtp.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RatepayerOtpAggregateArgs} args - Select which aggregations you would like to apply and on what fields.
+     * @example
+     * // Ordered by age ascending
+     * // Where email contains prisma.io
+     * // Limited to the 10 users
+     * const aggregations = await prisma.user.aggregate({
+     *   _avg: {
+     *     age: true,
+     *   },
+     *   where: {
+     *     email: {
+     *       contains: "prisma.io",
+     *     },
+     *   },
+     *   orderBy: {
+     *     age: "asc",
+     *   },
+     *   take: 10,
+     * })
+    **/
+    aggregate<T extends RatepayerOtpAggregateArgs>(args: Subset<T, RatepayerOtpAggregateArgs>): Prisma.PrismaPromise<GetRatepayerOtpAggregateType<T>>
+
+    /**
+     * Group by RatepayerOtp.
+     * Note, that providing `undefined` is treated as the value not being there.
+     * Read more here: https://pris.ly/d/null-undefined
+     * @param {RatepayerOtpGroupByArgs} args - Group by arguments.
+     * @example
+     * // Group by city, order by createdAt, get count
+     * const result = await prisma.user.groupBy({
+     *   by: ['city', 'createdAt'],
+     *   orderBy: {
+     *     createdAt: true
+     *   },
+     *   _count: {
+     *     _all: true
+     *   },
+     * })
+     * 
+    **/
+    groupBy<
+      T extends RatepayerOtpGroupByArgs,
+      HasSelectOrTake extends Or<
+        Extends<'skip', Keys<T>>,
+        Extends<'take', Keys<T>>
+      >,
+      OrderByArg extends True extends HasSelectOrTake
+        ? { orderBy: RatepayerOtpGroupByArgs['orderBy'] }
+        : { orderBy?: RatepayerOtpGroupByArgs['orderBy'] },
+      OrderFields extends ExcludeUnderscoreKeys<Keys<MaybeTupleToUnion<T['orderBy']>>>,
+      ByFields extends MaybeTupleToUnion<T['by']>,
+      ByValid extends Has<ByFields, OrderFields>,
+      HavingFields extends GetHavingFields<T['having']>,
+      HavingValid extends Has<ByFields, HavingFields>,
+      ByEmpty extends T['by'] extends never[] ? True : False,
+      InputErrors extends ByEmpty extends True
+      ? `Error: "by" must not be empty.`
+      : HavingValid extends False
+      ? {
+          [P in HavingFields]: P extends ByFields
+            ? never
+            : P extends string
+            ? `Error: Field "${P}" used in "having" needs to be provided in "by".`
+            : [
+                Error,
+                'Field ',
+                P,
+                ` in "having" needs to be provided in "by"`,
+              ]
+        }[HavingFields]
+      : 'take' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "take", you also need to provide "orderBy"'
+      : 'skip' extends Keys<T>
+      ? 'orderBy' extends Keys<T>
+        ? ByValid extends True
+          ? {}
+          : {
+              [P in OrderFields]: P extends ByFields
+                ? never
+                : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+            }[OrderFields]
+        : 'Error: If you provide "skip", you also need to provide "orderBy"'
+      : ByValid extends True
+      ? {}
+      : {
+          [P in OrderFields]: P extends ByFields
+            ? never
+            : `Error: Field "${P}" in "orderBy" needs to be provided in "by"`
+        }[OrderFields]
+    >(args: SubsetIntersection<T, RatepayerOtpGroupByArgs, OrderByArg> & InputErrors): {} extends InputErrors ? GetRatepayerOtpGroupByPayload<T> : Prisma.PrismaPromise<InputErrors>
+  /**
+   * Fields of the RatepayerOtp model
+   */
+  readonly fields: RatepayerOtpFieldRefs;
+  }
+
+  /**
+   * The delegate class that acts as a "Promise-like" for RatepayerOtp.
+   * Why is this prefixed with `Prisma__`?
+   * Because we want to prevent naming conflicts as mentioned in
+   * https://github.com/prisma/prisma-client-js/issues/707
+   */
+  export interface Prisma__RatepayerOtpClient<T, Null = never, ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs, GlobalOmitOptions = {}> extends Prisma.PrismaPromise<T> {
+    readonly [Symbol.toStringTag]: "PrismaPromise"
+    ratepayer<T extends RatepayerDefaultArgs<ExtArgs> = {}>(args?: Subset<T, RatepayerDefaultArgs<ExtArgs>>): Prisma__RatepayerClient<$Result.GetResult<Prisma.$RatepayerPayload<ExtArgs>, T, "findUniqueOrThrow", GlobalOmitOptions> | Null, Null, ExtArgs, GlobalOmitOptions>
+    /**
+     * Attaches callbacks for the resolution and/or rejection of the Promise.
+     * @param onfulfilled The callback to execute when the Promise is resolved.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of which ever callback is executed.
+     */
+    then<TResult1 = T, TResult2 = never>(onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null, onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null): $Utils.JsPromise<TResult1 | TResult2>
+    /**
+     * Attaches a callback for only the rejection of the Promise.
+     * @param onrejected The callback to execute when the Promise is rejected.
+     * @returns A Promise for the completion of the callback.
+     */
+    catch<TResult = never>(onrejected?: ((reason: any) => TResult | PromiseLike<TResult>) | undefined | null): $Utils.JsPromise<T | TResult>
+    /**
+     * Attaches a callback that is invoked when the Promise is settled (fulfilled or rejected). The
+     * resolved value cannot be modified from the callback.
+     * @param onfinally The callback to execute when the Promise is settled (fulfilled or rejected).
+     * @returns A Promise for the completion of the callback.
+     */
+    finally(onfinally?: (() => void) | undefined | null): $Utils.JsPromise<T>
+  }
+
+
+
+
+  /**
+   * Fields of the RatepayerOtp model
+   */
+  interface RatepayerOtpFieldRefs {
+    readonly id: FieldRef<"RatepayerOtp", 'String'>
+    readonly ratepayerId: FieldRef<"RatepayerOtp", 'String'>
+    readonly purpose: FieldRef<"RatepayerOtp", 'String'>
+    readonly codeHash: FieldRef<"RatepayerOtp", 'String'>
+    readonly expiresAt: FieldRef<"RatepayerOtp", 'DateTime'>
+    readonly consumedAt: FieldRef<"RatepayerOtp", 'DateTime'>
+    readonly attempts: FieldRef<"RatepayerOtp", 'Int'>
+    readonly createdAt: FieldRef<"RatepayerOtp", 'DateTime'>
+  }
+    
+
+  // Custom InputTypes
+  /**
+   * RatepayerOtp findUnique
+   */
+  export type RatepayerOtpFindUniqueArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RatepayerOtp
+     */
+    select?: RatepayerOtpSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RatepayerOtp
+     */
+    omit?: RatepayerOtpOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RatepayerOtpInclude<ExtArgs> | null
+    /**
+     * Filter, which RatepayerOtp to fetch.
+     */
+    where: RatepayerOtpWhereUniqueInput
+  }
+
+  /**
+   * RatepayerOtp findUniqueOrThrow
+   */
+  export type RatepayerOtpFindUniqueOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RatepayerOtp
+     */
+    select?: RatepayerOtpSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RatepayerOtp
+     */
+    omit?: RatepayerOtpOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RatepayerOtpInclude<ExtArgs> | null
+    /**
+     * Filter, which RatepayerOtp to fetch.
+     */
+    where: RatepayerOtpWhereUniqueInput
+  }
+
+  /**
+   * RatepayerOtp findFirst
+   */
+  export type RatepayerOtpFindFirstArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RatepayerOtp
+     */
+    select?: RatepayerOtpSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RatepayerOtp
+     */
+    omit?: RatepayerOtpOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RatepayerOtpInclude<ExtArgs> | null
+    /**
+     * Filter, which RatepayerOtp to fetch.
+     */
+    where?: RatepayerOtpWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RatepayerOtps to fetch.
+     */
+    orderBy?: RatepayerOtpOrderByWithRelationInput | RatepayerOtpOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RatepayerOtps.
+     */
+    cursor?: RatepayerOtpWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RatepayerOtps from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RatepayerOtps.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RatepayerOtps.
+     */
+    distinct?: RatepayerOtpScalarFieldEnum | RatepayerOtpScalarFieldEnum[]
+  }
+
+  /**
+   * RatepayerOtp findFirstOrThrow
+   */
+  export type RatepayerOtpFindFirstOrThrowArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RatepayerOtp
+     */
+    select?: RatepayerOtpSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RatepayerOtp
+     */
+    omit?: RatepayerOtpOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RatepayerOtpInclude<ExtArgs> | null
+    /**
+     * Filter, which RatepayerOtp to fetch.
+     */
+    where?: RatepayerOtpWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RatepayerOtps to fetch.
+     */
+    orderBy?: RatepayerOtpOrderByWithRelationInput | RatepayerOtpOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for searching for RatepayerOtps.
+     */
+    cursor?: RatepayerOtpWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RatepayerOtps from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RatepayerOtps.
+     */
+    skip?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/distinct Distinct Docs}
+     * 
+     * Filter by unique combinations of RatepayerOtps.
+     */
+    distinct?: RatepayerOtpScalarFieldEnum | RatepayerOtpScalarFieldEnum[]
+  }
+
+  /**
+   * RatepayerOtp findMany
+   */
+  export type RatepayerOtpFindManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RatepayerOtp
+     */
+    select?: RatepayerOtpSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RatepayerOtp
+     */
+    omit?: RatepayerOtpOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RatepayerOtpInclude<ExtArgs> | null
+    /**
+     * Filter, which RatepayerOtps to fetch.
+     */
+    where?: RatepayerOtpWhereInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/sorting Sorting Docs}
+     * 
+     * Determine the order of RatepayerOtps to fetch.
+     */
+    orderBy?: RatepayerOtpOrderByWithRelationInput | RatepayerOtpOrderByWithRelationInput[]
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination#cursor-based-pagination Cursor Docs}
+     * 
+     * Sets the position for listing RatepayerOtps.
+     */
+    cursor?: RatepayerOtpWhereUniqueInput
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Take `±n` RatepayerOtps from the position of the cursor.
+     */
+    take?: number
+    /**
+     * {@link https://www.prisma.io/docs/concepts/components/prisma-client/pagination Pagination Docs}
+     * 
+     * Skip the first `n` RatepayerOtps.
+     */
+    skip?: number
+    distinct?: RatepayerOtpScalarFieldEnum | RatepayerOtpScalarFieldEnum[]
+  }
+
+  /**
+   * RatepayerOtp create
+   */
+  export type RatepayerOtpCreateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RatepayerOtp
+     */
+    select?: RatepayerOtpSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RatepayerOtp
+     */
+    omit?: RatepayerOtpOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RatepayerOtpInclude<ExtArgs> | null
+    /**
+     * The data needed to create a RatepayerOtp.
+     */
+    data: XOR<RatepayerOtpCreateInput, RatepayerOtpUncheckedCreateInput>
+  }
+
+  /**
+   * RatepayerOtp createMany
+   */
+  export type RatepayerOtpCreateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to create many RatepayerOtps.
+     */
+    data: RatepayerOtpCreateManyInput | RatepayerOtpCreateManyInput[]
+    skipDuplicates?: boolean
+  }
+
+  /**
+   * RatepayerOtp createManyAndReturn
+   */
+  export type RatepayerOtpCreateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RatepayerOtp
+     */
+    select?: RatepayerOtpSelectCreateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the RatepayerOtp
+     */
+    omit?: RatepayerOtpOmit<ExtArgs> | null
+    /**
+     * The data used to create many RatepayerOtps.
+     */
+    data: RatepayerOtpCreateManyInput | RatepayerOtpCreateManyInput[]
+    skipDuplicates?: boolean
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RatepayerOtpIncludeCreateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * RatepayerOtp update
+   */
+  export type RatepayerOtpUpdateArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RatepayerOtp
+     */
+    select?: RatepayerOtpSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RatepayerOtp
+     */
+    omit?: RatepayerOtpOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RatepayerOtpInclude<ExtArgs> | null
+    /**
+     * The data needed to update a RatepayerOtp.
+     */
+    data: XOR<RatepayerOtpUpdateInput, RatepayerOtpUncheckedUpdateInput>
+    /**
+     * Choose, which RatepayerOtp to update.
+     */
+    where: RatepayerOtpWhereUniqueInput
+  }
+
+  /**
+   * RatepayerOtp updateMany
+   */
+  export type RatepayerOtpUpdateManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * The data used to update RatepayerOtps.
+     */
+    data: XOR<RatepayerOtpUpdateManyMutationInput, RatepayerOtpUncheckedUpdateManyInput>
+    /**
+     * Filter which RatepayerOtps to update
+     */
+    where?: RatepayerOtpWhereInput
+    /**
+     * Limit how many RatepayerOtps to update.
+     */
+    limit?: number
+  }
+
+  /**
+   * RatepayerOtp updateManyAndReturn
+   */
+  export type RatepayerOtpUpdateManyAndReturnArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RatepayerOtp
+     */
+    select?: RatepayerOtpSelectUpdateManyAndReturn<ExtArgs> | null
+    /**
+     * Omit specific fields from the RatepayerOtp
+     */
+    omit?: RatepayerOtpOmit<ExtArgs> | null
+    /**
+     * The data used to update RatepayerOtps.
+     */
+    data: XOR<RatepayerOtpUpdateManyMutationInput, RatepayerOtpUncheckedUpdateManyInput>
+    /**
+     * Filter which RatepayerOtps to update
+     */
+    where?: RatepayerOtpWhereInput
+    /**
+     * Limit how many RatepayerOtps to update.
+     */
+    limit?: number
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RatepayerOtpIncludeUpdateManyAndReturn<ExtArgs> | null
+  }
+
+  /**
+   * RatepayerOtp upsert
+   */
+  export type RatepayerOtpUpsertArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RatepayerOtp
+     */
+    select?: RatepayerOtpSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RatepayerOtp
+     */
+    omit?: RatepayerOtpOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RatepayerOtpInclude<ExtArgs> | null
+    /**
+     * The filter to search for the RatepayerOtp to update in case it exists.
+     */
+    where: RatepayerOtpWhereUniqueInput
+    /**
+     * In case the RatepayerOtp found by the `where` argument doesn't exist, create a new RatepayerOtp with this data.
+     */
+    create: XOR<RatepayerOtpCreateInput, RatepayerOtpUncheckedCreateInput>
+    /**
+     * In case the RatepayerOtp was found with the provided `where` argument, update it with this data.
+     */
+    update: XOR<RatepayerOtpUpdateInput, RatepayerOtpUncheckedUpdateInput>
+  }
+
+  /**
+   * RatepayerOtp delete
+   */
+  export type RatepayerOtpDeleteArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RatepayerOtp
+     */
+    select?: RatepayerOtpSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RatepayerOtp
+     */
+    omit?: RatepayerOtpOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RatepayerOtpInclude<ExtArgs> | null
+    /**
+     * Filter which RatepayerOtp to delete.
+     */
+    where: RatepayerOtpWhereUniqueInput
+  }
+
+  /**
+   * RatepayerOtp deleteMany
+   */
+  export type RatepayerOtpDeleteManyArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Filter which RatepayerOtps to delete
+     */
+    where?: RatepayerOtpWhereInput
+    /**
+     * Limit how many RatepayerOtps to delete.
+     */
+    limit?: number
+  }
+
+  /**
+   * RatepayerOtp without action
+   */
+  export type RatepayerOtpDefaultArgs<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
+    /**
+     * Select specific fields to fetch from the RatepayerOtp
+     */
+    select?: RatepayerOtpSelect<ExtArgs> | null
+    /**
+     * Omit specific fields from the RatepayerOtp
+     */
+    omit?: RatepayerOtpOmit<ExtArgs> | null
+    /**
+     * Choose, which related nodes to fetch as well
+     */
+    include?: RatepayerOtpInclude<ExtArgs> | null
   }
 
 
@@ -10490,6 +11762,7 @@ export namespace Prisma {
     legalName: 'legalName',
     phone: 'phone',
     email: 'email',
+    passwordHash: 'passwordHash',
     regionId: 'regionId',
     assemblyId: 'assemblyId',
     locationGeo: 'locationGeo',
@@ -10499,6 +11772,20 @@ export namespace Prisma {
   };
 
   export type RatepayerScalarFieldEnum = (typeof RatepayerScalarFieldEnum)[keyof typeof RatepayerScalarFieldEnum]
+
+
+  export const RatepayerOtpScalarFieldEnum: {
+    id: 'id',
+    ratepayerId: 'ratepayerId',
+    purpose: 'purpose',
+    codeHash: 'codeHash',
+    expiresAt: 'expiresAt',
+    consumedAt: 'consumedAt',
+    attempts: 'attempts',
+    createdAt: 'createdAt'
+  };
+
+  export type RatepayerOtpScalarFieldEnum = (typeof RatepayerOtpScalarFieldEnum)[keyof typeof RatepayerOtpScalarFieldEnum]
 
 
   export const RatepayerVerificationScalarFieldEnum: {
@@ -10708,6 +11995,20 @@ export namespace Prisma {
 
 
   /**
+   * Reference to a field of type 'Int'
+   */
+  export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
+    
+
+
+  /**
+   * Reference to a field of type 'Int[]'
+   */
+  export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
+    
+
+
+  /**
    * Reference to a field of type 'Decimal'
    */
   export type DecimalFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Decimal'>
@@ -10725,20 +12026,6 @@ export namespace Prisma {
    * Reference to a field of type 'Boolean'
    */
   export type BooleanFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Boolean'>
-    
-
-
-  /**
-   * Reference to a field of type 'Int'
-   */
-  export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
-    
-
-
-  /**
-   * Reference to a field of type 'Int[]'
-   */
-  export type ListIntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int[]'>
     
 
 
@@ -10769,6 +12056,7 @@ export namespace Prisma {
     legalName?: StringFilter<"Ratepayer"> | string
     phone?: StringFilter<"Ratepayer"> | string
     email?: StringNullableFilter<"Ratepayer"> | string | null
+    passwordHash?: StringNullableFilter<"Ratepayer"> | string | null
     regionId?: UuidFilter<"Ratepayer"> | string
     assemblyId?: UuidFilter<"Ratepayer"> | string
     locationGeo?: JsonFilter<"Ratepayer">
@@ -10777,6 +12065,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFilter<"Ratepayer"> | Date | string
     verifications?: RatepayerVerificationListRelationFilter
     propertyLinks?: PropertyRatepayerLinkListRelationFilter
+    otps?: RatepayerOtpListRelationFilter
   }
 
   export type RatepayerOrderByWithRelationInput = {
@@ -10786,6 +12075,7 @@ export namespace Prisma {
     legalName?: SortOrder
     phone?: SortOrder
     email?: SortOrderInput | SortOrder
+    passwordHash?: SortOrderInput | SortOrder
     regionId?: SortOrder
     assemblyId?: SortOrder
     locationGeo?: SortOrder
@@ -10794,6 +12084,7 @@ export namespace Prisma {
     updatedAt?: SortOrder
     verifications?: RatepayerVerificationOrderByRelationAggregateInput
     propertyLinks?: PropertyRatepayerLinkOrderByRelationAggregateInput
+    otps?: RatepayerOtpOrderByRelationAggregateInput
   }
 
   export type RatepayerWhereUniqueInput = Prisma.AtLeast<{
@@ -10806,6 +12097,7 @@ export namespace Prisma {
     legalName?: StringFilter<"Ratepayer"> | string
     phone?: StringFilter<"Ratepayer"> | string
     email?: StringNullableFilter<"Ratepayer"> | string | null
+    passwordHash?: StringNullableFilter<"Ratepayer"> | string | null
     regionId?: UuidFilter<"Ratepayer"> | string
     assemblyId?: UuidFilter<"Ratepayer"> | string
     locationGeo?: JsonFilter<"Ratepayer">
@@ -10814,6 +12106,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFilter<"Ratepayer"> | Date | string
     verifications?: RatepayerVerificationListRelationFilter
     propertyLinks?: PropertyRatepayerLinkListRelationFilter
+    otps?: RatepayerOtpListRelationFilter
   }, "id" | "code">
 
   export type RatepayerOrderByWithAggregationInput = {
@@ -10823,6 +12116,7 @@ export namespace Prisma {
     legalName?: SortOrder
     phone?: SortOrder
     email?: SortOrderInput | SortOrder
+    passwordHash?: SortOrderInput | SortOrder
     regionId?: SortOrder
     assemblyId?: SortOrder
     locationGeo?: SortOrder
@@ -10844,12 +12138,85 @@ export namespace Prisma {
     legalName?: StringWithAggregatesFilter<"Ratepayer"> | string
     phone?: StringWithAggregatesFilter<"Ratepayer"> | string
     email?: StringNullableWithAggregatesFilter<"Ratepayer"> | string | null
+    passwordHash?: StringNullableWithAggregatesFilter<"Ratepayer"> | string | null
     regionId?: UuidWithAggregatesFilter<"Ratepayer"> | string
     assemblyId?: UuidWithAggregatesFilter<"Ratepayer"> | string
     locationGeo?: JsonWithAggregatesFilter<"Ratepayer">
     status?: StringWithAggregatesFilter<"Ratepayer"> | string
     createdAt?: DateTimeWithAggregatesFilter<"Ratepayer"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Ratepayer"> | Date | string
+  }
+
+  export type RatepayerOtpWhereInput = {
+    AND?: RatepayerOtpWhereInput | RatepayerOtpWhereInput[]
+    OR?: RatepayerOtpWhereInput[]
+    NOT?: RatepayerOtpWhereInput | RatepayerOtpWhereInput[]
+    id?: UuidFilter<"RatepayerOtp"> | string
+    ratepayerId?: UuidFilter<"RatepayerOtp"> | string
+    purpose?: StringFilter<"RatepayerOtp"> | string
+    codeHash?: StringFilter<"RatepayerOtp"> | string
+    expiresAt?: DateTimeFilter<"RatepayerOtp"> | Date | string
+    consumedAt?: DateTimeNullableFilter<"RatepayerOtp"> | Date | string | null
+    attempts?: IntFilter<"RatepayerOtp"> | number
+    createdAt?: DateTimeFilter<"RatepayerOtp"> | Date | string
+    ratepayer?: XOR<RatepayerScalarRelationFilter, RatepayerWhereInput>
+  }
+
+  export type RatepayerOtpOrderByWithRelationInput = {
+    id?: SortOrder
+    ratepayerId?: SortOrder
+    purpose?: SortOrder
+    codeHash?: SortOrder
+    expiresAt?: SortOrder
+    consumedAt?: SortOrderInput | SortOrder
+    attempts?: SortOrder
+    createdAt?: SortOrder
+    ratepayer?: RatepayerOrderByWithRelationInput
+  }
+
+  export type RatepayerOtpWhereUniqueInput = Prisma.AtLeast<{
+    id?: string
+    AND?: RatepayerOtpWhereInput | RatepayerOtpWhereInput[]
+    OR?: RatepayerOtpWhereInput[]
+    NOT?: RatepayerOtpWhereInput | RatepayerOtpWhereInput[]
+    ratepayerId?: UuidFilter<"RatepayerOtp"> | string
+    purpose?: StringFilter<"RatepayerOtp"> | string
+    codeHash?: StringFilter<"RatepayerOtp"> | string
+    expiresAt?: DateTimeFilter<"RatepayerOtp"> | Date | string
+    consumedAt?: DateTimeNullableFilter<"RatepayerOtp"> | Date | string | null
+    attempts?: IntFilter<"RatepayerOtp"> | number
+    createdAt?: DateTimeFilter<"RatepayerOtp"> | Date | string
+    ratepayer?: XOR<RatepayerScalarRelationFilter, RatepayerWhereInput>
+  }, "id">
+
+  export type RatepayerOtpOrderByWithAggregationInput = {
+    id?: SortOrder
+    ratepayerId?: SortOrder
+    purpose?: SortOrder
+    codeHash?: SortOrder
+    expiresAt?: SortOrder
+    consumedAt?: SortOrderInput | SortOrder
+    attempts?: SortOrder
+    createdAt?: SortOrder
+    _count?: RatepayerOtpCountOrderByAggregateInput
+    _avg?: RatepayerOtpAvgOrderByAggregateInput
+    _max?: RatepayerOtpMaxOrderByAggregateInput
+    _min?: RatepayerOtpMinOrderByAggregateInput
+    _sum?: RatepayerOtpSumOrderByAggregateInput
+  }
+
+  export type RatepayerOtpScalarWhereWithAggregatesInput = {
+    AND?: RatepayerOtpScalarWhereWithAggregatesInput | RatepayerOtpScalarWhereWithAggregatesInput[]
+    OR?: RatepayerOtpScalarWhereWithAggregatesInput[]
+    NOT?: RatepayerOtpScalarWhereWithAggregatesInput | RatepayerOtpScalarWhereWithAggregatesInput[]
+    id?: UuidWithAggregatesFilter<"RatepayerOtp"> | string
+    ratepayerId?: UuidWithAggregatesFilter<"RatepayerOtp"> | string
+    purpose?: StringWithAggregatesFilter<"RatepayerOtp"> | string
+    codeHash?: StringWithAggregatesFilter<"RatepayerOtp"> | string
+    expiresAt?: DateTimeWithAggregatesFilter<"RatepayerOtp"> | Date | string
+    consumedAt?: DateTimeNullableWithAggregatesFilter<"RatepayerOtp"> | Date | string | null
+    attempts?: IntWithAggregatesFilter<"RatepayerOtp"> | number
+    createdAt?: DateTimeWithAggregatesFilter<"RatepayerOtp"> | Date | string
   }
 
   export type RatepayerVerificationWhereInput = {
@@ -11414,6 +12781,7 @@ export namespace Prisma {
     legalName: string
     phone: string
     email?: string | null
+    passwordHash?: string | null
     regionId: string
     assemblyId: string
     locationGeo: JsonNullValueInput | InputJsonValue
@@ -11422,6 +12790,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     verifications?: RatepayerVerificationCreateNestedManyWithoutRatepayerInput
     propertyLinks?: PropertyRatepayerLinkCreateNestedManyWithoutRatepayerInput
+    otps?: RatepayerOtpCreateNestedManyWithoutRatepayerInput
   }
 
   export type RatepayerUncheckedCreateInput = {
@@ -11431,6 +12800,7 @@ export namespace Prisma {
     legalName: string
     phone: string
     email?: string | null
+    passwordHash?: string | null
     regionId: string
     assemblyId: string
     locationGeo: JsonNullValueInput | InputJsonValue
@@ -11439,6 +12809,7 @@ export namespace Prisma {
     updatedAt?: Date | string
     verifications?: RatepayerVerificationUncheckedCreateNestedManyWithoutRatepayerInput
     propertyLinks?: PropertyRatepayerLinkUncheckedCreateNestedManyWithoutRatepayerInput
+    otps?: RatepayerOtpUncheckedCreateNestedManyWithoutRatepayerInput
   }
 
   export type RatepayerUpdateInput = {
@@ -11448,6 +12819,7 @@ export namespace Prisma {
     legalName?: StringFieldUpdateOperationsInput | string
     phone?: StringFieldUpdateOperationsInput | string
     email?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: NullableStringFieldUpdateOperationsInput | string | null
     regionId?: StringFieldUpdateOperationsInput | string
     assemblyId?: StringFieldUpdateOperationsInput | string
     locationGeo?: JsonNullValueInput | InputJsonValue
@@ -11456,6 +12828,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     verifications?: RatepayerVerificationUpdateManyWithoutRatepayerNestedInput
     propertyLinks?: PropertyRatepayerLinkUpdateManyWithoutRatepayerNestedInput
+    otps?: RatepayerOtpUpdateManyWithoutRatepayerNestedInput
   }
 
   export type RatepayerUncheckedUpdateInput = {
@@ -11465,6 +12838,7 @@ export namespace Prisma {
     legalName?: StringFieldUpdateOperationsInput | string
     phone?: StringFieldUpdateOperationsInput | string
     email?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: NullableStringFieldUpdateOperationsInput | string | null
     regionId?: StringFieldUpdateOperationsInput | string
     assemblyId?: StringFieldUpdateOperationsInput | string
     locationGeo?: JsonNullValueInput | InputJsonValue
@@ -11473,6 +12847,7 @@ export namespace Prisma {
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     verifications?: RatepayerVerificationUncheckedUpdateManyWithoutRatepayerNestedInput
     propertyLinks?: PropertyRatepayerLinkUncheckedUpdateManyWithoutRatepayerNestedInput
+    otps?: RatepayerOtpUncheckedUpdateManyWithoutRatepayerNestedInput
   }
 
   export type RatepayerCreateManyInput = {
@@ -11482,6 +12857,7 @@ export namespace Prisma {
     legalName: string
     phone: string
     email?: string | null
+    passwordHash?: string | null
     regionId: string
     assemblyId: string
     locationGeo: JsonNullValueInput | InputJsonValue
@@ -11497,6 +12873,7 @@ export namespace Prisma {
     legalName?: StringFieldUpdateOperationsInput | string
     phone?: StringFieldUpdateOperationsInput | string
     email?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: NullableStringFieldUpdateOperationsInput | string | null
     regionId?: StringFieldUpdateOperationsInput | string
     assemblyId?: StringFieldUpdateOperationsInput | string
     locationGeo?: JsonNullValueInput | InputJsonValue
@@ -11512,12 +12889,89 @@ export namespace Prisma {
     legalName?: StringFieldUpdateOperationsInput | string
     phone?: StringFieldUpdateOperationsInput | string
     email?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: NullableStringFieldUpdateOperationsInput | string | null
     regionId?: StringFieldUpdateOperationsInput | string
     assemblyId?: StringFieldUpdateOperationsInput | string
     locationGeo?: JsonNullValueInput | InputJsonValue
     status?: StringFieldUpdateOperationsInput | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RatepayerOtpCreateInput = {
+    id?: string
+    purpose: string
+    codeHash: string
+    expiresAt: Date | string
+    consumedAt?: Date | string | null
+    attempts?: number
+    createdAt?: Date | string
+    ratepayer: RatepayerCreateNestedOneWithoutOtpsInput
+  }
+
+  export type RatepayerOtpUncheckedCreateInput = {
+    id?: string
+    ratepayerId: string
+    purpose: string
+    codeHash: string
+    expiresAt: Date | string
+    consumedAt?: Date | string | null
+    attempts?: number
+    createdAt?: Date | string
+  }
+
+  export type RatepayerOtpUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    purpose?: StringFieldUpdateOperationsInput | string
+    codeHash?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    consumedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    ratepayer?: RatepayerUpdateOneRequiredWithoutOtpsNestedInput
+  }
+
+  export type RatepayerOtpUncheckedUpdateInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    ratepayerId?: StringFieldUpdateOperationsInput | string
+    purpose?: StringFieldUpdateOperationsInput | string
+    codeHash?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    consumedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RatepayerOtpCreateManyInput = {
+    id?: string
+    ratepayerId: string
+    purpose: string
+    codeHash: string
+    expiresAt: Date | string
+    consumedAt?: Date | string | null
+    attempts?: number
+    createdAt?: Date | string
+  }
+
+  export type RatepayerOtpUpdateManyMutationInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    purpose?: StringFieldUpdateOperationsInput | string
+    codeHash?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    consumedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RatepayerOtpUncheckedUpdateManyInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    ratepayerId?: StringFieldUpdateOperationsInput | string
+    purpose?: StringFieldUpdateOperationsInput | string
+    codeHash?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    consumedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 
   export type RatepayerVerificationCreateInput = {
@@ -12239,6 +13693,12 @@ export namespace Prisma {
     none?: PropertyRatepayerLinkWhereInput
   }
 
+  export type RatepayerOtpListRelationFilter = {
+    every?: RatepayerOtpWhereInput
+    some?: RatepayerOtpWhereInput
+    none?: RatepayerOtpWhereInput
+  }
+
   export type SortOrderInput = {
     sort: SortOrder
     nulls?: NullsOrder
@@ -12252,6 +13712,10 @@ export namespace Prisma {
     _count?: SortOrder
   }
 
+  export type RatepayerOtpOrderByRelationAggregateInput = {
+    _count?: SortOrder
+  }
+
   export type RatepayerCountOrderByAggregateInput = {
     id?: SortOrder
     code?: SortOrder
@@ -12259,6 +13723,7 @@ export namespace Prisma {
     legalName?: SortOrder
     phone?: SortOrder
     email?: SortOrder
+    passwordHash?: SortOrder
     regionId?: SortOrder
     assemblyId?: SortOrder
     locationGeo?: SortOrder
@@ -12274,6 +13739,7 @@ export namespace Prisma {
     legalName?: SortOrder
     phone?: SortOrder
     email?: SortOrder
+    passwordHash?: SortOrder
     regionId?: SortOrder
     assemblyId?: SortOrder
     status?: SortOrder
@@ -12288,6 +13754,7 @@ export namespace Prisma {
     legalName?: SortOrder
     phone?: SortOrder
     email?: SortOrder
+    passwordHash?: SortOrder
     regionId?: SortOrder
     assemblyId?: SortOrder
     status?: SortOrder
@@ -12397,9 +13864,91 @@ export namespace Prisma {
     not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
   }
 
+  export type IntFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntFilter<$PrismaModel> | number
+  }
+
   export type RatepayerScalarRelationFilter = {
     is?: RatepayerWhereInput
     isNot?: RatepayerWhereInput
+  }
+
+  export type RatepayerOtpCountOrderByAggregateInput = {
+    id?: SortOrder
+    ratepayerId?: SortOrder
+    purpose?: SortOrder
+    codeHash?: SortOrder
+    expiresAt?: SortOrder
+    consumedAt?: SortOrder
+    attempts?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type RatepayerOtpAvgOrderByAggregateInput = {
+    attempts?: SortOrder
+  }
+
+  export type RatepayerOtpMaxOrderByAggregateInput = {
+    id?: SortOrder
+    ratepayerId?: SortOrder
+    purpose?: SortOrder
+    codeHash?: SortOrder
+    expiresAt?: SortOrder
+    consumedAt?: SortOrder
+    attempts?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type RatepayerOtpMinOrderByAggregateInput = {
+    id?: SortOrder
+    ratepayerId?: SortOrder
+    purpose?: SortOrder
+    codeHash?: SortOrder
+    expiresAt?: SortOrder
+    consumedAt?: SortOrder
+    attempts?: SortOrder
+    createdAt?: SortOrder
+  }
+
+  export type RatepayerOtpSumOrderByAggregateInput = {
+    attempts?: SortOrder
+  }
+
+  export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedDateTimeNullableFilter<$PrismaModel>
+    _max?: NestedDateTimeNullableFilter<$PrismaModel>
+  }
+
+  export type IntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
   }
 
   export type RatepayerVerificationCountOrderByAggregateInput = {
@@ -12430,20 +13979,6 @@ export namespace Prisma {
     verificationStatus?: SortOrder
     verifiedAt?: SortOrder
     createdAt?: SortOrder
-  }
-
-  export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedDateTimeNullableFilter<$PrismaModel>
-    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
   export type DecimalFilter<$PrismaModel = never> = {
@@ -12589,17 +14124,6 @@ export namespace Prisma {
     createdAt?: SortOrder
   }
 
-  export type IntFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntFilter<$PrismaModel> | number
-  }
-
   export type OutboxEventCountOrderByAggregateInput = {
     id?: SortOrder
     eventType?: SortOrder
@@ -12660,22 +14184,6 @@ export namespace Prisma {
     eventVersion?: SortOrder
     aggregateVersion?: SortOrder
     attempts?: SortOrder
-  }
-
-  export type IntWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedFloatFilter<$PrismaModel>
-    _sum?: NestedIntFilter<$PrismaModel>
-    _min?: NestedIntFilter<$PrismaModel>
-    _max?: NestedIntFilter<$PrismaModel>
   }
   export type JsonNullableFilter<$PrismaModel = never> =
     | PatchUndefined<
@@ -12918,6 +14426,13 @@ export namespace Prisma {
     connect?: PropertyRatepayerLinkWhereUniqueInput | PropertyRatepayerLinkWhereUniqueInput[]
   }
 
+  export type RatepayerOtpCreateNestedManyWithoutRatepayerInput = {
+    create?: XOR<RatepayerOtpCreateWithoutRatepayerInput, RatepayerOtpUncheckedCreateWithoutRatepayerInput> | RatepayerOtpCreateWithoutRatepayerInput[] | RatepayerOtpUncheckedCreateWithoutRatepayerInput[]
+    connectOrCreate?: RatepayerOtpCreateOrConnectWithoutRatepayerInput | RatepayerOtpCreateOrConnectWithoutRatepayerInput[]
+    createMany?: RatepayerOtpCreateManyRatepayerInputEnvelope
+    connect?: RatepayerOtpWhereUniqueInput | RatepayerOtpWhereUniqueInput[]
+  }
+
   export type RatepayerVerificationUncheckedCreateNestedManyWithoutRatepayerInput = {
     create?: XOR<RatepayerVerificationCreateWithoutRatepayerInput, RatepayerVerificationUncheckedCreateWithoutRatepayerInput> | RatepayerVerificationCreateWithoutRatepayerInput[] | RatepayerVerificationUncheckedCreateWithoutRatepayerInput[]
     connectOrCreate?: RatepayerVerificationCreateOrConnectWithoutRatepayerInput | RatepayerVerificationCreateOrConnectWithoutRatepayerInput[]
@@ -12930,6 +14445,13 @@ export namespace Prisma {
     connectOrCreate?: PropertyRatepayerLinkCreateOrConnectWithoutRatepayerInput | PropertyRatepayerLinkCreateOrConnectWithoutRatepayerInput[]
     createMany?: PropertyRatepayerLinkCreateManyRatepayerInputEnvelope
     connect?: PropertyRatepayerLinkWhereUniqueInput | PropertyRatepayerLinkWhereUniqueInput[]
+  }
+
+  export type RatepayerOtpUncheckedCreateNestedManyWithoutRatepayerInput = {
+    create?: XOR<RatepayerOtpCreateWithoutRatepayerInput, RatepayerOtpUncheckedCreateWithoutRatepayerInput> | RatepayerOtpCreateWithoutRatepayerInput[] | RatepayerOtpUncheckedCreateWithoutRatepayerInput[]
+    connectOrCreate?: RatepayerOtpCreateOrConnectWithoutRatepayerInput | RatepayerOtpCreateOrConnectWithoutRatepayerInput[]
+    createMany?: RatepayerOtpCreateManyRatepayerInputEnvelope
+    connect?: RatepayerOtpWhereUniqueInput | RatepayerOtpWhereUniqueInput[]
   }
 
   export type StringFieldUpdateOperationsInput = {
@@ -12972,6 +14494,20 @@ export namespace Prisma {
     deleteMany?: PropertyRatepayerLinkScalarWhereInput | PropertyRatepayerLinkScalarWhereInput[]
   }
 
+  export type RatepayerOtpUpdateManyWithoutRatepayerNestedInput = {
+    create?: XOR<RatepayerOtpCreateWithoutRatepayerInput, RatepayerOtpUncheckedCreateWithoutRatepayerInput> | RatepayerOtpCreateWithoutRatepayerInput[] | RatepayerOtpUncheckedCreateWithoutRatepayerInput[]
+    connectOrCreate?: RatepayerOtpCreateOrConnectWithoutRatepayerInput | RatepayerOtpCreateOrConnectWithoutRatepayerInput[]
+    upsert?: RatepayerOtpUpsertWithWhereUniqueWithoutRatepayerInput | RatepayerOtpUpsertWithWhereUniqueWithoutRatepayerInput[]
+    createMany?: RatepayerOtpCreateManyRatepayerInputEnvelope
+    set?: RatepayerOtpWhereUniqueInput | RatepayerOtpWhereUniqueInput[]
+    disconnect?: RatepayerOtpWhereUniqueInput | RatepayerOtpWhereUniqueInput[]
+    delete?: RatepayerOtpWhereUniqueInput | RatepayerOtpWhereUniqueInput[]
+    connect?: RatepayerOtpWhereUniqueInput | RatepayerOtpWhereUniqueInput[]
+    update?: RatepayerOtpUpdateWithWhereUniqueWithoutRatepayerInput | RatepayerOtpUpdateWithWhereUniqueWithoutRatepayerInput[]
+    updateMany?: RatepayerOtpUpdateManyWithWhereWithoutRatepayerInput | RatepayerOtpUpdateManyWithWhereWithoutRatepayerInput[]
+    deleteMany?: RatepayerOtpScalarWhereInput | RatepayerOtpScalarWhereInput[]
+  }
+
   export type RatepayerVerificationUncheckedUpdateManyWithoutRatepayerNestedInput = {
     create?: XOR<RatepayerVerificationCreateWithoutRatepayerInput, RatepayerVerificationUncheckedCreateWithoutRatepayerInput> | RatepayerVerificationCreateWithoutRatepayerInput[] | RatepayerVerificationUncheckedCreateWithoutRatepayerInput[]
     connectOrCreate?: RatepayerVerificationCreateOrConnectWithoutRatepayerInput | RatepayerVerificationCreateOrConnectWithoutRatepayerInput[]
@@ -13000,14 +14536,50 @@ export namespace Prisma {
     deleteMany?: PropertyRatepayerLinkScalarWhereInput | PropertyRatepayerLinkScalarWhereInput[]
   }
 
-  export type RatepayerCreateNestedOneWithoutVerificationsInput = {
-    create?: XOR<RatepayerCreateWithoutVerificationsInput, RatepayerUncheckedCreateWithoutVerificationsInput>
-    connectOrCreate?: RatepayerCreateOrConnectWithoutVerificationsInput
+  export type RatepayerOtpUncheckedUpdateManyWithoutRatepayerNestedInput = {
+    create?: XOR<RatepayerOtpCreateWithoutRatepayerInput, RatepayerOtpUncheckedCreateWithoutRatepayerInput> | RatepayerOtpCreateWithoutRatepayerInput[] | RatepayerOtpUncheckedCreateWithoutRatepayerInput[]
+    connectOrCreate?: RatepayerOtpCreateOrConnectWithoutRatepayerInput | RatepayerOtpCreateOrConnectWithoutRatepayerInput[]
+    upsert?: RatepayerOtpUpsertWithWhereUniqueWithoutRatepayerInput | RatepayerOtpUpsertWithWhereUniqueWithoutRatepayerInput[]
+    createMany?: RatepayerOtpCreateManyRatepayerInputEnvelope
+    set?: RatepayerOtpWhereUniqueInput | RatepayerOtpWhereUniqueInput[]
+    disconnect?: RatepayerOtpWhereUniqueInput | RatepayerOtpWhereUniqueInput[]
+    delete?: RatepayerOtpWhereUniqueInput | RatepayerOtpWhereUniqueInput[]
+    connect?: RatepayerOtpWhereUniqueInput | RatepayerOtpWhereUniqueInput[]
+    update?: RatepayerOtpUpdateWithWhereUniqueWithoutRatepayerInput | RatepayerOtpUpdateWithWhereUniqueWithoutRatepayerInput[]
+    updateMany?: RatepayerOtpUpdateManyWithWhereWithoutRatepayerInput | RatepayerOtpUpdateManyWithWhereWithoutRatepayerInput[]
+    deleteMany?: RatepayerOtpScalarWhereInput | RatepayerOtpScalarWhereInput[]
+  }
+
+  export type RatepayerCreateNestedOneWithoutOtpsInput = {
+    create?: XOR<RatepayerCreateWithoutOtpsInput, RatepayerUncheckedCreateWithoutOtpsInput>
+    connectOrCreate?: RatepayerCreateOrConnectWithoutOtpsInput
     connect?: RatepayerWhereUniqueInput
   }
 
   export type NullableDateTimeFieldUpdateOperationsInput = {
     set?: Date | string | null
+  }
+
+  export type IntFieldUpdateOperationsInput = {
+    set?: number
+    increment?: number
+    decrement?: number
+    multiply?: number
+    divide?: number
+  }
+
+  export type RatepayerUpdateOneRequiredWithoutOtpsNestedInput = {
+    create?: XOR<RatepayerCreateWithoutOtpsInput, RatepayerUncheckedCreateWithoutOtpsInput>
+    connectOrCreate?: RatepayerCreateOrConnectWithoutOtpsInput
+    upsert?: RatepayerUpsertWithoutOtpsInput
+    connect?: RatepayerWhereUniqueInput
+    update?: XOR<XOR<RatepayerUpdateToOneWithWhereWithoutOtpsInput, RatepayerUpdateWithoutOtpsInput>, RatepayerUncheckedUpdateWithoutOtpsInput>
+  }
+
+  export type RatepayerCreateNestedOneWithoutVerificationsInput = {
+    create?: XOR<RatepayerCreateWithoutVerificationsInput, RatepayerUncheckedCreateWithoutVerificationsInput>
+    connectOrCreate?: RatepayerCreateOrConnectWithoutVerificationsInput
+    connect?: RatepayerWhereUniqueInput
   }
 
   export type RatepayerUpdateOneRequiredWithoutVerificationsNestedInput = {
@@ -13098,14 +14670,6 @@ export namespace Prisma {
     upsert?: PropertyRatepayerLinkUpsertWithoutClaimDocumentsInput
     connect?: PropertyRatepayerLinkWhereUniqueInput
     update?: XOR<XOR<PropertyRatepayerLinkUpdateToOneWithWhereWithoutClaimDocumentsInput, PropertyRatepayerLinkUpdateWithoutClaimDocumentsInput>, PropertyRatepayerLinkUncheckedUpdateWithoutClaimDocumentsInput>
-  }
-
-  export type IntFieldUpdateOperationsInput = {
-    set?: number
-    increment?: number
-    decrement?: number
-    multiply?: number
-    divide?: number
   }
 
   export type NullableIntFieldUpdateOperationsInput = {
@@ -13298,6 +14862,33 @@ export namespace Prisma {
     _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
+  export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
+  }
+
+  export type NestedFloatFilter<$PrismaModel = never> = {
+    equals?: number | FloatFieldRefInput<$PrismaModel>
+    in?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    lt?: number | FloatFieldRefInput<$PrismaModel>
+    lte?: number | FloatFieldRefInput<$PrismaModel>
+    gt?: number | FloatFieldRefInput<$PrismaModel>
+    gte?: number | FloatFieldRefInput<$PrismaModel>
+    not?: NestedFloatFilter<$PrismaModel> | number
+  }
+
   export type NestedDecimalFilter<$PrismaModel = never> = {
     equals?: Decimal | DecimalJsLike | number | string | DecimalFieldRefInput<$PrismaModel>
     in?: Decimal[] | DecimalJsLike[] | number[] | string[] | ListDecimalFieldRefInput<$PrismaModel>
@@ -13336,33 +14927,6 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedBoolFilter<$PrismaModel>
     _max?: NestedBoolFilter<$PrismaModel>
-  }
-
-  export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedFloatFilter<$PrismaModel>
-    _sum?: NestedIntFilter<$PrismaModel>
-    _min?: NestedIntFilter<$PrismaModel>
-    _max?: NestedIntFilter<$PrismaModel>
-  }
-
-  export type NestedFloatFilter<$PrismaModel = never> = {
-    equals?: number | FloatFieldRefInput<$PrismaModel>
-    in?: number[] | ListFloatFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListFloatFieldRefInput<$PrismaModel>
-    lt?: number | FloatFieldRefInput<$PrismaModel>
-    lte?: number | FloatFieldRefInput<$PrismaModel>
-    gt?: number | FloatFieldRefInput<$PrismaModel>
-    gte?: number | FloatFieldRefInput<$PrismaModel>
-    not?: NestedFloatFilter<$PrismaModel> | number
   }
   export type NestedJsonNullableFilter<$PrismaModel = never> =
     | PatchUndefined<
@@ -13506,6 +15070,36 @@ export namespace Prisma {
     skipDuplicates?: boolean
   }
 
+  export type RatepayerOtpCreateWithoutRatepayerInput = {
+    id?: string
+    purpose: string
+    codeHash: string
+    expiresAt: Date | string
+    consumedAt?: Date | string | null
+    attempts?: number
+    createdAt?: Date | string
+  }
+
+  export type RatepayerOtpUncheckedCreateWithoutRatepayerInput = {
+    id?: string
+    purpose: string
+    codeHash: string
+    expiresAt: Date | string
+    consumedAt?: Date | string | null
+    attempts?: number
+    createdAt?: Date | string
+  }
+
+  export type RatepayerOtpCreateOrConnectWithoutRatepayerInput = {
+    where: RatepayerOtpWhereUniqueInput
+    create: XOR<RatepayerOtpCreateWithoutRatepayerInput, RatepayerOtpUncheckedCreateWithoutRatepayerInput>
+  }
+
+  export type RatepayerOtpCreateManyRatepayerInputEnvelope = {
+    data: RatepayerOtpCreateManyRatepayerInput | RatepayerOtpCreateManyRatepayerInput[]
+    skipDuplicates?: boolean
+  }
+
   export type RatepayerVerificationUpsertWithWhereUniqueWithoutRatepayerInput = {
     where: RatepayerVerificationWhereUniqueInput
     update: XOR<RatepayerVerificationUpdateWithoutRatepayerInput, RatepayerVerificationUncheckedUpdateWithoutRatepayerInput>
@@ -13568,6 +15162,124 @@ export namespace Prisma {
     createdAt?: DateTimeFilter<"PropertyRatepayerLink"> | Date | string
   }
 
+  export type RatepayerOtpUpsertWithWhereUniqueWithoutRatepayerInput = {
+    where: RatepayerOtpWhereUniqueInput
+    update: XOR<RatepayerOtpUpdateWithoutRatepayerInput, RatepayerOtpUncheckedUpdateWithoutRatepayerInput>
+    create: XOR<RatepayerOtpCreateWithoutRatepayerInput, RatepayerOtpUncheckedCreateWithoutRatepayerInput>
+  }
+
+  export type RatepayerOtpUpdateWithWhereUniqueWithoutRatepayerInput = {
+    where: RatepayerOtpWhereUniqueInput
+    data: XOR<RatepayerOtpUpdateWithoutRatepayerInput, RatepayerOtpUncheckedUpdateWithoutRatepayerInput>
+  }
+
+  export type RatepayerOtpUpdateManyWithWhereWithoutRatepayerInput = {
+    where: RatepayerOtpScalarWhereInput
+    data: XOR<RatepayerOtpUpdateManyMutationInput, RatepayerOtpUncheckedUpdateManyWithoutRatepayerInput>
+  }
+
+  export type RatepayerOtpScalarWhereInput = {
+    AND?: RatepayerOtpScalarWhereInput | RatepayerOtpScalarWhereInput[]
+    OR?: RatepayerOtpScalarWhereInput[]
+    NOT?: RatepayerOtpScalarWhereInput | RatepayerOtpScalarWhereInput[]
+    id?: UuidFilter<"RatepayerOtp"> | string
+    ratepayerId?: UuidFilter<"RatepayerOtp"> | string
+    purpose?: StringFilter<"RatepayerOtp"> | string
+    codeHash?: StringFilter<"RatepayerOtp"> | string
+    expiresAt?: DateTimeFilter<"RatepayerOtp"> | Date | string
+    consumedAt?: DateTimeNullableFilter<"RatepayerOtp"> | Date | string | null
+    attempts?: IntFilter<"RatepayerOtp"> | number
+    createdAt?: DateTimeFilter<"RatepayerOtp"> | Date | string
+  }
+
+  export type RatepayerCreateWithoutOtpsInput = {
+    id?: string
+    code: string
+    ratepayerType?: string
+    legalName: string
+    phone: string
+    email?: string | null
+    passwordHash?: string | null
+    regionId: string
+    assemblyId: string
+    locationGeo: JsonNullValueInput | InputJsonValue
+    status?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    verifications?: RatepayerVerificationCreateNestedManyWithoutRatepayerInput
+    propertyLinks?: PropertyRatepayerLinkCreateNestedManyWithoutRatepayerInput
+  }
+
+  export type RatepayerUncheckedCreateWithoutOtpsInput = {
+    id?: string
+    code: string
+    ratepayerType?: string
+    legalName: string
+    phone: string
+    email?: string | null
+    passwordHash?: string | null
+    regionId: string
+    assemblyId: string
+    locationGeo: JsonNullValueInput | InputJsonValue
+    status?: string
+    createdAt?: Date | string
+    updatedAt?: Date | string
+    verifications?: RatepayerVerificationUncheckedCreateNestedManyWithoutRatepayerInput
+    propertyLinks?: PropertyRatepayerLinkUncheckedCreateNestedManyWithoutRatepayerInput
+  }
+
+  export type RatepayerCreateOrConnectWithoutOtpsInput = {
+    where: RatepayerWhereUniqueInput
+    create: XOR<RatepayerCreateWithoutOtpsInput, RatepayerUncheckedCreateWithoutOtpsInput>
+  }
+
+  export type RatepayerUpsertWithoutOtpsInput = {
+    update: XOR<RatepayerUpdateWithoutOtpsInput, RatepayerUncheckedUpdateWithoutOtpsInput>
+    create: XOR<RatepayerCreateWithoutOtpsInput, RatepayerUncheckedCreateWithoutOtpsInput>
+    where?: RatepayerWhereInput
+  }
+
+  export type RatepayerUpdateToOneWithWhereWithoutOtpsInput = {
+    where?: RatepayerWhereInput
+    data: XOR<RatepayerUpdateWithoutOtpsInput, RatepayerUncheckedUpdateWithoutOtpsInput>
+  }
+
+  export type RatepayerUpdateWithoutOtpsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    ratepayerType?: StringFieldUpdateOperationsInput | string
+    legalName?: StringFieldUpdateOperationsInput | string
+    phone?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: NullableStringFieldUpdateOperationsInput | string | null
+    regionId?: StringFieldUpdateOperationsInput | string
+    assemblyId?: StringFieldUpdateOperationsInput | string
+    locationGeo?: JsonNullValueInput | InputJsonValue
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    verifications?: RatepayerVerificationUpdateManyWithoutRatepayerNestedInput
+    propertyLinks?: PropertyRatepayerLinkUpdateManyWithoutRatepayerNestedInput
+  }
+
+  export type RatepayerUncheckedUpdateWithoutOtpsInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    code?: StringFieldUpdateOperationsInput | string
+    ratepayerType?: StringFieldUpdateOperationsInput | string
+    legalName?: StringFieldUpdateOperationsInput | string
+    phone?: StringFieldUpdateOperationsInput | string
+    email?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: NullableStringFieldUpdateOperationsInput | string | null
+    regionId?: StringFieldUpdateOperationsInput | string
+    assemblyId?: StringFieldUpdateOperationsInput | string
+    locationGeo?: JsonNullValueInput | InputJsonValue
+    status?: StringFieldUpdateOperationsInput | string
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    verifications?: RatepayerVerificationUncheckedUpdateManyWithoutRatepayerNestedInput
+    propertyLinks?: PropertyRatepayerLinkUncheckedUpdateManyWithoutRatepayerNestedInput
+  }
+
   export type RatepayerCreateWithoutVerificationsInput = {
     id?: string
     code: string
@@ -13575,6 +15287,7 @@ export namespace Prisma {
     legalName: string
     phone: string
     email?: string | null
+    passwordHash?: string | null
     regionId: string
     assemblyId: string
     locationGeo: JsonNullValueInput | InputJsonValue
@@ -13582,6 +15295,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     propertyLinks?: PropertyRatepayerLinkCreateNestedManyWithoutRatepayerInput
+    otps?: RatepayerOtpCreateNestedManyWithoutRatepayerInput
   }
 
   export type RatepayerUncheckedCreateWithoutVerificationsInput = {
@@ -13591,6 +15305,7 @@ export namespace Prisma {
     legalName: string
     phone: string
     email?: string | null
+    passwordHash?: string | null
     regionId: string
     assemblyId: string
     locationGeo: JsonNullValueInput | InputJsonValue
@@ -13598,6 +15313,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     propertyLinks?: PropertyRatepayerLinkUncheckedCreateNestedManyWithoutRatepayerInput
+    otps?: RatepayerOtpUncheckedCreateNestedManyWithoutRatepayerInput
   }
 
   export type RatepayerCreateOrConnectWithoutVerificationsInput = {
@@ -13623,6 +15339,7 @@ export namespace Prisma {
     legalName?: StringFieldUpdateOperationsInput | string
     phone?: StringFieldUpdateOperationsInput | string
     email?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: NullableStringFieldUpdateOperationsInput | string | null
     regionId?: StringFieldUpdateOperationsInput | string
     assemblyId?: StringFieldUpdateOperationsInput | string
     locationGeo?: JsonNullValueInput | InputJsonValue
@@ -13630,6 +15347,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     propertyLinks?: PropertyRatepayerLinkUpdateManyWithoutRatepayerNestedInput
+    otps?: RatepayerOtpUpdateManyWithoutRatepayerNestedInput
   }
 
   export type RatepayerUncheckedUpdateWithoutVerificationsInput = {
@@ -13639,6 +15357,7 @@ export namespace Prisma {
     legalName?: StringFieldUpdateOperationsInput | string
     phone?: StringFieldUpdateOperationsInput | string
     email?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: NullableStringFieldUpdateOperationsInput | string | null
     regionId?: StringFieldUpdateOperationsInput | string
     assemblyId?: StringFieldUpdateOperationsInput | string
     locationGeo?: JsonNullValueInput | InputJsonValue
@@ -13646,6 +15365,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     propertyLinks?: PropertyRatepayerLinkUncheckedUpdateManyWithoutRatepayerNestedInput
+    otps?: RatepayerOtpUncheckedUpdateManyWithoutRatepayerNestedInput
   }
 
   export type RatepayerCreateWithoutPropertyLinksInput = {
@@ -13655,6 +15375,7 @@ export namespace Prisma {
     legalName: string
     phone: string
     email?: string | null
+    passwordHash?: string | null
     regionId: string
     assemblyId: string
     locationGeo: JsonNullValueInput | InputJsonValue
@@ -13662,6 +15383,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     verifications?: RatepayerVerificationCreateNestedManyWithoutRatepayerInput
+    otps?: RatepayerOtpCreateNestedManyWithoutRatepayerInput
   }
 
   export type RatepayerUncheckedCreateWithoutPropertyLinksInput = {
@@ -13671,6 +15393,7 @@ export namespace Prisma {
     legalName: string
     phone: string
     email?: string | null
+    passwordHash?: string | null
     regionId: string
     assemblyId: string
     locationGeo: JsonNullValueInput | InputJsonValue
@@ -13678,6 +15401,7 @@ export namespace Prisma {
     createdAt?: Date | string
     updatedAt?: Date | string
     verifications?: RatepayerVerificationUncheckedCreateNestedManyWithoutRatepayerInput
+    otps?: RatepayerOtpUncheckedCreateNestedManyWithoutRatepayerInput
   }
 
   export type RatepayerCreateOrConnectWithoutPropertyLinksInput = {
@@ -13733,6 +15457,7 @@ export namespace Prisma {
     legalName?: StringFieldUpdateOperationsInput | string
     phone?: StringFieldUpdateOperationsInput | string
     email?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: NullableStringFieldUpdateOperationsInput | string | null
     regionId?: StringFieldUpdateOperationsInput | string
     assemblyId?: StringFieldUpdateOperationsInput | string
     locationGeo?: JsonNullValueInput | InputJsonValue
@@ -13740,6 +15465,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     verifications?: RatepayerVerificationUpdateManyWithoutRatepayerNestedInput
+    otps?: RatepayerOtpUpdateManyWithoutRatepayerNestedInput
   }
 
   export type RatepayerUncheckedUpdateWithoutPropertyLinksInput = {
@@ -13749,6 +15475,7 @@ export namespace Prisma {
     legalName?: StringFieldUpdateOperationsInput | string
     phone?: StringFieldUpdateOperationsInput | string
     email?: NullableStringFieldUpdateOperationsInput | string | null
+    passwordHash?: NullableStringFieldUpdateOperationsInput | string | null
     regionId?: StringFieldUpdateOperationsInput | string
     assemblyId?: StringFieldUpdateOperationsInput | string
     locationGeo?: JsonNullValueInput | InputJsonValue
@@ -13756,6 +15483,7 @@ export namespace Prisma {
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     verifications?: RatepayerVerificationUncheckedUpdateManyWithoutRatepayerNestedInput
+    otps?: RatepayerOtpUncheckedUpdateManyWithoutRatepayerNestedInput
   }
 
   export type PropertyClaimDocumentUpsertWithWhereUniqueWithoutLinkInput = {
@@ -13882,6 +15610,16 @@ export namespace Prisma {
     createdAt?: Date | string
   }
 
+  export type RatepayerOtpCreateManyRatepayerInput = {
+    id?: string
+    purpose: string
+    codeHash: string
+    expiresAt: Date | string
+    consumedAt?: Date | string | null
+    attempts?: number
+    createdAt?: Date | string
+  }
+
   export type RatepayerVerificationUpdateWithoutRatepayerInput = {
     id?: StringFieldUpdateOperationsInput | string
     provider?: StringFieldUpdateOperationsInput | string
@@ -13947,6 +15685,36 @@ export namespace Prisma {
     claimStatus?: StringFieldUpdateOperationsInput | string
     effectiveFrom?: DateTimeFieldUpdateOperationsInput | Date | string
     effectiveTo?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RatepayerOtpUpdateWithoutRatepayerInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    purpose?: StringFieldUpdateOperationsInput | string
+    codeHash?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    consumedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RatepayerOtpUncheckedUpdateWithoutRatepayerInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    purpose?: StringFieldUpdateOperationsInput | string
+    codeHash?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    consumedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
+    createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
+  }
+
+  export type RatepayerOtpUncheckedUpdateManyWithoutRatepayerInput = {
+    id?: StringFieldUpdateOperationsInput | string
+    purpose?: StringFieldUpdateOperationsInput | string
+    codeHash?: StringFieldUpdateOperationsInput | string
+    expiresAt?: DateTimeFieldUpdateOperationsInput | Date | string
+    consumedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
+    attempts?: IntFieldUpdateOperationsInput | number
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
 

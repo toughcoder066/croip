@@ -16,6 +16,12 @@ export class ForbiddenError extends AppError {
   }
 }
 
+export class UnauthorizedError extends AppError {
+  constructor(message = 'Invalid credentials') {
+    super(401, 'UNAUTHORIZED', message);
+  }
+}
+
 export class NotFoundError extends AppError {
   constructor(message = 'The requested resource was not found') {
     super(404, 'NOT_FOUND', message);

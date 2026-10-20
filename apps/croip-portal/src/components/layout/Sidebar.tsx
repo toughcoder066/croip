@@ -18,6 +18,7 @@ import type { MenuGroupSubItem, MenuItem, MenuLeafSubItem, MenuSubItem, NavItem 
 
 // Component Imports
 import LogoSvg from '@/assets/svg/logo'
+import { useUserSession } from '@/context/user-session-context'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import {
   DropdownMenu,
@@ -481,20 +482,16 @@ const SidebarLayout = () => {
   }, [])
 
   // User Role & Oversight Switcher
+  const { user } = useUserSession()
   const [userRole, setUserRole] = useState<string>('SUPER_ADMIN')
   const [activeRoleView, setActiveRoleView] = useState<string>('SUPER_ADMIN')
 
   useEffect(() => {
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => {
-        if (data.user?.role) {
-          setUserRole(data.user.role)
-          setActiveRoleView(data.user.role)
-        }
-      })
-      .catch(() => {})
-  }, [])
+    if (user?.role) {
+      setUserRole(user.role)
+      setActiveRoleView(prev => (prev === 'SUPER_ADMIN' || prev === user.role ? user.role! : prev))
+    }
+  }, [user?.role])
 
   // Nav groups filtered by active role view
   const navGroups = useMemo(() => {

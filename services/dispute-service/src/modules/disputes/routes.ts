@@ -65,16 +65,17 @@ export const disputeRoutes: FastifyPluginAsync = async (app) => {
     return service.listMyDisputes(request.auth.subject);
   });
 
-  app.get<{ Querystring: { status?: string; assignedToPersonnelId?: string } }>('/disputes', {
+  app.get<{ Querystring: { status?: string; assignedToPersonnelId?: string; raisedByRatepayerId?: string } }>('/disputes', {
     preHandler: app.requirePermissions(['disputes:read']),
     schema: {
       tags: ['Disputes'],
-      summary: 'Review queue: list disputes, optionally filtered by status or assignee',
+      summary: 'Review queue: list disputes, optionally filtered by status, assignee, or ratepayer',
       querystring: {
         type: 'object',
         properties: {
           status: { type: 'string', enum: ['OPEN', 'UNDER_REVIEW', 'RESOLVED', 'REJECTED'] },
-          assignedToPersonnelId: { type: 'string', format: 'uuid' }
+          assignedToPersonnelId: { type: 'string', format: 'uuid' },
+          raisedByRatepayerId: { type: 'string', format: 'uuid' }
         }
       },
       response: { 200: { type: 'array', items: disputeRef }, 401: problemRef, 403: problemRef }

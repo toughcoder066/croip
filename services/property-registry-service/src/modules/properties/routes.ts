@@ -1,15 +1,26 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { propertyService, type CreatePropertyInput, type UploadPremisesDocumentInput, type SubmitVerificationInput, type ReviewVerificationInput } from './service.js';
-import { problemSchema, propertyResponseSchema, createPropertyBodySchema, createUnitBodySchema, uploadPremisesDocumentBodySchema, submitVerificationBodySchema, reviewVerificationBodySchema, verificationResponseSchema } from './schemas.js';
+import {
+  problemSchema,
+  propertyResponseSchema,
+  createPropertyBodySchema,
+  createBatchPropertiesBodySchema,
+  batchPropertiesResponseSchema,
+  createUnitBodySchema,
+  uploadPremisesDocumentBodySchema,
+  submitVerificationBodySchema,
+  reviewVerificationBodySchema,
+  verificationResponseSchema
+} from './schemas.js';
 
 export const propertyRoutes: FastifyPluginAsync = async (app) => {
   const service = propertyService(app);
 
-  app.post<{ Body: Omit<CreatePropertyInput, 'concessionId' | 'assemblyId' | 'actorId'> }>('/properties', {
-    preHandler: app.requirePermissions(['properties:manage']),
+  app.post<{ Body: Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType'> & { assemblyId?: string } }>('/properties', {
+    preHandler: app.authenticateStaffOrRatepayer(['properties:manage']),
     schema: {
       tags: ['Property Registry'],
-      summary: 'Register landed property parcel into national cadastre',
+      summary: 'Register landed property parcel into national cadastre — concession action (restricted to assigned MMDA) or ratepayer self-service with bearer token',
       body: createPropertyBodySchema,
       response: {
         201: propertyResponseSchema,
@@ -21,24 +32,91 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       }
     }
   }, async (request, reply) => {
+    const isRatepayer = request.auth.actorType === 'RATEPAYER';
     const created = await service.createProperty({
       ...request.body,
+      // A ratepayer can only ever register a property as themselves — the body's own
+      // createdByRatepayerId/registrationSource are ignored for this actor type so one
+      // ratepayer can't claim to be registering on another's behalf.
+      ...(isRatepayer ? { createdByRatepayerId: request.auth.subject, registrationSource: 'RATEPAYER' as const } : { registrationSource: 'CONCESSION' as const }),
       concessionId: request.auth.concessionId,
-      assemblyId: request.auth.assemblyId,
-      actorId: request.auth.subject
+      assemblyId: request.body.assemblyId || request.auth.assemblyId,
+      actorId: request.auth.subject,
+      actorType: request.auth.actorType
     });
+
+    if (isRatepayer) {
+      // Best-effort: the property is already correctly attributed in this service's own
+      // database (createdByRatepayerId above) regardless of whether this call succeeds —
+      // this just propagates the link to ratepayer-service's own relationship table so
+      // the ratepayer sees it under "my properties". Forwards the same ratepayer bearer
+      // token the caller used for this request, so ratepayer-service's authenticateRatepayer
+      // resolves the ratepayer id itself rather than trusting a body field.
+      try {
+        const response = await fetch(`${app.config.RATEPAYER_SERVICE_URL}/v1/ratepayers/me/properties/link`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(request.headers.authorization ? { Authorization: request.headers.authorization } : {})
+          },
+          body: JSON.stringify({ propertyId: created.id, unitId: created.defaultUnitId }),
+          signal: AbortSignal.timeout(5000)
+        });
+        if (!response.ok) {
+          request.log.error({ status: response.status, body: await response.text() }, 'Failed to link self-registered property to ratepayer profile');
+        }
+      } catch (err) {
+        request.log.error({ err }, 'Failed to reach ratepayer-service to link self-registered property');
+      }
+    }
+
     return reply.code(201).send(created);
   });
 
-  app.get('/properties', {
+  app.post<{ Body: { properties: Array<Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType'>> } }>('/properties/batch', {
+    preHandler: app.authenticateStaffOrRatepayer(['properties:manage']),
+    schema: {
+      tags: ['Property Registry'],
+      summary: 'Concession registers a batch of landed properties within their assigned MMDA territory',
+      body: createBatchPropertiesBodySchema,
+      response: {
+        201: batchPropertiesResponseSchema,
+        400: problemSchema,
+        401: problemSchema,
+        403: problemSchema,
+        409: problemSchema,
+        503: problemSchema
+      }
+    }
+  }, async (request, reply) => {
+    if (request.auth.actorType === 'RATEPAYER') {
+      throw app.httpErrors.forbidden('Batch property registration is only available to concessionaires. Ratepayers can register individual properties.');
+    }
+
+    const createdList = await service.createBatchProperties({
+      properties: request.body.properties,
+      concessionId: request.auth.concessionId,
+      actorId: request.auth.subject,
+      actorType: request.auth.actorType
+    });
+
+    return reply.code(201).send({
+      success: true,
+      count: createdList.length,
+      properties: createdList
+    });
+  });
+
+  app.get<{ Querystring: { assemblyId?: string } }>('/properties', {
     preHandler: app.requirePermissions(['properties:read']),
     schema: {
       tags: ['Property Registry'],
-      summary: 'Search / list properties within caller assembly context',
+      summary: 'Search / list properties platform-wide, optionally filtered to one MMDA',
+      querystring: { type: 'object', properties: { assemblyId: { type: 'string', format: 'uuid' } } },
       response: { 200: { type: 'array', items: propertyResponseSchema }, 401: problemSchema, 403: problemSchema }
     }
   }, async (request) => {
-    return service.listProperties(request.auth.assemblyId);
+    return service.listProperties(request.query?.assemblyId);
   });
 
   app.get<{ Params: { id: string } }>('/properties/:id', {
@@ -50,7 +128,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema, 404: problemSchema }
     }
   }, async (request) => {
-    return service.getProperty(request.params.id, request.auth.assemblyId);
+    return service.getProperty(request.params.id);
   });
 
   app.post<{ Params: { id: string }; Body: { unitIdentifier: string; unitType?: string; floorLevel?: number } }>('/properties/:id/units', {

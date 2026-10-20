@@ -25,19 +25,10 @@ interface UserSession {
   createdAt?: string
 }
 
-const UserProfile = () => {
-  const [user, setUser] = useState<UserSession | null>(null)
+import { useUserSession } from '@/context/user-session-context'
 
-  useEffect(() => {
-    fetch('/api/auth/me')
-      .then(res => res.json())
-      .then(data => {
-        if (data.authenticated && data.user) {
-          setUser(data.user)
-        }
-      })
-      .catch(() => {})
-  }, [])
+const UserProfile = () => {
+  const { user } = useUserSession()
 
   const displayName = user?.fullName || 'CROIP Super Administrator'
   const roleDisplay = user?.roleName || user?.role || 'Super Administrator'

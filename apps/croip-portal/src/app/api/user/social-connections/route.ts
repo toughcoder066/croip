@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 
-import { getTokenSession } from '@/lib/token-store'
+import { touchTokenSession } from '@/lib/token-store'
 import { ZITADEL_ISSUER } from '@/lib/zitadel'
 
 export type SocialProviderId = 'google' | 'microsoft' | 'github' | 'apple'
@@ -38,8 +38,9 @@ async function getSessionAccessToken(): Promise<string | null> {
 
   try {
     const session = JSON.parse(sessionCookie.value)
+    const tokens = await touchTokenSession(session.tokenSessionId)
 
-    return getTokenSession(session.tokenSessionId)?.accessToken ?? null
+    return tokens?.accessToken ?? null
   } catch {
     return null
   }

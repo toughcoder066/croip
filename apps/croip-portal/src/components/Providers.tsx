@@ -5,6 +5,7 @@ import type { ReactNode } from 'react'
 import { ThemeProvider } from './ThemeProvider'
 import { SidebarProvider } from './ui/sidebar'
 import { TooltipProvider } from './ui/tooltip'
+import { UserSessionProvider } from '@/context/user-session-context'
 
 type Props = {
   children: ReactNode
@@ -15,7 +16,9 @@ const Providers = ({ children, sidebarDefaultOpen }: Props) => {
   return (
     <ThemeProvider attribute='class' defaultTheme='system' enableSystem={true}>
       <TooltipProvider>
-        <SidebarProvider defaultOpen={sidebarDefaultOpen}>{children}</SidebarProvider>
+        <UserSessionProvider>
+          <SidebarProvider defaultOpen={sidebarDefaultOpen}>{children}</SidebarProvider>
+        </UserSessionProvider>
       </TooltipProvider>
     </ThemeProvider>
   )

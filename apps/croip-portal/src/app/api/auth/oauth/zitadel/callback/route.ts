@@ -136,7 +136,7 @@ export async function GET(request: Request) {
   // The access token alone can run 6-7KB once it carries the full project-role claim
   // set — far past the ~4KB a single cookie can hold. Keep the tokens server-side,
   // referenced from the cookie by a short session ID, rather than embedding them.
-  const tokenSessionId = createTokenSession(tokens.access_token, tokens.id_token, tokens.expires_in)
+  const tokenSessionId = createTokenSession(tokens.access_token, tokens.id_token, tokens.expires_in, tokens.refresh_token ?? null)
 
   const sessionUser = {
     id: governanceUser?.id || String(claims.sub),

@@ -17,8 +17,11 @@ export async function GET(_request: Request, { params }: RouteProps) {
   try {
     const verifications = await croipApi.propertyRegistry.listVerifications(id)
     return NextResponse.json({ success: true, data: verifications })
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message?.includes('404')) {
+      return NextResponse.json({ success: true, data: [] })
+    }
     console.error(`Failed to fetch verifications for property ${id}:`, error)
-    return NextResponse.json({ success: false, error: 'Failed to fetch property verifications' }, { status: 500 })
+    return NextResponse.json({ success: false, error: error?.message || 'Failed to fetch property verifications', data: [] }, { status: 500 })
   }
 }

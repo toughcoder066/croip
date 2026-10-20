@@ -3,6 +3,7 @@ import { domainEvent } from '../../events/envelope.js';
 import { appendOutboxEvent } from '../../events/outbox.js';
 import { NotFoundError, BadRequestError, ForbiddenError, ConflictError, ServiceUnavailableError } from '../../lib/errors.js';
 import { getServiceAccessToken } from '../../lib/zitadel-client.js';
+import { doPolygonsOverlap } from '../../lib/geo.js';
 
 interface DetectZoneForPolygonResult {
   status: 'MATCHED' | 'NO_MATCH' | 'CONFLICT';
@@ -21,7 +22,7 @@ export interface PropertyDocumentInput {
 }
 
 export interface CreatePropertyInput {
-  code: string;
+  code?: string;
   accountNumber?: string;
   propertyName?: string;
   propertyClass?: string;
@@ -35,8 +36,16 @@ export interface CreatePropertyInput {
   createdByRatepayerId?: string;
   documents?: PropertyDocumentInput[];
   concessionId: string;
-  assemblyId: string;
+  assemblyId?: string;
   actorId: string;
+  actorType?: 'RATEPAYER' | 'CONCESSION' | 'USER' | 'SERVICE';
+}
+
+export interface CreateBatchPropertyInput {
+  properties: Array<Omit<CreatePropertyInput, 'concessionId' | 'assemblyId' | 'actorId' | 'actorType'>>;
+  concessionId: string;
+  actorId: string;
+  actorType?: 'RATEPAYER' | 'CONCESSION' | 'USER' | 'SERVICE';
 }
 
 export interface SubmitVerificationInput {
@@ -81,17 +90,79 @@ export interface UploadPremisesDocumentInput {
   actorId: string;
 }
 
-// Zone-membership guard: a property's footprint must fall inside exactly one drawn MMDA
-// boundary before it can be registered, so two assemblies can never end up disputing the
-// same parcel and no property is silently orphaned outside every known MMDA. Calls Shared
-// Services (the owner of boundary geometry) synchronously rather than keeping a local copy —
-// simplest to reason about, at the cost of property registration depending on Shared Services
-// being up.
+const assignedAssembliesCache = new Map<string, { assemblies: string[]; expiresAt: number }>();
+
+/**
+ * Fetches the active MMDAs assigned to a concession from Platform Governance Service (:3010).
+ * Results are cached in-memory with a short TTL to keep boundary enforcement fast.
+ */
+export async function getConcessionAssignedAssemblies(
+  app: FastifyInstance,
+  concessionId: string,
+  fallbackAssemblyId?: string
+): Promise<string[]> {
+  const cached = assignedAssembliesCache.get(concessionId);
+  if (cached && Date.now() < cached.expiresAt) {
+    return cached.assemblies;
+  }
+
+  const assemblies = new Set<string>();
+  if (fallbackAssemblyId && fallbackAssemblyId !== '00000000-0000-0000-0000-000000000000') {
+    assemblies.add(fallbackAssemblyId);
+  }
+
+  try {
+    const headers: Record<string, string> =
+      app.config.AUTH_MODE === 'zitadel'
+        ? { Authorization: `Bearer ${await getServiceAccessToken(app.config)}` }
+        : { 'x-dev-subject': 'property-registry-service', 'x-dev-permissions': 'concessionaires:read' };
+
+    const response = await fetch(`${app.config.PLATFORM_GOVERNANCE_URL}/v1/concessions/${concessionId}/assemblies`, {
+      method: 'GET',
+      headers,
+      signal: AbortSignal.timeout(3000)
+    });
+
+    if (response.ok) {
+      const list = (await response.json()) as Array<{ assemblyId: string; status?: string }>;
+      for (const item of list) {
+        if (!item.status || item.status === 'ACTIVE') {
+          assemblies.add(item.assemblyId);
+        }
+      }
+    }
+  } catch (err) {
+    app.log.warn({ err, concessionId }, 'Could not fetch assigned assemblies from Platform Governance Service');
+  }
+
+  const result = Array.from(assemblies);
+  if (result.length > 0) {
+    assignedAssembliesCache.set(concessionId, {
+      assemblies: result,
+      expiresAt: Date.now() + 60_000
+    });
+  }
+  return result;
+}
+
+interface ZoneValidationOptions {
+  isRatepayer: boolean;
+  concessionId?: string | undefined;
+  allowedAssemblyIds?: string[] | undefined;
+  propertyCode?: string | undefined;
+}
+
+/**
+ * Zone-membership guard:
+ * 1. Checks that the property's polygon footprint falls inside exactly one registered MMDA boundary.
+ * 2. For concession registrations, enforces that the detected MMDA is strictly within the concession's
+ *    assigned territorial boundaries.
+ */
 async function assertZoneMembership(
   app: FastifyInstance,
   polygonGeoJson: Record<string, unknown>,
-  claimedAssemblyId: string
-): Promise<void> {
+  options: ZoneValidationOptions
+): Promise<{ id: string; name: string; code: string }> {
   let result: DetectZoneForPolygonResult;
 
   try {
@@ -119,137 +190,477 @@ async function assertZoneMembership(
     );
   }
 
-  if (result.status === 'NO_MATCH') {
+  const prefix = options.propertyCode ? `Property "${options.propertyCode}": ` : '';
+
+  if (result.status === 'NO_MATCH' || !result.assembly) {
     throw new BadRequestError(
-      'This property boundary does not fall within any registered MMDA boundary. Draw the MMDA boundary in Zones & Boundaries before registering properties inside it.'
+      `${prefix}This property boundary does not fall within any registered MMDA boundary. Draw the MMDA boundary in Zones & Boundaries before registering properties inside it.`
     );
   }
 
   if (result.status === 'CONFLICT') {
     throw new ConflictError(
-      `This property boundary overlaps more than one MMDA: ${result.matchedAssemblies.map((a) => `${a.name} (${a.code})`).join(', ')}. Fix the overlapping MMDA boundaries in Zones & Boundaries, or correct the property's footprint, before registering it.`,
+      `${prefix}This property boundary overlaps more than one MMDA: ${result.matchedAssemblies.map((a) => `${a.name} (${a.code})`).join(', ')}. Fix the overlapping MMDA boundaries in Zones & Boundaries, or correct the property's footprint, before registering it.`,
       { matchedAssemblies: result.matchedAssemblies }
     );
   }
 
-  // MATCHED, but to an assembly other than the one the caller is registering under — the
-  // property sits in a different MMDA's territory than claimed. This is the same "zone
-  // conflict" case as above, just caught against the caller's own context rather than
-  // against another drawn boundary.
-  if (result.assembly && result.assembly.id !== claimedAssemblyId) {
-    throw new ConflictError(
-      `This property boundary falls within ${result.assembly.name} (${result.assembly.code}), not the assembly you're registering it under. Register it under the correct MMDA, or draw/fix the MMDA boundaries in Zones & Boundaries if this is wrong.`,
-      { matchedAssembly: result.assembly, claimedAssemblyId }
-    );
+  // Concessions cannot create properties outside of their assigned MMDA
+  if (!options.isRatepayer) {
+    const allowed = options.allowedAssemblyIds ?? [];
+    if (allowed.length > 0 && !allowed.includes(result.assembly.id)) {
+      throw new ForbiddenError(
+        `${prefix}Concession is not authorized to register properties outside of its assigned MMDA. This property falls within ${result.assembly.name} (${result.assembly.code}), which is not assigned to concession ${options.concessionId ?? ''}.`
+      );
+    }
+  }
+
+  return result.assembly;
+}
+
+/**
+ * Asserts that the candidate property polygon does not spatially overlap or nest within an
+ * existing property's boundary when the property uses are matching or when either property is
+ * a residential house / whole parcel.
+ */
+async function assertNoConflictingOverlap(
+  tx: any,
+  polygonGeoJson: Record<string, unknown>,
+  details: {
+    propertyUse?: string | undefined;
+    assemblyId: string;
+    propertyCode?: string | undefined;
+    excludePropertyId?: string | undefined;
+  }
+) {
+  const existingProperties = await tx.property.findMany({
+    where: {
+      assemblyId: details.assemblyId,
+      ...(details.excludePropertyId ? { id: { not: details.excludePropertyId } } : {})
+    },
+    select: {
+      id: true,
+      code: true,
+      propertyName: true,
+      propertyUse: true,
+      propertyClass: true,
+      polygonGeoJson: true
+    }
+  });
+
+  const candidateUse = (details.propertyUse || 'RESIDENTIAL').toUpperCase();
+
+  for (const existing of existingProperties) {
+    if (!existing.polygonGeoJson) continue;
+
+    if (doPolygonsOverlap(polygonGeoJson, existing.polygonGeoJson)) {
+      const existingUse = (existing.propertyUse || 'RESIDENTIAL').toUpperCase();
+      const hasMatchingUse = candidateUse === existingUse;
+      const isResidentialConflict = candidateUse === 'RESIDENTIAL' || existingUse === 'RESIDENTIAL';
+
+      if (hasMatchingUse || isResidentialConflict) {
+        const propDesc = existing.propertyName
+          ? `"${existing.propertyName}" (${existing.code})`
+          : `property ${existing.code}`;
+
+        throw new ConflictError(
+          `Property boundary conflict: The specified polygon overlaps with or is within the boundary of existing registered ${propDesc} with matching use "${existing.propertyUse}". Properties of matching use cannot share or overlap the same parcel footprint.`
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Generates the next sequential property code for an MMDA:
+ * - Ratepayer: ${assemblyCode}-SELF-XXXX (e.g. GH0701-SELF-0004)
+ * - Concession: ${assemblyCode}-XXXX (e.g. GH0701-0003)
+ */
+async function generatePropertyCode(
+  tx: any,
+  assemblyCode: string,
+  isRatepayer: boolean,
+  reservedCodes?: Set<string>
+): Promise<string> {
+  const prefix = isRatepayer ? `${assemblyCode}-SELF-` : `${assemblyCode}-`;
+
+  const existingProperties = await tx.property.findMany({
+    where: {
+      code: {
+        startsWith: prefix
+      }
+    },
+    select: {
+      code: true
+    }
+  });
+
+  let maxSeq = 0;
+  for (const p of existingProperties) {
+    if (!isRatepayer && p.code.startsWith(`${assemblyCode}-SELF-`)) {
+      continue;
+    }
+    const suffix = p.code.slice(prefix.length);
+    if (/^\d{4}$/.test(suffix)) {
+      const num = parseInt(suffix, 10);
+      if (num > maxSeq) {
+        maxSeq = num;
+      }
+    }
+  }
+
+  let candidateSeq = maxSeq + 1;
+  while (true) {
+    const candidateCode = `${prefix}${String(candidateSeq).padStart(4, '0')}`;
+    if (reservedCodes && reservedCodes.has(candidateCode)) {
+      candidateSeq++;
+      continue;
+    }
+
+    const existing = await tx.property.findUnique({
+      where: { code: candidateCode },
+      select: { id: true }
+    });
+    if (!existing) {
+      if (reservedCodes) {
+        reservedCodes.add(candidateCode);
+      }
+      return candidateCode;
+    }
+    candidateSeq++;
   }
 }
 
 export function propertyService(app: FastifyInstance) {
   return {
     async createProperty(input: CreatePropertyInput) {
-      await assertZoneMembership(app, input.polygonGeoJson, input.assemblyId);
+      const isRatepayerCreation =
+        input.actorType === 'RATEPAYER' ||
+        input.registrationSource === 'RATEPAYER' ||
+        Boolean(input.createdByRatepayerId);
 
-      const isRatepayerCreation = input.registrationSource === 'RATEPAYER' || Boolean(input.createdByRatepayerId);
-
-      // Business Rule: Ownership verification documents are MANDATORY when property is created from ratepayer's end
       if (isRatepayerCreation) {
+        // Business Rule: For ratepayer registration, propertyName and ownership verification documents are strictly required
+        if (!input.propertyName || !input.propertyName.trim()) {
+          throw new BadRequestError('Property name is required when registering a property as a ratepayer.');
+        }
         if (!input.documents || input.documents.length === 0) {
           throw new BadRequestError(
             `Ownership verification documents are required to register a property from the ratepayer's end. Please attach at least one proof of ownership (e.g. Land Title Certificate, Indenture, Building Permit, or Purchase Agreement).`
           );
         }
+      } else {
+        // Business Rule: Concession registration requires all core classification fields
+        const missingFields: string[] = [];
+        if (!input.propertyClass?.trim()) missingFields.push('propertyClass');
+        if (!input.buildingStatus?.trim()) missingFields.push('buildingStatus');
+        if (!input.propertyStatus?.trim()) missingFields.push('propertyStatus');
+        if (!input.propertyUse?.trim()) missingFields.push('propertyUse');
+        if (!input.tenureType?.trim()) missingFields.push('tenureType');
+        if (!input.structureType?.trim()) missingFields.push('structureType');
+
+        if (missingFields.length > 0) {
+          throw new BadRequestError(
+            `The following fields are required for concession property registration: ${missingFields.join(', ')}`
+          );
+        }
       }
 
-      return app.prisma.$transaction(async (tx) => {
-        const property = await tx.property.create({
-          data: {
-            code: input.code,
-            accountNumber: input.accountNumber ?? null,
-            propertyName: input.propertyName ?? null,
-            assemblyId: input.assemblyId,
-            propertyClass: input.propertyClass ?? 'RESIDENTIAL_CLASS_1',
-            buildingStatus: input.buildingStatus ?? 'COMPLETED',
-            propertyStatus: input.propertyStatus ?? 'ASSESSED',
-            propertyUse: input.propertyUse ?? 'RESIDENTIAL',
-            tenureType: input.tenureType ?? 'FREEHOLD',
-            structureType: input.structureType ?? 'CONCRETE',
-            registrationSource: isRatepayerCreation ? 'RATEPAYER' : 'CONCESSION',
-            registeredByConcessionId: isRatepayerCreation ? null : input.concessionId,
-            createdByRatepayerId: input.createdByRatepayerId ?? null,
-            verificationStatus: 'PENDING',
-            polygonGeoJson: input.polygonGeoJson as any
-          }
-        });
+      let allowedAssemblyIds: string[] = [];
+      if (!isRatepayerCreation) {
+        allowedAssemblyIds = await getConcessionAssignedAssemblies(app, input.concessionId, input.assemblyId);
+      }
 
-        // Default unit
-        await tx.propertyUnit.create({
-          data: {
-            propertyId: property.id,
-            unitIdentifier: 'WHOLE_BUILDING',
-            unitType: 'WHOLE_BUILDING',
-            floorLevel: 0
-          }
-        });
-
-        // Save documents if provided
-        if (input.documents && input.documents.length > 0) {
-          for (const doc of input.documents) {
-            await tx.propertyDocument.create({
-              data: {
-                propertyId: property.id,
-                documentType: doc.documentType,
-                documentNumber: doc.documentNumber ?? null,
-                issuingAuthority: doc.issuingAuthority ?? null,
-                issueDate: doc.issueDate ? new Date(doc.issueDate) : null,
-                mediaUrl: doc.mediaUrl,
-                fileSizeBytes: doc.fileSizeBytes ?? null,
-                mimeType: doc.mimeType ?? 'application/pdf',
-                uploadedByActorType: isRatepayerCreation ? 'RATEPAYER' : 'CONCESSION_STAFF',
-                uploadedByActorId: input.actorId,
-                ratepayerId: input.createdByRatepayerId ?? null,
-                verificationStatus: 'PENDING'
-              }
-            });
-          }
-        }
-
-        const evt = domainEvent({
-          eventType: 'PropertyCreated',
-          eventVersion: 1,
-          producer: app.serviceInfo.name,
-          aggregateType: 'Property',
-          aggregateId: property.id,
-          aggregateVersion: 1,
-          concessionId: input.concessionId,
-          assemblyId: input.assemblyId,
-          correlationId: crypto.randomUUID(),
-          data: {
-            propertyId: property.id,
-            code: property.code,
-            assemblyId: property.assemblyId,
-            registrationSource: property.registrationSource,
-            documentCount: input.documents?.length ?? 0
-          }
-        });
-
-        await appendOutboxEvent(tx, 'revenue.property.created.v1', evt);
-
-        return property;
+      const matchedAssembly = await assertZoneMembership(app, input.polygonGeoJson, {
+        isRatepayer: isRatepayerCreation,
+        concessionId: input.concessionId,
+        allowedAssemblyIds,
+        propertyCode: input.code
       });
+
+      const effectiveAssemblyId = matchedAssembly.id;
+
+      try {
+        return await app.prisma.$transaction(async (tx) => {
+          // Spatial constraint: verify candidate polygon does not overlap any existing property of matching use
+          await assertNoConflictingOverlap(tx, input.polygonGeoJson, {
+            propertyUse: input.propertyUse,
+            assemblyId: effectiveAssemblyId,
+            propertyCode: input.code
+          });
+
+          const code = input.code?.trim() || (await generatePropertyCode(tx, matchedAssembly.code, isRatepayerCreation));
+          const effectivePropertyStatus = isRatepayerCreation ? 'UNASSESSED' : input.propertyStatus!;
+
+          const property = await tx.property.create({
+            data: {
+              code,
+              accountNumber: input.accountNumber ?? null,
+              propertyName: input.propertyName ?? null,
+              assemblyId: effectiveAssemblyId,
+              propertyClass: input.propertyClass ?? 'RESIDENTIAL_CLASS_1',
+              buildingStatus: input.buildingStatus ?? 'COMPLETED',
+              propertyStatus: effectivePropertyStatus,
+              propertyUse: input.propertyUse ?? 'RESIDENTIAL',
+              tenureType: input.tenureType ?? 'FREEHOLD',
+              structureType: input.structureType ?? 'CONCRETE',
+              registrationSource: isRatepayerCreation ? 'RATEPAYER' : 'CONCESSION',
+              registeredByConcessionId: isRatepayerCreation ? null : input.concessionId,
+              createdByRatepayerId: isRatepayerCreation ? (input.createdByRatepayerId ?? input.actorId) : null,
+              verificationStatus: 'PENDING',
+              polygonGeoJson: input.polygonGeoJson as any
+            }
+          });
+
+          // Default unit
+          const defaultUnit = await tx.propertyUnit.create({
+            data: {
+              propertyId: property.id,
+              unitIdentifier: 'WHOLE_BUILDING',
+              unitType: 'WHOLE_BUILDING',
+              floorLevel: 0
+            }
+          });
+
+          // Save documents if provided
+          if (input.documents && input.documents.length > 0) {
+            for (const doc of input.documents) {
+              await tx.propertyDocument.create({
+                data: {
+                  propertyId: property.id,
+                  documentType: doc.documentType,
+                  documentNumber: doc.documentNumber ?? null,
+                  issuingAuthority: doc.issuingAuthority ?? null,
+                  issueDate: doc.issueDate ? new Date(doc.issueDate) : null,
+                  mediaUrl: doc.mediaUrl,
+                  fileSizeBytes: doc.fileSizeBytes ?? null,
+                  mimeType: doc.mimeType ?? 'application/pdf',
+                  uploadedByActorType: isRatepayerCreation ? 'RATEPAYER' : 'CONCESSION_STAFF',
+                  uploadedByActorId: input.actorId,
+                  ratepayerId: isRatepayerCreation ? (input.createdByRatepayerId ?? input.actorId) : null,
+                  verificationStatus: 'PENDING'
+                }
+              });
+            }
+          }
+
+          const evt = domainEvent({
+            eventType: 'PropertyCreated',
+            eventVersion: 1,
+            producer: app.serviceInfo.name,
+            aggregateType: 'Property',
+            aggregateId: property.id,
+            aggregateVersion: 1,
+            concessionId: input.concessionId,
+            assemblyId: effectiveAssemblyId,
+            correlationId: crypto.randomUUID(),
+            data: {
+              propertyId: property.id,
+              code: property.code,
+              assemblyId: property.assemblyId,
+              registrationSource: property.registrationSource,
+              documentCount: input.documents?.length ?? 0
+            }
+          });
+
+          await appendOutboxEvent(tx, 'revenue.property.created.v1', evt);
+
+          // defaultUnitId isn't part of the public response schema (fast-json-stringify
+          // strips anything not declared there) — it's only consumed internally, by the
+          // route, to link a self-registered property back to the ratepayer in
+          // ratepayer-service right after this transaction commits.
+          return { ...property, defaultUnitId: defaultUnit.id };
+        });
+      } catch (err: any) {
+        if (err?.code === 'P2002') {
+          throw new ConflictError(`Property with code "${input.code}" already exists.`);
+        }
+        throw err;
+      }
     },
 
-    async listProperties(assemblyId: string) {
+    async createBatchProperties(input: CreateBatchPropertyInput) {
+      if (input.actorType === 'RATEPAYER') {
+        throw new ForbiddenError('Batch property registration is only available to concessionaires. Ratepayers can register individual properties.');
+      }
+      if (!input.properties || input.properties.length === 0) {
+        throw new BadRequestError('At least one property must be provided in the batch');
+      }
+      if (input.properties.length > 500) {
+        throw new BadRequestError('Batch size exceeds maximum limit of 500 properties');
+      }
+
+      const allowedAssemblyIds = await getConcessionAssignedAssemblies(app, input.concessionId);
+
+      // Pre-validate all items in the batch to ensure all boundaries fall inside assigned MMDA
+      const validatedList: Array<{
+        property: (typeof input.properties)[number];
+        assembly: { id: string; name: string; code: string };
+      }> = [];
+
+      for (const [i, item] of input.properties.entries()) {
+        if (!item.polygonGeoJson) {
+          throw new BadRequestError(`Property ${item.code ? `"${item.code}"` : `at index ${i}`} is missing required polygonGeoJson boundary`);
+        }
+
+        const missingFields: string[] = [];
+        if (!item.propertyClass?.trim()) missingFields.push('propertyClass');
+        if (!item.buildingStatus?.trim()) missingFields.push('buildingStatus');
+        if (!item.propertyStatus?.trim()) missingFields.push('propertyStatus');
+        if (!item.propertyUse?.trim()) missingFields.push('propertyUse');
+        if (!item.tenureType?.trim()) missingFields.push('tenureType');
+        if (!item.structureType?.trim()) missingFields.push('structureType');
+
+        if (missingFields.length > 0) {
+          throw new BadRequestError(
+            `Property ${item.code ? `"${item.code}"` : `at index ${i}`} is missing required concession fields: ${missingFields.join(', ')}`
+          );
+        }
+
+        const matched = await assertZoneMembership(app, item.polygonGeoJson, {
+          isRatepayer: false,
+          concessionId: input.concessionId,
+          allowedAssemblyIds,
+          propertyCode: item.code
+        });
+
+        validatedList.push({
+          property: item,
+          assembly: matched
+        });
+      }
+
+      try {
+        return await app.prisma.$transaction(async (tx) => {
+          const createdList = [];
+          const reservedCodes = new Set<string>();
+
+          for (const { property: item, assembly } of validatedList) {
+            // Spatial constraint: check against existing database properties in this MMDA
+            await assertNoConflictingOverlap(tx, item.polygonGeoJson, {
+              propertyUse: item.propertyUse,
+              assemblyId: assembly.id,
+              propertyCode: item.code
+            });
+
+            // Check against previously created properties in the same batch
+            for (const prev of createdList) {
+              if (doPolygonsOverlap(item.polygonGeoJson, prev.polygonGeoJson)) {
+                const prevUse = (prev.propertyUse || 'RESIDENTIAL').toUpperCase();
+                const currUse = (item.propertyUse || 'RESIDENTIAL').toUpperCase();
+                if (currUse === prevUse || currUse === 'RESIDENTIAL' || prevUse === 'RESIDENTIAL') {
+                  throw new ConflictError(
+                    `Batch boundary conflict: Property "${item.code || 'item'}" overlaps with another property in this batch ("${prev.code}") with matching use "${prev.propertyUse}".`
+                  );
+                }
+              }
+            }
+
+            const code = item.code?.trim() || (await generatePropertyCode(tx, assembly.code, false, reservedCodes));
+
+            const property = await tx.property.create({
+              data: {
+                code,
+                accountNumber: item.accountNumber ?? null,
+                propertyName: item.propertyName ?? null,
+                assemblyId: assembly.id,
+                propertyClass: item.propertyClass!,
+                buildingStatus: item.buildingStatus!,
+                propertyStatus: item.propertyStatus!,
+                propertyUse: item.propertyUse!,
+                tenureType: item.tenureType!,
+                structureType: item.structureType!,
+                registrationSource: 'CONCESSION',
+                registeredByConcessionId: input.concessionId,
+                createdByRatepayerId: null,
+                verificationStatus: 'PENDING',
+                polygonGeoJson: item.polygonGeoJson as any
+              }
+            });
+
+            const defaultUnit = await tx.propertyUnit.create({
+              data: {
+                propertyId: property.id,
+                unitIdentifier: 'WHOLE_BUILDING',
+                unitType: 'WHOLE_BUILDING',
+                floorLevel: 0
+              }
+            });
+
+            if (item.documents && item.documents.length > 0) {
+              for (const doc of item.documents) {
+                await tx.propertyDocument.create({
+                  data: {
+                    propertyId: property.id,
+                    documentType: doc.documentType,
+                    documentNumber: doc.documentNumber ?? null,
+                    issuingAuthority: doc.issuingAuthority ?? null,
+                    issueDate: doc.issueDate ? new Date(doc.issueDate) : null,
+                    mediaUrl: doc.mediaUrl,
+                    fileSizeBytes: doc.fileSizeBytes ?? null,
+                    mimeType: doc.mimeType ?? 'application/pdf',
+                    uploadedByActorType: 'CONCESSION_STAFF',
+                    uploadedByActorId: input.actorId,
+                    verificationStatus: 'PENDING'
+                  }
+                });
+              }
+            }
+
+            const evt = domainEvent({
+              eventType: 'PropertyCreated',
+              eventVersion: 1,
+              producer: app.serviceInfo.name,
+              aggregateType: 'Property',
+              aggregateId: property.id,
+              aggregateVersion: 1,
+              concessionId: input.concessionId,
+              assemblyId: assembly.id,
+              correlationId: crypto.randomUUID(),
+              data: {
+                propertyId: property.id,
+                code: property.code,
+                assemblyId: property.assemblyId,
+                registrationSource: property.registrationSource,
+                documentCount: item.documents?.length ?? 0
+              }
+            });
+
+            await appendOutboxEvent(tx, 'revenue.property.created.v1', evt);
+
+            createdList.push({ ...property, defaultUnitId: defaultUnit.id });
+          }
+
+          return createdList;
+        });
+      } catch (err: any) {
+        if (err?.code === 'P2002') {
+          throw new ConflictError('One or more properties in the batch already exist (duplicate code constraint violation).');
+        }
+        throw err;
+      }
+    },
+
+    // Platform-wide by default — matches the other oversight list/get endpoints
+    // (ratepayer directory, bill lookup by number), which were never scoped to a single
+    // assembly either. assemblyId narrows the search when the caller wants one MMDA's
+    // view. Deliberately NOT using the idarms:context claim here at all: that claim is a
+    // single hardcoded value shared by every officer today (there's no per-officer
+    // assembly assignment in the data model yet) and several OTHER services hard-filter
+    // on it as a real UUID with no wildcard support — changing what it contains would
+    // silently break those, so this fix stays local to how these two routes query.
+    async listProperties(assemblyId?: string) {
       return app.prisma.property.findMany({
-        where: { assemblyId },
+        where: assemblyId && assemblyId !== '*' ? { assemblyId } : {},
         include: { documents: true },
         orderBy: { createdAt: 'desc' },
         take: 50
       });
     },
 
-    async getProperty(id: string, assemblyId: string) {
+    async getProperty(id: string, assemblyId?: string) {
       const prop = await app.prisma.property.findFirst({
-        where: { id, assemblyId },
+        where: assemblyId && assemblyId !== '*' ? { id, assemblyId } : { id },
         include: {
           units: true,
           documents: true,
@@ -261,7 +672,10 @@ export function propertyService(app: FastifyInstance) {
     },
 
     async addUnit(propertyId: string, unitIdentifier: string, unitType: string, floorLevel: number, assemblyId: string) {
-      const prop = await app.prisma.property.findFirst({ where: { id: propertyId, assemblyId } });
+      const isScoped = assemblyId && assemblyId !== '*';
+      const prop = await app.prisma.property.findFirst({
+        where: isScoped ? { id: propertyId, assemblyId } : { id: propertyId }
+      });
       if (!prop) throw new NotFoundError('Property not found');
 
       return app.prisma.propertyUnit.create({
@@ -347,8 +761,9 @@ export function propertyService(app: FastifyInstance) {
     // Concessionaire agent submits a field verification; it does not move the property's
     // cached verificationStatus until a concessionaire officer reviews it (see reviewVerification).
     async submitVerification(input: SubmitVerificationInput) {
+      const isScoped = input.assemblyId && input.assemblyId !== '*';
       const property = await app.prisma.property.findFirst({
-        where: { id: input.propertyId, assemblyId: input.assemblyId }
+        where: isScoped ? { id: input.propertyId, assemblyId: input.assemblyId } : { id: input.propertyId }
       });
       if (!property) throw new NotFoundError('Property not found');
 
@@ -449,11 +864,21 @@ export function propertyService(app: FastifyInstance) {
     },
 
     async listVerifications(propertyId: string, assemblyId: string) {
-      const property = await app.prisma.property.findFirst({ where: { id: propertyId, assemblyId } });
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propertyId);
+      const isScoped = assemblyId && assemblyId !== '*';
+      const whereClause: Record<string, unknown> = isUuid
+        ? { OR: [{ id: propertyId }, { code: propertyId }] }
+        : { code: propertyId };
+
+      if (isScoped) {
+        whereClause.assemblyId = assemblyId;
+      }
+
+      const property = await app.prisma.property.findFirst({ where: whereClause });
       if (!property) throw new NotFoundError('Property not found');
 
       return app.prisma.propertyVerification.findMany({
-        where: { propertyId },
+        where: { propertyId: property.id },
         orderBy: { capturedAt: 'desc' }
       });
     },

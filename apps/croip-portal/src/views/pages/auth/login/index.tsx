@@ -23,7 +23,9 @@ const LOGIN_ERROR_MESSAGES: Record<string, string> = {
   invalid_request: 'The sign-in request was invalid — please try again.',
   state_mismatch: 'Your sign-in session expired — please try again.',
   token_exchange_failed: 'CROIP ID could not complete sign-in. Please try again.',
-  invalid_id_token: 'CROIP ID returned an invalid token. Please try again.'
+  invalid_id_token: 'CROIP ID returned an invalid token. Please try again.',
+  inactivity: 'Your session has ended due to inactivity. Please sign in again.',
+  session_expired: 'Your session has expired. Please sign in again to continue.'
 }
 
 const Login = () => {
@@ -31,9 +33,12 @@ const Login = () => {
 
   useEffect(() => {
     const error = searchParams.get('error')
+    const reason = searchParams.get('reason')
 
     if (error) {
       toast.error(LOGIN_ERROR_MESSAGES[error] || 'Sign-in failed. Please try again.')
+    } else if (reason) {
+      toast.info(LOGIN_ERROR_MESSAGES[reason] || 'Please sign in to continue.')
     }
   }, [searchParams])
 

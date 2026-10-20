@@ -10,6 +10,12 @@ export class AppError extends Error {
   }
 }
 
+export class UnauthorizedError extends AppError {
+  constructor(message = 'Authentication required') {
+    super(401, 'UNAUTHORIZED', message);
+  }
+}
+
 export class ForbiddenError extends AppError {
   constructor(message = 'You are not authorised to perform this operation') {
     super(403, 'FORBIDDEN', message);

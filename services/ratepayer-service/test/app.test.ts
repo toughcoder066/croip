@@ -26,3 +26,18 @@ test('unknown routes use the standard problem envelope', async () => {
   assert.ok(response.json().requestId);
   await app.close();
 });
+
+test('POST /v1/ratepayers/claims requires propertyId (400 when missing)', async () => {
+  const app = await buildApp({ config, skipInfrastructure: true });
+  const response = await app.inject({
+    method: 'POST',
+    url: '/v1/ratepayers/claims',
+    payload: {
+      ratepayerId: '00000000-0000-0000-0000-000000000001',
+      documents: [{ documentType: 'INDENTURE', mediaUrl: 'https://example.com/doc.pdf' }]
+    }
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().code, 'VALIDATION_ERROR');
+  await app.close();
+});

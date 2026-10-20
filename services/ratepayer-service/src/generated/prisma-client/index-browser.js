@@ -128,12 +128,24 @@ exports.Prisma.RatepayerScalarFieldEnum = {
   legalName: 'legalName',
   phone: 'phone',
   email: 'email',
+  passwordHash: 'passwordHash',
   regionId: 'regionId',
   assemblyId: 'assemblyId',
   locationGeo: 'locationGeo',
   status: 'status',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.RatepayerOtpScalarFieldEnum = {
+  id: 'id',
+  ratepayerId: 'ratepayerId',
+  purpose: 'purpose',
+  codeHash: 'codeHash',
+  expiresAt: 'expiresAt',
+  consumedAt: 'consumedAt',
+  attempts: 'attempts',
+  createdAt: 'createdAt'
 };
 
 exports.Prisma.RatepayerVerificationScalarFieldEnum = {
@@ -259,6 +271,7 @@ exports.Prisma.NullsOrder = {
 
 exports.Prisma.ModelName = {
   Ratepayer: 'Ratepayer',
+  RatepayerOtp: 'RatepayerOtp',
   RatepayerVerification: 'RatepayerVerification',
   PropertyRatepayerLink: 'PropertyRatepayerLink',
   PropertyClaimDocument: 'PropertyClaimDocument',

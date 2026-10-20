@@ -147,6 +147,14 @@ const DashboardPage = () => {
       changePercentage: 'GH₵ 0.00M total',
       comparisonText: 'Total value across all properties',
       isCurrency: true
+    },
+    {
+      iconName: 'userCheck',
+      title: 'Ratepayer Accounts',
+      value: '0 Registered',
+      changePercentage: '0 Property Claims',
+      comparisonText: 'Ratepayer self-service portal',
+      isCurrency: false
     }
   ])
 
@@ -348,8 +356,8 @@ const DashboardPage = () => {
         isCurrency: true
       },
       {
-        title: 'Message Broker',
-        value: 'RabbitMQ Active',
+        title: 'Ratepayer Accounts',
+        value: `${ratepayersCount} Registered`,
         isCurrency: false
       }
     ],
@@ -577,8 +585,8 @@ const DashboardPage = () => {
         /* 2. OVERSIGHT USER DASHBOARD VIEW (Properties & Valuations)   */
         /* ------------------------------------------------------------- */
         <div className='grid grid-cols-2 gap-6 lg:grid-cols-3'>
-          {/* Top Row: 3 Statistics Cards */}
-          <div className='col-span-full grid gap-6 sm:grid-cols-3 md:max-lg:grid-cols-1'>
+          {/* Top Row: 4 Statistics Cards */}
+          <div className='col-span-full grid gap-6 sm:grid-cols-2 lg:grid-cols-4 md:max-lg:grid-cols-2'>
             {oversightStats.map((card, index) => (
               <StatisticsCard
                 key={index}

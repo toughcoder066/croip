@@ -1,5 +1,14 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { ratepayerService, type RegisterRatepayerInput, type ClaimPropertyInput, type DirectoryFilter } from './service.js';
+import {
+  ratepayerService,
+  type RegisterRatepayerInput,
+  type ClaimPropertyInput,
+  type DirectoryFilter,
+  type LoginInput,
+  type VerifyOtpInput,
+  type UpdateProfileInput,
+  type LinkOwnPropertyInput
+} from './service.js';
 import {
   problemSchema,
   ratepayerResponseSchema,
@@ -7,7 +16,13 @@ import {
   claimPropertyBodySchema,
   directoryResponseSchema,
   reviewVerificationBodySchema,
-  verificationResponseSchema
+  verificationResponseSchema,
+  loginBodySchema,
+  otpRequiredResponseSchema,
+  verifyOtpBodySchema,
+  authTokenResponseSchema,
+  updateProfileBodySchema,
+  linkOwnPropertyBodySchema
 } from './schemas.js';
 
 export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
@@ -26,6 +41,64 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
       actorId: request.id
     });
     return reply.code(201).send(created);
+  });
+
+  app.post<{ Body: LoginInput }>('/auth/login', {
+    schema: {
+      tags: ['Ratepayer Self-Service'],
+      summary: 'Step 1 of login: check phone/email + password, send an OTP to the registered phone',
+      body: loginBodySchema,
+      response: { 200: otpRequiredResponseSchema, 401: problemSchema }
+    }
+  }, async (request) => {
+    return service.login(request.body);
+  });
+
+  app.post<{ Body: VerifyOtpInput }>('/auth/verify-otp', {
+    schema: {
+      tags: ['Ratepayer Self-Service'],
+      summary: 'Step 2 of login: confirm the OTP and receive a ratepayer session token',
+      body: verifyOtpBodySchema,
+      response: { 200: authTokenResponseSchema, 401: problemSchema }
+    }
+  }, async (request) => {
+    return service.verifyOtp(request.body);
+  });
+
+  app.patch<{ Body: UpdateProfileInput }>('/ratepayers/me', {
+    preHandler: app.authenticateRatepayer,
+    schema: {
+      tags: ['Ratepayer Self-Service'],
+      summary: 'Complete or update the signed-in ratepayer\'s own profile',
+      body: updateProfileBodySchema,
+      response: { 200: ratepayerResponseSchema, 401: problemSchema }
+    }
+  }, async (request) => {
+    return service.updateProfile(request.ratepayerAuth.sub, request.body);
+  });
+
+  app.post<{ Body: LinkOwnPropertyInput }>('/ratepayers/me/properties/link', {
+    preHandler: app.authenticateRatepayer,
+    schema: {
+      tags: ['Ratepayer Self-Service'],
+      summary: 'Internal: called by property-registry-service right after a ratepayer self-registers a property, to link it to their own profile',
+      body: linkOwnPropertyBodySchema,
+      response: { 201: { type: 'object', additionalProperties: true }, 401: problemSchema, 404: problemSchema }
+    }
+  }, async (request, reply) => {
+    const link = await service.linkOwnProperty(request.ratepayerAuth.sub, request.body);
+    return reply.code(201).send(link);
+  });
+
+  app.get('/ratepayers/me', {
+    preHandler: app.authenticateRatepayer,
+    schema: {
+      tags: ['Ratepayer Self-Service'],
+      summary: 'Get the signed-in ratepayer\'s own profile',
+      response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema }
+    }
+  }, async (request) => {
+    return service.getRatepayer(request.ratepayerAuth.sub);
   });
 
   app.get<{ Params: { id: string } }>('/ratepayers/:id', {
@@ -139,6 +212,33 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
         verificationId: request.params.verificationId,
         verificationStatus: request.body.verificationStatus
       });
+    }
+  );
+
+  app.patch<{ Params: { id: string }; Body: { status: string } }>(
+    '/ratepayers/:id/status',
+    {
+      preHandler: app.requirePermissions(['ratepayers:manage']),
+      schema: {
+        tags: ['Ratepayer Admin'],
+        summary: 'CROIP portal: oversight official updates a ratepayer account status (ACTIVE, SUSPENDED, DEACTIVATED)',
+        params: {
+          type: 'object',
+          required: ['id'],
+          properties: { id: { type: 'string', format: 'uuid' } }
+        },
+        body: {
+          type: 'object',
+          required: ['status'],
+          properties: {
+            status: { type: 'string', enum: ['ACTIVE', 'SUSPENDED', 'DEACTIVATED'] }
+          }
+        },
+        response: { 200: ratepayerResponseSchema, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
+      }
+    },
+    async (request) => {
+      return service.updateStatus(request.params.id, request.body.status);
     }
   );
 };

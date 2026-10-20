@@ -1,0 +1,4179 @@
+{
+  "info": {
+    "_postman_id": "192456d4-70bc-4369-b4b7-14d736df862f",
+    "name": "CROIP Central Platform API",
+    "description": "Central Revenue Oversight & Integration Platform \u2014 all 11 microservice APIs, organized by WHO calls them rather than which service owns them:\n\n- **1. Ratepayer** \u2014 citizen self-service: register, log in (password + OTP), complete profile, self-service property registration, own bills/disputes, receipt verification.\n- **2. Concession** \u2014 revenue-collection partner field staff: property registration/verification in the field, billing and payment collection, event reporting, reference-data lookups.\n- **3. CROIP Admin** \u2014 central platform/oversight staff: user & RBAC management, concession onboarding, reconciliation, audit, boundary/reference-data management, review/approval steps.\n- **Platform Health Checks** \u2014 infra liveness/readiness, not tied to any persona.\n\nSome endpoints are genuinely cross-cutting (e.g. a property verification is *submitted* by Concession staff but *reviewed* by CROIP Admin) \u2014 each lives under the persona who actually calls that specific endpoint, with a note where the split matters.\n\n**Auth model**\n- Ratepayer: no auth for register/claims/receipt-verification; phone/email + password + OTP issues `{{ratepayer_access_token}}` (HS256, ratepayer-service). Running 'Verify OTP' auto-saves it.\n- Concession & CROIP Admin: both use the same real Zitadel-issued `{{staff_access_token}}` (RBAC permissions decide what each officer can actually do) \u2014 there's no API-only login by design; sign into the portal (http://localhost:3050) as a real officer and copy the access token (see README).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [],
+  "item": [
+    {
+      "name": "1. Ratepayer",
+      "description": "",
+      "item": [
+        {
+          "name": "Auth & Profile",
+          "description": "ratepayer-service \u2014 the only API-level login flow in the platform; everything below needs ratepayer_access_token from 'Login step 2'.",
+          "item": [
+            {
+              "name": "Register (public)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"legalName\": \"{{ratepayer_name}}\",\n  \"phone\": \"{{ratepayer_phone}}\",\n  \"email\": \"{{ratepayer_email}}\",\n  \"password\": \"{{ratepayer_password}}\",\n  \"regionId\": \"{{sample_region_id}}\",\n  \"assemblyId\": \"{{sample_assembly_id}}\",\n  \"locationGeo\": {\n    \"type\": \"Point\",\n    \"coordinates\": [\n      -0.2351,\n      5.5551\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) { pm.environment.set('sample_ratepayer_id', pm.response.json().id); }"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Login step 1: password \u2192 OTP",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/auth/login",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "auth",
+                    "login"
+                  ]
+                },
+                "description": "devOtpCode is only present because no SMS provider is configured in this dev environment \u2014 a production deployment sends it by SMS instead and drops the field.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"identifier\": \"{{ratepayer_phone}}\",\n  \"password\": \"{{ratepayer_password}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) { const j = pm.response.json(); if (j.devOtpCode) pm.environment.set('ratepayer_otp_code', j.devOtpCode); }"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Login step 2: verify OTP \u2192 session token",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/auth/verify-otp",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "auth",
+                    "verify-otp"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"identifier\": \"{{ratepayer_phone}}\",\n  \"otpCode\": \"{{ratepayer_otp_code}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) { pm.environment.set('ratepayer_access_token', pm.response.json().accessToken); }"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Get my own profile",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/me",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "me"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Complete / update my profile",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/me",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "me"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"legalName\": \"{{ratepayer_name}} Jr.\",\n  \"email\": \"{{ratepayer_email}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get a ratepayer profile by id (public)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}"
+                  ]
+                },
+                "description": ""
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "My Properties",
+          "description": "property-registry-service + ratepayer-service \u2014 a property a ratepayer registers directly, or claims from one a concession already registered.",
+          "item": [
+            {
+              "name": "Register a property (self-service)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties"
+                  ]
+                },
+                "description": "Strictly requires ratepayer Bearer session token (HS256). Property is attributed to the logged-in ratepayer (createdByRatepayerId) and automatically linked in ratepayer-service. Ownership documents are mandatory. Spatial restriction: polygons cannot overlap or contain another property parcel if property uses and ownership match (prevents duplicate residential house registrations).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"code\": \"GH0701-SELF-{{$randomInt}}\",\n  \"propertyName\": \"My Residence\",\n  \"propertyUse\": \"RESIDENTIAL\",\n  \"documents\": [\n    {\n      \"documentType\": \"LAND_TITLE_CERTIFICATE\",\n      \"documentNumber\": \"LTC-00982\",\n      \"mediaUrl\": \"https://storage.croip.gov.gh/claims/ltc-00982.pdf\"\n    }\n  ],\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -0.2355,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5545\n        ]\n      ]\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Claim an existing property (public)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/claims",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "claims"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"ratepayerId\": \"{{sample_ratepayer_id}}\",\n  \"propertyId\": \"{{sample_property_id}}\",\n  \"ownershipType\": \"OWNER\",\n  \"documents\": [\n    {\n      \"documentType\": \"INDENTURE\",\n      \"mediaUrl\": \"https://storage.croip.gov.gh/claims/indenture.pdf\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Claim a property by code (public)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/properties/{{sample_property_code}}/claims",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{sample_property_code}}",
+                    "claims"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"propertyId\": \"{{sample_property_id}}\",\n  \"documents\": [\n    {\n      \"documentType\": \"INDENTURE\",\n      \"mediaUrl\": \"https://storage.croip.gov.gh/claims/indenture.pdf\"\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List my linked properties (public)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/properties",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}",
+                    "properties"
+                  ]
+                },
+                "description": ""
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "My Bills & Disputes",
+          "description": "billing-payments-service + dispute-service",
+          "item": [
+            {
+              "name": "My own bills",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{billing_payments_url}}/v1/me/bills",
+                  "host": [
+                    "{{billing_payments_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "me",
+                    "bills"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Raise a dispute",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{dispute_url}}/v1/disputes",
+                  "host": [
+                    "{{dispute_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "disputes"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"disputeType\": \"BILLING\",\n  \"billId\": \"{{sample_bill_id}}\",\n  \"description\": \"Billed amount does not match the posted rate for my property class.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "My own disputes",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{dispute_url}}/v1/me/disputes",
+                  "host": [
+                    "{{dispute_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "me",
+                    "disputes"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Attach evidence to my dispute",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{dispute_url}}/v1/disputes/{{sample_dispute_code}}/evidence",
+                  "host": [
+                    "{{dispute_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "disputes",
+                    "{{sample_dispute_code}}",
+                    "evidence"
+                  ]
+                },
+                "description": "Also usable by the reviewing officer (CROIP Admin) \u2014 same endpoint, same permission check (raise-or-review).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"mediaUrl\": \"https://storage.croip.gov.gh/disputes/evidence-1.pdf\",\n  \"description\": \"Previous year's bill for comparison\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Add a comment to my dispute",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{dispute_url}}/v1/disputes/{{sample_dispute_code}}/comments",
+                  "host": [
+                    "{{dispute_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "disputes",
+                    "{{sample_dispute_code}}",
+                    "comments"
+                  ]
+                },
+                "description": "Also usable by the reviewing officer (CROIP Admin) \u2014 same endpoint, same permission check (raise-or-review).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"comment\": \"Following up on this \\u2014 any update?\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Receipts",
+          "description": "shared-services \u2014 lets a ratepayer (or anyone holding a receipt) confirm it's genuine.",
+          "item": [
+            {
+              "name": "Verify a digital payment receipt (public)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/receipts/{{sample_receipt_id}}/verification",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "receipts",
+                    "{{sample_receipt_id}}",
+                    "verification"
+                  ]
+                },
+                "description": ""
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Concession",
+      "description": "",
+      "item": [
+        {
+          "name": "Properties",
+          "description": "property-registry-service \u2014 a concession's field agents registering and verifying properties in their assigned MMDAs.",
+          "item": [
+            {
+              "name": "Register a property",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties"
+                  ]
+                },
+                "description": "Requires staff/concessionaire Bearer token. Concessions can only register properties whose polygon falls strictly within their assigned MMDA territory (enforced via Shared Services and Platform Governance). Spatial non-overlap restriction: polygons cannot overlap or contain another property parcel when property uses and ownership percentage match. Core classification fields are required; propertyName and documents are optional.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"code\": \"GH0701-{{$randomInt}}\",\n  \"propertyName\": \"Sample Commercial Block\",\n  \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n  \"buildingStatus\": \"COMPLETED\",\n  \"propertyStatus\": \"ASSESSED\",\n  \"propertyUse\": \"COMMERCIAL\",\n  \"tenureType\": \"FREEHOLD\",\n  \"structureType\": \"CONCRETE\",\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -0.2355,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5545\n        ]\n      ]\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Register batch properties",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/batch",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "batch"
+                  ]
+                },
+                "description": "Concession batch registration (up to 500 properties). All properties must fall within the concession's assigned MMDA boundary. Core classification fields are required for each property; code is generated if omitted; propertyName and documents are optional.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"properties\": [\n    {\n      \"code\": \"GH0701-B1-{{$randomInt}}\",\n      \"propertyName\": \"Sample Commercial Block A\",\n      \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n      \"buildingStatus\": \"COMPLETED\",\n      \"propertyStatus\": \"ASSESSED\",\n      \"propertyUse\": \"COMMERCIAL\",\n      \"tenureType\": \"FREEHOLD\",\n      \"structureType\": \"CONCRETE\",\n      \"polygonGeoJson\": {\n        \"type\": \"Polygon\",\n        \"coordinates\": [\n          [\n            [\n              -0.2355,\n              5.5545\n            ],\n            [\n              -0.2355,\n              5.5555\n            ],\n            [\n              -0.2345,\n              5.5555\n            ],\n            [\n              -0.2345,\n              5.5545\n            ],\n            [\n              -0.2355,\n              5.5545\n            ]\n          ]\n        ]\n      }\n    },\n    {\n      \"code\": \"GH0701-B2-{{$randomInt}}\",\n      \"propertyName\": \"Sample Commercial Block B\",\n      \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n      \"buildingStatus\": \"COMPLETED\",\n      \"propertyStatus\": \"ASSESSED\",\n      \"propertyUse\": \"COMMERCIAL\",\n      \"tenureType\": \"FREEHOLD\",\n      \"structureType\": \"CONCRETE\",\n      \"polygonGeoJson\": {\n        \"type\": \"Polygon\",\n        \"coordinates\": [\n          [\n            [\n              -0.2345,\n              5.5545\n            ],\n            [\n              -0.2345,\n              5.5555\n            ],\n            [\n              -0.2335,\n              5.5555\n            ],\n            [\n              -0.2335,\n              5.5545\n            ],\n            [\n              -0.2345,\n              5.5545\n            ]\n          ]\n        ]\n      }\n    }\n  ]\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Search/list properties in own assembly",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get property details",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{sample_property_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Declare sectional sub-unit",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}/units",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{sample_property_id}}",
+                    "units"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"unitIdentifier\": \"SHOP-01\",\n  \"unitType\": \"SHOP\",\n  \"floorLevel\": 0\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Upload ownership docs on-premises",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_code}}/documents",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{sample_property_code}}",
+                    "documents"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"documentType\": \"BUILDING_PERMIT\",\n  \"mediaUrl\": \"https://storage.croip.gov.gh/docs/permit.pdf\",\n  \"staffRef\": \"REV-0045\",\n  \"deviceId\": \"TAB-001\",\n  \"premisesCoordinates\": {\n    \"latitude\": 5.5551,\n    \"longitude\": -0.2351\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List property documents",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_code}}/documents",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{sample_property_code}}",
+                    "documents"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Submit a field verification",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}/verifications",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{sample_property_id}}",
+                    "verifications"
+                  ]
+                },
+                "description": "Reviewed/approved afterwards by CROIP Admin (see that folder's Property Oversight section).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"verifiedByPersonnelId\": \"{{sample_personnel_id}}\",\n  \"verifierCoordinates\": {\n    \"latitude\": 5.5551,\n    \"longitude\": -0.2351\n  },\n  \"isWithinPolygon\": true,\n  \"verifiedSnapshot\": {},\n  \"capturedAt\": \"2026-10-19T12:00:00Z\",\n  \"outcome\": \"VERIFIED\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List field verifications",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}/verifications",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{sample_property_id}}",
+                    "verifications"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Billing & Collection",
+          "description": "billing-payments-service \u2014 issuing bills and collecting payment on behalf of the MMDA.",
+          "item": [
+            {
+              "name": "Issue a bill",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{billing_payments_url}}/v1/bills",
+                  "host": [
+                    "{{billing_payments_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "bills"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"propertyId\": \"{{sample_property_id}}\",\n  \"ratepayerId\": \"{{sample_ratepayer_id}}\",\n  \"billingPeriod\": \"2026-Q4\",\n  \"billType\": \"PROPERTY_RATE\",\n  \"currency\": \"GHS\",\n  \"amountDue\": \"450.00\",\n  \"dueDate\": \"2026-12-31\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get a bill",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{billing_payments_url}}/v1/bills/{{sample_bill_number}}",
+                  "host": [
+                    "{{billing_payments_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "bills",
+                    "{{sample_bill_number}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Record a payment",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{billing_payments_url}}/v1/bills/{{sample_bill_number}}/payments",
+                  "host": [
+                    "{{billing_payments_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "bills",
+                    "{{sample_bill_number}}",
+                    "payments"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"amount\": \"450.00\",\n  \"paymentType\": \"MOBILE_MONEY\",\n  \"externalPaymentRef\": \"MM-20261019-0001\",\n  \"paidByRatepayerId\": \"{{sample_ratepayer_id}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create a payment link",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{billing_payments_url}}/v1/payment-links",
+                  "host": [
+                    "{{billing_payments_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "payment-links"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"billNumber\": \"{{sample_bill_number}}\",\n  \"amount\": \"450.00\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Reporting",
+          "description": "reporting-gateway-service \u2014 a concession's own backend reporting its transaction activity into the platform.",
+          "item": [
+            {
+              "name": "Ingest a single CloudEvent",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{reporting_gateway_url}}/v1/events",
+                  "host": [
+                    "{{reporting_gateway_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "events"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"eventType\": \"revenue.bill.paid.v1\",\n  \"eventVersion\": 1,\n  \"producer\": \"external-psp\",\n  \"aggregateType\": \"Bill\",\n  \"aggregateId\": \"{{sample_bill_id}}\",\n  \"aggregateVersion\": 1,\n  \"concessionId\": \"{{sample_concession_id}}\",\n  \"assemblyId\": \"{{sample_assembly_id}}\",\n  \"correlationId\": \"{{$guid}}\",\n  \"data\": {\n    \"note\": \"example payload \\u2014 match the real CloudEvent envelope your producer uses\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Ingest a batch of CloudEvents",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{reporting_gateway_url}}/v1/event-batches",
+                  "host": [
+                    "{{reporting_gateway_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "event-batches"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"events\": []\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Check ingestion status",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{reporting_gateway_url}}/v1/ingestions/{{sample_ingestion_id}}",
+                  "host": [
+                    "{{reporting_gateway_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ingestions",
+                    "{{sample_ingestion_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Reference Data Lookups",
+          "description": "shared-services (read-only) \u2014 everyday lookups a field agent needs; boundary/reference-data management itself is CROIP Admin's job.",
+          "item": [
+            {
+              "name": "List regions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/regions",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "regions"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List MMDAs (assemblies)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/assemblies?regionId={{sample_region_id}}",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "assemblies"
+                  ],
+                  "query": [
+                    {
+                      "key": "regionId",
+                      "value": "{{sample_region_id}}"
+                    }
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Detect zone for a point",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/assemblies/detect-zone",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "assemblies",
+                    "detect-zone"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"latitude\": 5.5551,\n  \"longitude\": -0.2351\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Detect zone for a polygon",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/assemblies/detect-zone-for-polygon",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "assemblies",
+                    "detect-zone-for-polygon"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -0.2355,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5545\n        ]\n      ]\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List reference data",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/reference-data?category=country",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "reference-data"
+                  ],
+                  "query": [
+                    {
+                      "key": "category",
+                      "value": "country"
+                    }
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. CROIP Admin",
+      "description": "",
+      "item": [
+        {
+          "name": "Users & RBAC",
+          "description": "platform-governance-service",
+          "item": [
+            {
+              "name": "RBAC matrix",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/rbac/matrix",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "rbac",
+                    "matrix"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List assignable roles",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/roles",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "roles"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Grant permission to role",
+              "request": {
+                "method": "PUT",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/rbac/roles/{{sample_role_id}}/permissions/{{sample_permission_id}}",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "rbac",
+                    "roles",
+                    "{{sample_role_id}}",
+                    "permissions",
+                    "{{sample_permission_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Revoke permission from role",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/rbac/roles/{{sample_role_id}}/permissions/{{sample_permission_id}}",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "rbac",
+                    "roles",
+                    "{{sample_role_id}}",
+                    "permissions",
+                    "{{sample_permission_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Register/invite an officer",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/users",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "users"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"code\": \"OFFICER-002\",\n  \"email\": \"officer2@croip.gov.gh\",\n  \"fullName\": \"Kojo Owusu\",\n  \"roleCode\": \"OVERSIGHT_OFFICER\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List staff/officers",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/users",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "users"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "My own officer profile",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/users/me",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "users",
+                    "me"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get an officer",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/users/{{sample_user_id}}",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "users",
+                    "{{sample_user_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update an officer",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/users/{{sample_user_id}}",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "users",
+                    "{{sample_user_id}}"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"ACTIVE\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Resend Zitadel invite",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/users/{{sample_user_id}}/resend-invite",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "users",
+                    "{{sample_user_id}}",
+                    "resend-invite"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Remove an officer",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/users/{{sample_user_id}}",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "users",
+                    "{{sample_user_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Concession Management",
+          "description": "platform-governance-service \u2014 CROIP onboards, scopes, and offboards the revenue-collection partner companies (the concessions in folder 2 operate within what's set up here).",
+          "item": [
+            {
+              "name": "Onboard a concessionaire",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"code\": \"REVTECH\",\n  \"name\": \"RevTech Solutions Ltd\",\n  \"contactEmail\": \"ops@revtech.com\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List concessionaires",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get a concessionaire",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "{{sample_concession_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Offboard a concessionaire",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}/deactivate",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "{{sample_concession_id}}",
+                    "deactivate"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List a concessionaire's MMDAs",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}/assemblies",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "{{sample_concession_id}}",
+                    "assemblies"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Assign an MMDA to a concessionaire",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}/assemblies",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "{{sample_concession_id}}",
+                    "assemblies"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"assemblyId\": \"{{sample_assembly_id}}\",\n  \"contractStart\": \"2026-01-01\",\n  \"contractEnd\": \"2027-12-31\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List a concessionaire's API clients",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}/api-clients",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "{{sample_concession_id}}",
+                    "api-clients"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Provision M2M credentials for a concessionaire",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}/api-clients",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "{{sample_concession_id}}",
+                    "api-clients"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Register a concessionaire's field personnel",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}/personnel",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "{{sample_concession_id}}",
+                    "personnel"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"externalStaffRef\": \"REV-0045\",\n  \"fullName\": \"Yaw Boateng\",\n  \"phone\": \"+233244000333\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List a concessionaire's field personnel",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}/personnel",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "{{sample_concession_id}}",
+                    "personnel"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Property Oversight",
+          "description": "property-registry-service \u2014 the approval step after a concession agent submits a field verification.",
+          "item": [
+            {
+              "name": "Review a field verification",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/verifications/{{sample_verification_id}}/review",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "verifications",
+                    "{{sample_verification_id}}",
+                    "review"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"reviewStatus\": \"APPROVED\",\n  \"reviewedByPersonnelId\": \"{{sample_personnel_id}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Billing Oversight",
+          "description": "billing-payments-service \u2014 the platform-wide view, distinct from a single concession's own billing operations.",
+          "item": [
+            {
+              "name": "Bill directory (all concessions/ratepayers)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{billing_payments_url}}/v1/bills?page=1&pageSize=20",
+                  "host": [
+                    "{{billing_payments_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "bills"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List bills by ratepayer",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{billing_payments_url}}/v1/bills?ratepayerId={{sample_ratepayer_id}}&page=1&pageSize=20",
+                  "host": [
+                    "{{billing_payments_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "bills"
+                  ],
+                  "query": [
+                    {
+                      "key": "ratepayerId",
+                      "value": "{{sample_ratepayer_id}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Payment ledger (all concessions/ratepayers)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{billing_payments_url}}/v1/payments?page=1&pageSize=20",
+                  "host": [
+                    "{{billing_payments_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "payments"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List payments by ratepayer",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{billing_payments_url}}/v1/payments?paidByRatepayerId={{sample_ratepayer_id}}&page=1&pageSize=20",
+                  "host": [
+                    "{{billing_payments_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "payments"
+                  ],
+                  "query": [
+                    {
+                      "key": "paidByRatepayerId",
+                      "value": "{{sample_ratepayer_id}}"
+                    },
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Dispute Review",
+          "description": "dispute-service \u2014 an officer reviewing/resolving disputes a ratepayer raised (see Ratepayer folder for raising one).",
+          "item": [
+            {
+              "name": "Review queue",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{dispute_url}}/v1/disputes?status=OPEN",
+                  "host": [
+                    "{{dispute_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "disputes"
+                  ],
+                  "query": [
+                    {
+                      "key": "status",
+                      "value": "OPEN"
+                    }
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List disputes by ratepayer",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{dispute_url}}/v1/disputes?raisedByRatepayerId={{sample_ratepayer_id}}",
+                  "host": [
+                    "{{dispute_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "disputes"
+                  ],
+                  "query": [
+                    {
+                      "key": "raisedByRatepayerId",
+                      "value": "{{sample_ratepayer_id}}"
+                    }
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get a dispute",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{dispute_url}}/v1/disputes/{{sample_dispute_code}}",
+                  "host": [
+                    "{{dispute_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "disputes",
+                    "{{sample_dispute_code}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Transition dispute status",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{dispute_url}}/v1/disputes/{{sample_dispute_code}}/status",
+                  "host": [
+                    "{{dispute_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "disputes",
+                    "{{sample_dispute_code}}",
+                    "status"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"RESOLVED\",\n  \"resolution\": \"Bill amount corrected to match published rate.\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Reconciliation & Oversight",
+          "description": "oversight-reconciliation-service",
+          "item": [
+            {
+              "name": "Initiate a reconciliation run",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{oversight_reconciliation_url}}/v1/reconciliation/run",
+                  "host": [
+                    "{{oversight_reconciliation_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "reconciliation",
+                    "run"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"periodStart\": \"2026-10-01T00:00:00Z\",\n  \"periodEnd\": \"2026-10-19T23:59:59Z\",\n  \"assemblyId\": \"{{sample_assembly_id}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List reconciliation runs",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{oversight_reconciliation_url}}/v1/reconciliation/runs",
+                  "host": [
+                    "{{oversight_reconciliation_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "reconciliation",
+                    "runs"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Query open exceptions",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{oversight_reconciliation_url}}/v1/exceptions",
+                  "host": [
+                    "{{oversight_reconciliation_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "exceptions"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Resolve an exception (maker-checker)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{oversight_reconciliation_url}}/v1/exceptions/{{sample_exception_id}}/action",
+                  "host": [
+                    "{{oversight_reconciliation_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "exceptions",
+                    "{{sample_exception_id}}",
+                    "action"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"action\": \"APPROVE\",\n  \"notes\": \"Confirmed against independent MoMo evidence\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "National collection metrics",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{oversight_reconciliation_url}}/v1/oversight/metrics",
+                  "host": [
+                    "{{oversight_reconciliation_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "oversight",
+                    "metrics"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Audit Assurance",
+          "description": "audit-assurance-service",
+          "item": [
+            {
+              "name": "Query audit log",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{audit_assurance_url}}/v1/audit/records?concessionId={{sample_concession_id}}",
+                  "host": [
+                    "{{audit_assurance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "audit",
+                    "records"
+                  ],
+                  "query": [
+                    {
+                      "key": "concessionId",
+                      "value": "{{sample_concession_id}}"
+                    }
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Verify archive manifest integrity",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{audit_assurance_url}}/v1/assurance/verify",
+                  "host": [
+                    "{{audit_assurance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "assurance",
+                    "verify"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"manifestId\": \"{{sample_manifest_id}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "End-to-end auditor trace",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{audit_assurance_url}}/v1/assurance/trace/{{sample_target_id}}",
+                  "host": [
+                    "{{audit_assurance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "assurance",
+                    "trace",
+                    "{{sample_target_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Independent Financial Evidence",
+          "description": "independent-evidence-service \u2014 financial institutions reporting independently of the concession, used to cross-check reconciliation.",
+          "item": [
+            {
+              "name": "Ingest provider evidence (PSP/MoMo/Bank)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{independent_evidence_url}}/v1/provider-evidence",
+                  "host": [
+                    "{{independent_evidence_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "provider-evidence"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"MOMO\",\n  \"providerReference\": \"MM-20261019-0001\",\n  \"amount\": \"150.00\",\n  \"currency\": \"GHS\",\n  \"transactionDate\": \"2026-10-19T12:00:00Z\",\n  \"payerMsisdn\": \"+233244000222\",\n  \"rawPayload\": {}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get an evidence record",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{independent_evidence_url}}/v1/provider-evidence/{{sample_evidence_id}}",
+                  "host": [
+                    "{{independent_evidence_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "provider-evidence",
+                    "{{sample_evidence_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Submit control totals",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{independent_evidence_url}}/v1/control-totals",
+                  "host": [
+                    "{{independent_evidence_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "control-totals"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"provider\": \"MOMO\",\n  \"periodStart\": \"2026-10-01T00:00:00Z\",\n  \"periodEnd\": \"2026-10-19T23:59:59Z\",\n  \"totalCount\": 120,\n  \"totalAmount\": \"18000.00\",\n  \"currency\": \"GHS\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Event Processing",
+          "description": "event-processing-service",
+          "item": [
+            {
+              "name": "List quarantined events",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{event_processing_url}}/v1/quarantine",
+                  "host": [
+                    "{{event_processing_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "quarantine"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get a quarantined event",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{event_processing_url}}/v1/quarantine/{{sample_event_id}}",
+                  "host": [
+                    "{{event_processing_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "quarantine",
+                    "{{sample_event_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Resolve a quarantined event",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{event_processing_url}}/v1/quarantine/{{sample_event_id}}/resolve",
+                  "host": [
+                    "{{event_processing_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "quarantine",
+                    "{{sample_event_id}}",
+                    "resolve"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"resolutionNotes\": \"Reprocessed after fixing upstream schema mismatch\",\n  \"action\": \"REPLAY\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get operational projection",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{event_processing_url}}/v1/operational-view/{{sample_aggregate_type}}/{{sample_aggregate_id}}",
+                  "host": [
+                    "{{event_processing_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "operational-view",
+                    "{{sample_aggregate_type}}",
+                    "{{sample_aggregate_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Boundary & Reference Data Management",
+          "description": "shared-services (write/management) \u2014 drawing official boundaries and maintaining canonical reference data; read-only lookups live under Concession.",
+          "item": [
+            {
+              "name": "Create a region",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/regions",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "regions"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"code\": \"GH-AH\",\n  \"name\": \"Ashanti Region\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Draw/replace a region boundary",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/regions/{{sample_region_id}}/boundary",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "regions",
+                    "{{sample_region_id}}",
+                    "boundary"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          0,\n          0\n        ],\n        [\n          0,\n          1\n        ],\n        [\n          1,\n          1\n        ],\n        [\n          1,\n          0\n        ],\n        [\n          0,\n          0\n        ]\n      ]\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create an MMDA",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/assemblies",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "assemblies"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"regionId\": \"{{sample_region_id}}\",\n  \"code\": \"GH0701\",\n  \"name\": \"Ablekuma Central Municipal\",\n  \"category\": \"MUNICIPAL\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Draw/replace an MMDA boundary",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/assemblies/{{sample_assembly_id}}/boundary",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "assemblies",
+                    "{{sample_assembly_id}}",
+                    "boundary"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          0,\n          0\n        ],\n        [\n          0,\n          1\n        ],\n        [\n          1,\n          1\n        ],\n        [\n          1,\n          0\n        ],\n        [\n          0,\n          0\n        ]\n      ]\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Create/update a reference data item",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/reference-data",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "reference-data"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"category\": \"country\",\n  \"code\": \"GH\",\n  \"name\": \"Ghana\",\n  \"metadata\": {\n    \"flag\": \"\\ud83c\\uddec\\ud83c\\udded\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Delete a reference data item",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/reference-data/{{sample_reference_data_id}}",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "reference-data",
+                    "{{sample_reference_data_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List active concession scopes",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/concessions",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Submit a notification request",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/messages",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "messages"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"channel\": \"SMS\",\n  \"to\": \"+233244000222\",\n  \"template\": \"OTP_LOGIN\",\n  \"idempotencyKey\": \"{{$guid}}\",\n  \"data\": {\n    \"code\": \"123456\"\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get notification delivery status",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{shared_services_url}}/v1/messages/{{sample_message_id}}",
+                  "host": [
+                    "{{shared_services_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "messages",
+                    "{{sample_message_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Ratepayer Oversight",
+          "description": "ratepayer-service \u2014 oversight-wide views, account status management, and the KYC approval step, distinct from a ratepayer's own self-service endpoints.",
+          "item": [
+            {
+              "name": "Ratepayer summary metrics (public)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers"
+                  ]
+                },
+                "description": ""
+              },
+              "response": []
+            },
+            {
+              "name": "Ratepayer directory",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/directory?page=1&pageSize=20",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "directory"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Get a ratepayer profile",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "List ratepayer linked properties",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/properties",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}",
+                    "properties"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update ratepayer account status",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/status",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}",
+                    "status"
+                  ]
+                },
+                "description": "CROIP portal / oversight official updates a ratepayer's account status (ACTIVE, SUSPENDED, DEACTIVATED).",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"status\": \"SUSPENDED\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Review a KYC verification",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/verifications/{{sample_verification_id}}",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}",
+                    "verifications",
+                    "{{sample_verification_id}}"
+                  ]
+                },
+                "description": "",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"verificationStatus\": \"VERIFIED\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Zitadel Dev Tools",
+          "description": "Minting a staff access token for Postman testing itself (not a platform API) \u2014 real officers sign in through the portal's browser-based Zitadel login.",
+          "item": [
+            {
+              "name": "Machine-to-machine token (client_credentials)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{zitadel_issuer}}/oauth/v2/token",
+                  "host": [
+                    "{{zitadel_issuer}}"
+                  ],
+                  "path": [
+                    "oauth",
+                    "v2",
+                    "token"
+                  ]
+                },
+                "description": "Grant type: client_credentials. Use for service accounts (e.g. property-registry-service's own machine user). Body is form-urlencoded \u2014 see Body tab.",
+                "body": {
+                  "mode": "urlencoded",
+                  "urlencoded": [
+                    {
+                      "key": "grant_type",
+                      "value": "client_credentials"
+                    },
+                    {
+                      "key": "scope",
+                      "value": "openid urn:zitadel:iam:org:project:id:{{zitadel_project_id}}:roles urn:zitadel:iam:org:project:id:{{zitadel_project_id}}:aud"
+                    }
+                  ]
+                },
+                "auth": {
+                  "type": "basic",
+                  "basic": [
+                    {
+                      "key": "username",
+                      "value": "{{machine_client_id}}",
+                      "type": "string"
+                    },
+                    {
+                      "key": "password",
+                      "value": "{{machine_client_secret}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) { pm.environment.set('machine_access_token', pm.response.json().access_token); }"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Platform Health Checks",
+      "description": "All 11 services \u2014 not tied to any persona.",
+      "item": [
+        {
+          "name": "Reporting Gateway \u2014 liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{reporting_gateway_url}}/health/live",
+              "host": [
+                "{{reporting_gateway_url}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Reporting Gateway \u2014 readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{reporting_gateway_url}}/health/ready",
+              "host": [
+                "{{reporting_gateway_url}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Event Processing \u2014 liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{event_processing_url}}/health/live",
+              "host": [
+                "{{event_processing_url}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Event Processing \u2014 readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{event_processing_url}}/health/ready",
+              "host": [
+                "{{event_processing_url}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Independent Evidence \u2014 liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{independent_evidence_url}}/health/live",
+              "host": [
+                "{{independent_evidence_url}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Independent Evidence \u2014 readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{independent_evidence_url}}/health/ready",
+              "host": [
+                "{{independent_evidence_url}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Shared Services \u2014 liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{shared_services_url}}/health/live",
+              "host": [
+                "{{shared_services_url}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Shared Services \u2014 readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{shared_services_url}}/health/ready",
+              "host": [
+                "{{shared_services_url}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Oversight Reconciliation \u2014 liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{oversight_reconciliation_url}}/health/live",
+              "host": [
+                "{{oversight_reconciliation_url}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Oversight Reconciliation \u2014 readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{oversight_reconciliation_url}}/health/ready",
+              "host": [
+                "{{oversight_reconciliation_url}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Audit Assurance \u2014 liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{audit_assurance_url}}/health/live",
+              "host": [
+                "{{audit_assurance_url}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Audit Assurance \u2014 readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{audit_assurance_url}}/health/ready",
+              "host": [
+                "{{audit_assurance_url}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Billing Payments \u2014 liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{billing_payments_url}}/health/live",
+              "host": [
+                "{{billing_payments_url}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Billing Payments \u2014 readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{billing_payments_url}}/health/ready",
+              "host": [
+                "{{billing_payments_url}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Dispute \u2014 liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{dispute_url}}/health/live",
+              "host": [
+                "{{dispute_url}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Dispute \u2014 readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{dispute_url}}/health/ready",
+              "host": [
+                "{{dispute_url}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Platform Governance \u2014 liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{platform_governance_url}}/health/live",
+              "host": [
+                "{{platform_governance_url}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Platform Governance \u2014 readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{platform_governance_url}}/health/ready",
+              "host": [
+                "{{platform_governance_url}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Property Registry \u2014 liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{property_registry_url}}/health/live",
+              "host": [
+                "{{property_registry_url}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Property Registry \u2014 readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{property_registry_url}}/health/ready",
+              "host": [
+                "{{property_registry_url}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Ratepayer \u2014 liveness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ratepayer_url}}/health/live",
+              "host": [
+                "{{ratepayer_url}}"
+              ],
+              "path": [
+                "health",
+                "live"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        },
+        {
+          "name": "Ratepayer \u2014 readiness",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{ratepayer_url}}/health/ready",
+              "host": [
+                "{{ratepayer_url}}"
+              ],
+              "path": [
+                "health",
+                "ready"
+              ]
+            },
+            "description": ""
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
