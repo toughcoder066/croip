@@ -147,6 +147,23 @@ export interface ClaimPropertyInput {
   documents?: ClaimDocumentInput[];
 }
 
+export function hasCoordinatesPoint(locationGeo: unknown): boolean {
+  if (!locationGeo || typeof locationGeo !== 'object') return false;
+  const geo = locationGeo as Record<string, unknown>;
+  if (geo.type === 'Point' && Array.isArray(geo.coordinates) && geo.coordinates.length >= 2) {
+    const lng = Number(geo.coordinates[0]);
+    const lat = Number(geo.coordinates[1]);
+    return !isNaN(lng) && !isNaN(lat) && (lng !== 0 || lat !== 0);
+  }
+  if (typeof geo.latitude === 'number' && typeof geo.longitude === 'number') {
+    return !isNaN(geo.latitude) && !isNaN(geo.longitude);
+  }
+  if (typeof geo.lat === 'number' && typeof geo.lng === 'number') {
+    return !isNaN(geo.lat) && !isNaN(geo.lng);
+  }
+  return false;
+}
+
 export function computeProfileCompletion(ratepayer: {
   firstName?: string | null;
   middleName?: string | null;
@@ -163,69 +180,62 @@ export function computeProfileCompletion(ratepayer: {
   let score = 0;
   const missingSections: string[] = [];
 
-  // 1. Account Contact (Phone or Email)
-  if (ratepayer.phone || ratepayer.email) {
-    score += 25;
+  // 1. First Name (15%)
+  const hasFirstName = Boolean(ratepayer.firstName && ratepayer.firstName.trim().length > 0);
+  if (hasFirstName) {
+    score += 15;
   } else {
-    missingSections.push('ACCOUNT_CONTACT');
-  }
-
-  // Explicitly track missing contact fields so whatever was not inserted is added to metrics
-  if (!ratepayer.phone) {
-    missingSections.push('PHONE_NUMBER');
-  }
-  if (!ratepayer.email) {
-    missingSections.push('EMAIL_ADDRESS');
-  }
-
-  // 2. Personal / Legal Identity (Legal Name / First & Last Name)
-  const nameCandidate = ratepayer.legalName || [ratepayer.firstName, ratepayer.lastName].filter(Boolean).join(' ');
-  const hasValidName =
-    Boolean(nameCandidate) &&
-    nameCandidate.trim().length >= 2 &&
-    !nameCandidate.toLowerCase().includes('pending') &&
-    !nameCandidate.toLowerCase().startsWith('ratepayer ');
-  if (hasValidName) {
-    score += 25;
-  } else {
-    missingSections.push('LEGAL_NAME');
-  }
-  if (!ratepayer.firstName) {
     missingSections.push('FIRST_NAME');
   }
-  if (!ratepayer.lastName) {
+
+  // 2. Last Name (15%)
+  const hasLastName = Boolean(ratepayer.lastName && ratepayer.lastName.trim().length > 0);
+  if (hasLastName) {
+    score += 15;
+  } else {
     missingSections.push('LAST_NAME');
   }
 
-  // 3. Address & Pinpoint Location (Address, Region, Assembly, or Coordinates)
+  // 3. Physical Address (15%)
   const hasAddress = Boolean(ratepayer.address && ratepayer.address.trim().length > 0);
-  const hasLocationGeo = Boolean(ratepayer.locationGeo);
-  const hasRegionOrAssembly = Boolean(ratepayer.regionId || ratepayer.assemblyId);
-  const hasLocation = (hasAddress && (hasLocationGeo || hasRegionOrAssembly)) || (hasLocationGeo && hasRegionOrAssembly);
-  if (hasLocation) {
-    score += 25;
+  if (hasAddress) {
+    score += 15;
   } else {
-    missingSections.push('ADDRESS_AND_LOCATION');
-  }
-  if (!hasAddress) {
-    missingSections.push('PHYSICAL_ADDRESS');
-  }
-  if (!hasLocationGeo) {
-    missingSections.push('PINPOINT_LOCATION');
-  }
-  if (!hasRegionOrAssembly) {
-    missingSections.push('MMDA_JURISDICTION');
+    missingSections.push('ADDRESS');
   }
 
+  // 4. Coordinates Point (15%)
+  const hasCoordinates = hasCoordinatesPoint(ratepayer.locationGeo);
+  if (hasCoordinates) {
+    score += 15;
+  } else {
+    missingSections.push('COORDINATES_POINT');
+  }
+
+  // 5. Account Contact: Email (10%) & Phone (10%) = 20%
+  const hasPhone = Boolean(ratepayer.phone && ratepayer.phone.trim().length > 0);
+  const hasEmail = Boolean(ratepayer.email && ratepayer.email.trim().length > 0);
+  if (hasPhone) {
+    score += 10;
+  } else {
+    missingSections.push('PHONE_NUMBER');
+  }
+  if (hasEmail) {
+    score += 10;
+  } else {
+    missingSections.push('EMAIL_ADDRESS');
+  }
+
+  // 6. KYC Verification (20%)
   const activeVerification = ratepayer.verifications?.find(v => v.verificationStatus === 'VERIFIED');
   const hasVerifiedKyc = Boolean(activeVerification);
   if (hasVerifiedKyc) {
-    score += 25;
+    score += 20;
   } else {
     missingSections.push('KYC_VERIFICATION');
   }
 
-  const isProfileComplete = hasValidName && Boolean(ratepayer.phone || ratepayer.email) && hasLocation;
+  const isProfileComplete = hasFirstName && hasLastName && hasAddress && hasCoordinates && (hasPhone || hasEmail);
   const isEligibleForPropertyCreation = isProfileComplete && hasVerifiedKyc;
 
   return {

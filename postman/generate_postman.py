@@ -60,9 +60,9 @@ rp_register_item = item("Register (public)", "POST", "ratepayer_url", "/v1/ratep
     "address": "14 Independence Avenue, Accra",
     "latitude": 5.6037,
     "longitude": -0.1870
-}, description="Single public registration endpoint that accepts all ratepayer profile fields. Only email (or phone number) and password (with confirmPassword) are strictly required. Either email or phone must be present. Any information not inserted at registration will be dynamically added to the completion metrics (missingSections). Profile details can be completed or updated at any time using the unified complete/update profile API.")
+}, description="Single public registration endpoint that accepts all ratepayer profile fields. Only email (or phone number) and password (with confirmPassword) are strictly required. Either email or phone must be present. First name, last name, physical address, and coordinates point are explicit components of the profile completion metric (along with contact and KYC verification). Any information omitted or not inserted at registration will be dynamically tracked in completion metrics (missingSections). Profile details can be completed or updated at any time using the unified complete/update profile API.")
 rp_register_item["event"] = [{"listen": "test", "script": {"exec": [
-    "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res).to.have.property('completion');\n  pm.expect(res.completion).to.have.property('completionPercentage');\n}"
+    "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res).to.have.property('completion');\n  pm.expect(res.completion).to.have.property('completionPercentage');\n  pm.expect(res.completion).to.have.property('missingSections');\n}"
 ], "type": "text/javascript"}}]
 
 rp_update_profile_item = item("Complete / Update profile by ID (single unified API)", "PATCH", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}", body={
