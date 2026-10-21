@@ -1972,12 +1972,14 @@ export namespace Prisma {
   }
 
   export type PropertyAvgAggregateOutputType = {
+    version: number | null
     leaseDurationYears: number | null
     landAreaSqm: number | null
     numberOfFloors: number | null
   }
 
   export type PropertySumAggregateOutputType = {
+    version: number | null
     leaseDurationYears: number | null
     landAreaSqm: number | null
     numberOfFloors: number | null
@@ -1995,11 +1997,16 @@ export namespace Prisma {
     propertyUse: string | null
     tenureType: string | null
     structureType: string | null
+    version: number | null
+    ghanaPostGps: string | null
+    createdBy: string | null
     createdByRatepayerId: string | null
     registrationSource: string | null
     registeredByConcessionId: string | null
     claimedByRatepayerId: string | null
     verificationStatus: string | null
+    verifiedBy: string | null
+    verifiedAt: Date | null
     leaseDurationYears: number | null
     landAreaSqm: number | null
     numberOfFloors: number | null
@@ -2019,11 +2026,16 @@ export namespace Prisma {
     propertyUse: string | null
     tenureType: string | null
     structureType: string | null
+    version: number | null
+    ghanaPostGps: string | null
+    createdBy: string | null
     createdByRatepayerId: string | null
     registrationSource: string | null
     registeredByConcessionId: string | null
     claimedByRatepayerId: string | null
     verificationStatus: string | null
+    verifiedBy: string | null
+    verifiedAt: Date | null
     leaseDurationYears: number | null
     landAreaSqm: number | null
     numberOfFloors: number | null
@@ -2043,11 +2055,16 @@ export namespace Prisma {
     propertyUse: number
     tenureType: number
     structureType: number
+    version: number
+    ghanaPostGps: number
+    createdBy: number
     createdByRatepayerId: number
     registrationSource: number
     registeredByConcessionId: number
     claimedByRatepayerId: number
     verificationStatus: number
+    verifiedBy: number
+    verifiedAt: number
     polygonGeoJson: number
     leaseDurationYears: number
     landAreaSqm: number
@@ -2059,12 +2076,14 @@ export namespace Prisma {
 
 
   export type PropertyAvgAggregateInputType = {
+    version?: true
     leaseDurationYears?: true
     landAreaSqm?: true
     numberOfFloors?: true
   }
 
   export type PropertySumAggregateInputType = {
+    version?: true
     leaseDurationYears?: true
     landAreaSqm?: true
     numberOfFloors?: true
@@ -2082,11 +2101,16 @@ export namespace Prisma {
     propertyUse?: true
     tenureType?: true
     structureType?: true
+    version?: true
+    ghanaPostGps?: true
+    createdBy?: true
     createdByRatepayerId?: true
     registrationSource?: true
     registeredByConcessionId?: true
     claimedByRatepayerId?: true
     verificationStatus?: true
+    verifiedBy?: true
+    verifiedAt?: true
     leaseDurationYears?: true
     landAreaSqm?: true
     numberOfFloors?: true
@@ -2106,11 +2130,16 @@ export namespace Prisma {
     propertyUse?: true
     tenureType?: true
     structureType?: true
+    version?: true
+    ghanaPostGps?: true
+    createdBy?: true
     createdByRatepayerId?: true
     registrationSource?: true
     registeredByConcessionId?: true
     claimedByRatepayerId?: true
     verificationStatus?: true
+    verifiedBy?: true
+    verifiedAt?: true
     leaseDurationYears?: true
     landAreaSqm?: true
     numberOfFloors?: true
@@ -2130,11 +2159,16 @@ export namespace Prisma {
     propertyUse?: true
     tenureType?: true
     structureType?: true
+    version?: true
+    ghanaPostGps?: true
+    createdBy?: true
     createdByRatepayerId?: true
     registrationSource?: true
     registeredByConcessionId?: true
     claimedByRatepayerId?: true
     verificationStatus?: true
+    verifiedBy?: true
+    verifiedAt?: true
     polygonGeoJson?: true
     leaseDurationYears?: true
     landAreaSqm?: true
@@ -2242,11 +2276,16 @@ export namespace Prisma {
     propertyUse: string
     tenureType: string | null
     structureType: string | null
+    version: number
+    ghanaPostGps: string | null
+    createdBy: string | null
     createdByRatepayerId: string | null
     registrationSource: string
     registeredByConcessionId: string | null
     claimedByRatepayerId: string | null
     verificationStatus: string
+    verifiedBy: string | null
+    verifiedAt: Date | null
     polygonGeoJson: JsonValue
     leaseDurationYears: number | null
     landAreaSqm: number | null
@@ -2286,11 +2325,16 @@ export namespace Prisma {
     propertyUse?: boolean
     tenureType?: boolean
     structureType?: boolean
+    version?: boolean
+    ghanaPostGps?: boolean
+    createdBy?: boolean
     createdByRatepayerId?: boolean
     registrationSource?: boolean
     registeredByConcessionId?: boolean
     claimedByRatepayerId?: boolean
     verificationStatus?: boolean
+    verifiedBy?: boolean
+    verifiedAt?: boolean
     polygonGeoJson?: boolean
     leaseDurationYears?: boolean
     landAreaSqm?: boolean
@@ -2317,11 +2361,16 @@ export namespace Prisma {
     propertyUse?: boolean
     tenureType?: boolean
     structureType?: boolean
+    version?: boolean
+    ghanaPostGps?: boolean
+    createdBy?: boolean
     createdByRatepayerId?: boolean
     registrationSource?: boolean
     registeredByConcessionId?: boolean
     claimedByRatepayerId?: boolean
     verificationStatus?: boolean
+    verifiedBy?: boolean
+    verifiedAt?: boolean
     polygonGeoJson?: boolean
     leaseDurationYears?: boolean
     landAreaSqm?: boolean
@@ -2342,11 +2391,16 @@ export namespace Prisma {
     propertyUse?: boolean
     tenureType?: boolean
     structureType?: boolean
+    version?: boolean
+    ghanaPostGps?: boolean
+    createdBy?: boolean
     createdByRatepayerId?: boolean
     registrationSource?: boolean
     registeredByConcessionId?: boolean
     claimedByRatepayerId?: boolean
     verificationStatus?: boolean
+    verifiedBy?: boolean
+    verifiedAt?: boolean
     polygonGeoJson?: boolean
     leaseDurationYears?: boolean
     landAreaSqm?: boolean
@@ -2367,11 +2421,16 @@ export namespace Prisma {
     propertyUse?: boolean
     tenureType?: boolean
     structureType?: boolean
+    version?: boolean
+    ghanaPostGps?: boolean
+    createdBy?: boolean
     createdByRatepayerId?: boolean
     registrationSource?: boolean
     registeredByConcessionId?: boolean
     claimedByRatepayerId?: boolean
     verificationStatus?: boolean
+    verifiedBy?: boolean
+    verifiedAt?: boolean
     polygonGeoJson?: boolean
     leaseDurationYears?: boolean
     landAreaSqm?: boolean
@@ -2380,7 +2439,7 @@ export namespace Prisma {
     updatedAt?: boolean
   }
 
-  export type PropertyOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "accountNumber" | "propertyName" | "assemblyId" | "propertyClass" | "buildingStatus" | "propertyStatus" | "propertyUse" | "tenureType" | "structureType" | "createdByRatepayerId" | "registrationSource" | "registeredByConcessionId" | "claimedByRatepayerId" | "verificationStatus" | "polygonGeoJson" | "leaseDurationYears" | "landAreaSqm" | "numberOfFloors" | "createdAt" | "updatedAt", ExtArgs["result"]["property"]>
+  export type PropertyOmit<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = $Extensions.GetOmit<"id" | "code" | "accountNumber" | "propertyName" | "assemblyId" | "propertyClass" | "buildingStatus" | "propertyStatus" | "propertyUse" | "tenureType" | "structureType" | "version" | "ghanaPostGps" | "createdBy" | "createdByRatepayerId" | "registrationSource" | "registeredByConcessionId" | "claimedByRatepayerId" | "verificationStatus" | "verifiedBy" | "verifiedAt" | "polygonGeoJson" | "leaseDurationYears" | "landAreaSqm" | "numberOfFloors" | "createdAt" | "updatedAt", ExtArgs["result"]["property"]>
   export type PropertyInclude<ExtArgs extends $Extensions.InternalArgs = $Extensions.DefaultArgs> = {
     units?: boolean | Property$unitsArgs<ExtArgs>
     photos?: boolean | Property$photosArgs<ExtArgs>
@@ -2413,11 +2472,16 @@ export namespace Prisma {
       propertyUse: string
       tenureType: string | null
       structureType: string | null
+      version: number
+      ghanaPostGps: string | null
+      createdBy: string | null
       createdByRatepayerId: string | null
       registrationSource: string
       registeredByConcessionId: string | null
       claimedByRatepayerId: string | null
       verificationStatus: string
+      verifiedBy: string | null
+      verifiedAt: Date | null
       polygonGeoJson: Prisma.JsonValue
       leaseDurationYears: number | null
       landAreaSqm: number | null
@@ -2863,11 +2927,16 @@ export namespace Prisma {
     readonly propertyUse: FieldRef<"Property", 'String'>
     readonly tenureType: FieldRef<"Property", 'String'>
     readonly structureType: FieldRef<"Property", 'String'>
+    readonly version: FieldRef<"Property", 'Int'>
+    readonly ghanaPostGps: FieldRef<"Property", 'String'>
+    readonly createdBy: FieldRef<"Property", 'String'>
     readonly createdByRatepayerId: FieldRef<"Property", 'String'>
     readonly registrationSource: FieldRef<"Property", 'String'>
     readonly registeredByConcessionId: FieldRef<"Property", 'String'>
     readonly claimedByRatepayerId: FieldRef<"Property", 'String'>
     readonly verificationStatus: FieldRef<"Property", 'String'>
+    readonly verifiedBy: FieldRef<"Property", 'String'>
+    readonly verifiedAt: FieldRef<"Property", 'DateTime'>
     readonly polygonGeoJson: FieldRef<"Property", 'Json'>
     readonly leaseDurationYears: FieldRef<"Property", 'Int'>
     readonly landAreaSqm: FieldRef<"Property", 'Float'>
@@ -15740,11 +15809,16 @@ export namespace Prisma {
     propertyUse: 'propertyUse',
     tenureType: 'tenureType',
     structureType: 'structureType',
+    version: 'version',
+    ghanaPostGps: 'ghanaPostGps',
+    createdBy: 'createdBy',
     createdByRatepayerId: 'createdByRatepayerId',
     registrationSource: 'registrationSource',
     registeredByConcessionId: 'registeredByConcessionId',
     claimedByRatepayerId: 'claimedByRatepayerId',
     verificationStatus: 'verificationStatus',
+    verifiedBy: 'verifiedBy',
+    verifiedAt: 'verifiedAt',
     polygonGeoJson: 'polygonGeoJson',
     leaseDurationYears: 'leaseDurationYears',
     landAreaSqm: 'landAreaSqm',
@@ -16004,20 +16078,6 @@ export namespace Prisma {
 
 
   /**
-   * Reference to a field of type 'Json'
-   */
-  export type JsonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Json'>
-    
-
-
-  /**
-   * Reference to a field of type 'QueryMode'
-   */
-  export type EnumQueryModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'QueryMode'>
-    
-
-
-  /**
    * Reference to a field of type 'Int'
    */
   export type IntFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Int'>
@@ -16032,20 +16092,6 @@ export namespace Prisma {
 
 
   /**
-   * Reference to a field of type 'Float'
-   */
-  export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
-    
-
-
-  /**
-   * Reference to a field of type 'Float[]'
-   */
-  export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
-    
-
-
-  /**
    * Reference to a field of type 'DateTime'
    */
   export type DateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime'>
@@ -16056,6 +16102,34 @@ export namespace Prisma {
    * Reference to a field of type 'DateTime[]'
    */
   export type ListDateTimeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'DateTime[]'>
+    
+
+
+  /**
+   * Reference to a field of type 'Json'
+   */
+  export type JsonFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Json'>
+    
+
+
+  /**
+   * Reference to a field of type 'QueryMode'
+   */
+  export type EnumQueryModeFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'QueryMode'>
+    
+
+
+  /**
+   * Reference to a field of type 'Float'
+   */
+  export type FloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float'>
+    
+
+
+  /**
+   * Reference to a field of type 'Float[]'
+   */
+  export type ListFloatFieldRefInput<$PrismaModel> = FieldRefInputType<$PrismaModel, 'Float[]'>
     
 
 
@@ -16098,11 +16172,16 @@ export namespace Prisma {
     propertyUse?: StringFilter<"Property"> | string
     tenureType?: StringNullableFilter<"Property"> | string | null
     structureType?: StringNullableFilter<"Property"> | string | null
+    version?: IntFilter<"Property"> | number
+    ghanaPostGps?: StringNullableFilter<"Property"> | string | null
+    createdBy?: StringNullableFilter<"Property"> | string | null
     createdByRatepayerId?: UuidNullableFilter<"Property"> | string | null
     registrationSource?: StringFilter<"Property"> | string
     registeredByConcessionId?: UuidNullableFilter<"Property"> | string | null
     claimedByRatepayerId?: UuidNullableFilter<"Property"> | string | null
     verificationStatus?: StringFilter<"Property"> | string
+    verifiedBy?: StringNullableFilter<"Property"> | string | null
+    verifiedAt?: DateTimeNullableFilter<"Property"> | Date | string | null
     polygonGeoJson?: JsonFilter<"Property">
     leaseDurationYears?: IntNullableFilter<"Property"> | number | null
     landAreaSqm?: FloatNullableFilter<"Property"> | number | null
@@ -16128,11 +16207,16 @@ export namespace Prisma {
     propertyUse?: SortOrder
     tenureType?: SortOrderInput | SortOrder
     structureType?: SortOrderInput | SortOrder
+    version?: SortOrder
+    ghanaPostGps?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
     createdByRatepayerId?: SortOrderInput | SortOrder
     registrationSource?: SortOrder
     registeredByConcessionId?: SortOrderInput | SortOrder
     claimedByRatepayerId?: SortOrderInput | SortOrder
     verificationStatus?: SortOrder
+    verifiedBy?: SortOrderInput | SortOrder
+    verifiedAt?: SortOrderInput | SortOrder
     polygonGeoJson?: SortOrder
     leaseDurationYears?: SortOrderInput | SortOrder
     landAreaSqm?: SortOrderInput | SortOrder
@@ -16161,11 +16245,16 @@ export namespace Prisma {
     propertyUse?: StringFilter<"Property"> | string
     tenureType?: StringNullableFilter<"Property"> | string | null
     structureType?: StringNullableFilter<"Property"> | string | null
+    version?: IntFilter<"Property"> | number
+    ghanaPostGps?: StringNullableFilter<"Property"> | string | null
+    createdBy?: StringNullableFilter<"Property"> | string | null
     createdByRatepayerId?: UuidNullableFilter<"Property"> | string | null
     registrationSource?: StringFilter<"Property"> | string
     registeredByConcessionId?: UuidNullableFilter<"Property"> | string | null
     claimedByRatepayerId?: UuidNullableFilter<"Property"> | string | null
     verificationStatus?: StringFilter<"Property"> | string
+    verifiedBy?: StringNullableFilter<"Property"> | string | null
+    verifiedAt?: DateTimeNullableFilter<"Property"> | Date | string | null
     polygonGeoJson?: JsonFilter<"Property">
     leaseDurationYears?: IntNullableFilter<"Property"> | number | null
     landAreaSqm?: FloatNullableFilter<"Property"> | number | null
@@ -16191,11 +16280,16 @@ export namespace Prisma {
     propertyUse?: SortOrder
     tenureType?: SortOrderInput | SortOrder
     structureType?: SortOrderInput | SortOrder
+    version?: SortOrder
+    ghanaPostGps?: SortOrderInput | SortOrder
+    createdBy?: SortOrderInput | SortOrder
     createdByRatepayerId?: SortOrderInput | SortOrder
     registrationSource?: SortOrder
     registeredByConcessionId?: SortOrderInput | SortOrder
     claimedByRatepayerId?: SortOrderInput | SortOrder
     verificationStatus?: SortOrder
+    verifiedBy?: SortOrderInput | SortOrder
+    verifiedAt?: SortOrderInput | SortOrder
     polygonGeoJson?: SortOrder
     leaseDurationYears?: SortOrderInput | SortOrder
     landAreaSqm?: SortOrderInput | SortOrder
@@ -16224,11 +16318,16 @@ export namespace Prisma {
     propertyUse?: StringWithAggregatesFilter<"Property"> | string
     tenureType?: StringNullableWithAggregatesFilter<"Property"> | string | null
     structureType?: StringNullableWithAggregatesFilter<"Property"> | string | null
+    version?: IntWithAggregatesFilter<"Property"> | number
+    ghanaPostGps?: StringNullableWithAggregatesFilter<"Property"> | string | null
+    createdBy?: StringNullableWithAggregatesFilter<"Property"> | string | null
     createdByRatepayerId?: UuidNullableWithAggregatesFilter<"Property"> | string | null
     registrationSource?: StringWithAggregatesFilter<"Property"> | string
     registeredByConcessionId?: UuidNullableWithAggregatesFilter<"Property"> | string | null
     claimedByRatepayerId?: UuidNullableWithAggregatesFilter<"Property"> | string | null
     verificationStatus?: StringWithAggregatesFilter<"Property"> | string
+    verifiedBy?: StringNullableWithAggregatesFilter<"Property"> | string | null
+    verifiedAt?: DateTimeNullableWithAggregatesFilter<"Property"> | Date | string | null
     polygonGeoJson?: JsonWithAggregatesFilter<"Property">
     leaseDurationYears?: IntNullableWithAggregatesFilter<"Property"> | number | null
     landAreaSqm?: FloatNullableWithAggregatesFilter<"Property"> | number | null
@@ -17152,11 +17251,16 @@ export namespace Prisma {
     propertyUse: string
     tenureType?: string | null
     structureType?: string | null
+    version?: number
+    ghanaPostGps?: string | null
+    createdBy?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
     claimedByRatepayerId?: string | null
     verificationStatus?: string
+    verifiedBy?: string | null
+    verifiedAt?: Date | string | null
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
@@ -17182,11 +17286,16 @@ export namespace Prisma {
     propertyUse: string
     tenureType?: string | null
     structureType?: string | null
+    version?: number
+    ghanaPostGps?: string | null
+    createdBy?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
     claimedByRatepayerId?: string | null
     verificationStatus?: string
+    verifiedBy?: string | null
+    verifiedAt?: Date | string | null
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
@@ -17212,11 +17321,16 @@ export namespace Prisma {
     propertyUse?: StringFieldUpdateOperationsInput | string
     tenureType?: NullableStringFieldUpdateOperationsInput | string | null
     structureType?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    ghanaPostGps?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
     claimedByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     verificationStatus?: StringFieldUpdateOperationsInput | string
+    verifiedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    verifiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -17242,11 +17356,16 @@ export namespace Prisma {
     propertyUse?: StringFieldUpdateOperationsInput | string
     tenureType?: NullableStringFieldUpdateOperationsInput | string | null
     structureType?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    ghanaPostGps?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
     claimedByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     verificationStatus?: StringFieldUpdateOperationsInput | string
+    verifiedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    verifiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -17272,11 +17391,16 @@ export namespace Prisma {
     propertyUse: string
     tenureType?: string | null
     structureType?: string | null
+    version?: number
+    ghanaPostGps?: string | null
+    createdBy?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
     claimedByRatepayerId?: string | null
     verificationStatus?: string
+    verifiedBy?: string | null
+    verifiedAt?: Date | string | null
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
@@ -17297,11 +17421,16 @@ export namespace Prisma {
     propertyUse?: StringFieldUpdateOperationsInput | string
     tenureType?: NullableStringFieldUpdateOperationsInput | string | null
     structureType?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    ghanaPostGps?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
     claimedByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     verificationStatus?: StringFieldUpdateOperationsInput | string
+    verifiedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    verifiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -17322,11 +17451,16 @@ export namespace Prisma {
     propertyUse?: StringFieldUpdateOperationsInput | string
     tenureType?: NullableStringFieldUpdateOperationsInput | string | null
     structureType?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    ghanaPostGps?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
     claimedByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     verificationStatus?: StringFieldUpdateOperationsInput | string
+    verifiedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    verifiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -18404,6 +18538,17 @@ export namespace Prisma {
     not?: NestedStringNullableFilter<$PrismaModel> | string | null
   }
 
+  export type IntFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntFilter<$PrismaModel> | number
+  }
+
   export type UuidNullableFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel> | null
     in?: string[] | ListStringFieldRefInput<$PrismaModel> | null
@@ -18414,6 +18559,17 @@ export namespace Prisma {
     gte?: string | StringFieldRefInput<$PrismaModel>
     mode?: QueryMode
     not?: NestedUuidNullableFilter<$PrismaModel> | string | null
+  }
+
+  export type DateTimeNullableFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
   }
   export type JsonFilter<$PrismaModel = never> =
     | PatchUndefined<
@@ -18539,11 +18695,16 @@ export namespace Prisma {
     propertyUse?: SortOrder
     tenureType?: SortOrder
     structureType?: SortOrder
+    version?: SortOrder
+    ghanaPostGps?: SortOrder
+    createdBy?: SortOrder
     createdByRatepayerId?: SortOrder
     registrationSource?: SortOrder
     registeredByConcessionId?: SortOrder
     claimedByRatepayerId?: SortOrder
     verificationStatus?: SortOrder
+    verifiedBy?: SortOrder
+    verifiedAt?: SortOrder
     polygonGeoJson?: SortOrder
     leaseDurationYears?: SortOrder
     landAreaSqm?: SortOrder
@@ -18553,6 +18714,7 @@ export namespace Prisma {
   }
 
   export type PropertyAvgOrderByAggregateInput = {
+    version?: SortOrder
     leaseDurationYears?: SortOrder
     landAreaSqm?: SortOrder
     numberOfFloors?: SortOrder
@@ -18570,11 +18732,16 @@ export namespace Prisma {
     propertyUse?: SortOrder
     tenureType?: SortOrder
     structureType?: SortOrder
+    version?: SortOrder
+    ghanaPostGps?: SortOrder
+    createdBy?: SortOrder
     createdByRatepayerId?: SortOrder
     registrationSource?: SortOrder
     registeredByConcessionId?: SortOrder
     claimedByRatepayerId?: SortOrder
     verificationStatus?: SortOrder
+    verifiedBy?: SortOrder
+    verifiedAt?: SortOrder
     leaseDurationYears?: SortOrder
     landAreaSqm?: SortOrder
     numberOfFloors?: SortOrder
@@ -18594,11 +18761,16 @@ export namespace Prisma {
     propertyUse?: SortOrder
     tenureType?: SortOrder
     structureType?: SortOrder
+    version?: SortOrder
+    ghanaPostGps?: SortOrder
+    createdBy?: SortOrder
     createdByRatepayerId?: SortOrder
     registrationSource?: SortOrder
     registeredByConcessionId?: SortOrder
     claimedByRatepayerId?: SortOrder
     verificationStatus?: SortOrder
+    verifiedBy?: SortOrder
+    verifiedAt?: SortOrder
     leaseDurationYears?: SortOrder
     landAreaSqm?: SortOrder
     numberOfFloors?: SortOrder
@@ -18607,6 +18779,7 @@ export namespace Prisma {
   }
 
   export type PropertySumOrderByAggregateInput = {
+    version?: SortOrder
     leaseDurationYears?: SortOrder
     landAreaSqm?: SortOrder
     numberOfFloors?: SortOrder
@@ -18663,6 +18836,22 @@ export namespace Prisma {
     _max?: NestedStringNullableFilter<$PrismaModel>
   }
 
+  export type IntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
+  }
+
   export type UuidNullableWithAggregatesFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel> | null
     in?: string[] | ListStringFieldRefInput<$PrismaModel> | null
@@ -18676,6 +18865,20 @@ export namespace Prisma {
     _count?: NestedIntNullableFilter<$PrismaModel>
     _min?: NestedStringNullableFilter<$PrismaModel>
     _max?: NestedStringNullableFilter<$PrismaModel>
+  }
+
+  export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedDateTimeNullableFilter<$PrismaModel>
+    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
   export type JsonWithAggregatesFilter<$PrismaModel = never> =
     | PatchUndefined<
@@ -18793,17 +18996,6 @@ export namespace Prisma {
     _max?: NestedBoolFilter<$PrismaModel>
   }
 
-  export type DateTimeNullableFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
-  }
-
   export type PropertyScalarRelationFilter = {
     is?: PropertyWhereInput
     isNot?: PropertyWhereInput
@@ -18907,31 +19099,6 @@ export namespace Prisma {
     premisesGpsAccuracy?: SortOrder
   }
 
-  export type DateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedDateTimeNullableFilter<$PrismaModel>
-    _max?: NestedDateTimeNullableFilter<$PrismaModel>
-  }
-
-  export type IntFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntFilter<$PrismaModel> | number
-  }
-
   export type PropertyUnitCountOrderByAggregateInput = {
     id?: SortOrder
     propertyId?: SortOrder
@@ -18965,22 +19132,6 @@ export namespace Prisma {
 
   export type PropertyUnitSumOrderByAggregateInput = {
     floorLevel?: SortOrder
-  }
-
-  export type IntWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedFloatFilter<$PrismaModel>
-    _sum?: NestedIntFilter<$PrismaModel>
-    _min?: NestedIntFilter<$PrismaModel>
-    _max?: NestedIntFilter<$PrismaModel>
   }
 
   export type PropertyPhotoCountOrderByAggregateInput = {
@@ -19510,6 +19661,18 @@ export namespace Prisma {
     set?: string | null
   }
 
+  export type IntFieldUpdateOperationsInput = {
+    set?: number
+    increment?: number
+    decrement?: number
+    multiply?: number
+    divide?: number
+  }
+
+  export type NullableDateTimeFieldUpdateOperationsInput = {
+    set?: Date | string | null
+  }
+
   export type NullableIntFieldUpdateOperationsInput = {
     set?: number | null
     increment?: number
@@ -19680,10 +19843,6 @@ export namespace Prisma {
     connect?: PropertyWhereUniqueInput
   }
 
-  export type NullableDateTimeFieldUpdateOperationsInput = {
-    set?: Date | string | null
-  }
-
   export type PropertyUpdateOneRequiredWithoutDocumentsNestedInput = {
     create?: XOR<PropertyCreateWithoutDocumentsInput, PropertyUncheckedCreateWithoutDocumentsInput>
     connectOrCreate?: PropertyCreateOrConnectWithoutDocumentsInput
@@ -19696,14 +19855,6 @@ export namespace Prisma {
     create?: XOR<PropertyCreateWithoutUnitsInput, PropertyUncheckedCreateWithoutUnitsInput>
     connectOrCreate?: PropertyCreateOrConnectWithoutUnitsInput
     connect?: PropertyWhereUniqueInput
-  }
-
-  export type IntFieldUpdateOperationsInput = {
-    set?: number
-    increment?: number
-    decrement?: number
-    multiply?: number
-    divide?: number
   }
 
   export type PropertyUpdateOneRequiredWithoutUnitsNestedInput = {
@@ -19867,6 +20018,17 @@ export namespace Prisma {
     not?: NestedStringNullableFilter<$PrismaModel> | string | null
   }
 
+  export type NestedIntFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntFilter<$PrismaModel> | number
+  }
+
   export type NestedUuidNullableFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel> | null
     in?: string[] | ListStringFieldRefInput<$PrismaModel> | null
@@ -19876,6 +20038,17 @@ export namespace Prisma {
     gt?: string | StringFieldRefInput<$PrismaModel>
     gte?: string | StringFieldRefInput<$PrismaModel>
     not?: NestedUuidNullableFilter<$PrismaModel> | string | null
+  }
+
+  export type NestedDateTimeNullableFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
   }
 
   export type NestedIntNullableFilter<$PrismaModel = never> = {
@@ -19925,17 +20098,6 @@ export namespace Prisma {
     _max?: NestedStringFilter<$PrismaModel>
   }
 
-  export type NestedIntFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntFilter<$PrismaModel> | number
-  }
-
   export type NestedStringWithAggregatesFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel>
     in?: string[] | ListStringFieldRefInput<$PrismaModel>
@@ -19970,6 +20132,33 @@ export namespace Prisma {
     _max?: NestedStringNullableFilter<$PrismaModel>
   }
 
+  export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
+  }
+
+  export type NestedFloatFilter<$PrismaModel = never> = {
+    equals?: number | FloatFieldRefInput<$PrismaModel>
+    in?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    lt?: number | FloatFieldRefInput<$PrismaModel>
+    lte?: number | FloatFieldRefInput<$PrismaModel>
+    gt?: number | FloatFieldRefInput<$PrismaModel>
+    gte?: number | FloatFieldRefInput<$PrismaModel>
+    not?: NestedFloatFilter<$PrismaModel> | number
+  }
+
   export type NestedUuidNullableWithAggregatesFilter<$PrismaModel = never> = {
     equals?: string | StringFieldRefInput<$PrismaModel> | null
     in?: string[] | ListStringFieldRefInput<$PrismaModel> | null
@@ -19982,6 +20171,20 @@ export namespace Prisma {
     _count?: NestedIntNullableFilter<$PrismaModel>
     _min?: NestedStringNullableFilter<$PrismaModel>
     _max?: NestedStringNullableFilter<$PrismaModel>
+  }
+
+  export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
+    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
+    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
+    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
+    _count?: NestedIntNullableFilter<$PrismaModel>
+    _min?: NestedDateTimeNullableFilter<$PrismaModel>
+    _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
   export type NestedJsonFilter<$PrismaModel = never> =
     | PatchUndefined<
@@ -20064,58 +20267,6 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedBoolFilter<$PrismaModel>
     _max?: NestedBoolFilter<$PrismaModel>
-  }
-
-  export type NestedDateTimeNullableFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableFilter<$PrismaModel> | Date | string | null
-  }
-
-  export type NestedDateTimeNullableWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: Date | string | DateTimeFieldRefInput<$PrismaModel> | null
-    in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    notIn?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel> | null
-    lt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    lte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gt?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    gte?: Date | string | DateTimeFieldRefInput<$PrismaModel>
-    not?: NestedDateTimeNullableWithAggregatesFilter<$PrismaModel> | Date | string | null
-    _count?: NestedIntNullableFilter<$PrismaModel>
-    _min?: NestedDateTimeNullableFilter<$PrismaModel>
-    _max?: NestedDateTimeNullableFilter<$PrismaModel>
-  }
-
-  export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedFloatFilter<$PrismaModel>
-    _sum?: NestedIntFilter<$PrismaModel>
-    _min?: NestedIntFilter<$PrismaModel>
-    _max?: NestedIntFilter<$PrismaModel>
-  }
-
-  export type NestedFloatFilter<$PrismaModel = never> = {
-    equals?: number | FloatFieldRefInput<$PrismaModel>
-    in?: number[] | ListFloatFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListFloatFieldRefInput<$PrismaModel>
-    lt?: number | FloatFieldRefInput<$PrismaModel>
-    lte?: number | FloatFieldRefInput<$PrismaModel>
-    gt?: number | FloatFieldRefInput<$PrismaModel>
-    gte?: number | FloatFieldRefInput<$PrismaModel>
-    not?: NestedFloatFilter<$PrismaModel> | number
   }
 
   export type NestedDecimalFilter<$PrismaModel = never> = {
@@ -20553,11 +20704,16 @@ export namespace Prisma {
     propertyUse: string
     tenureType?: string | null
     structureType?: string | null
+    version?: number
+    ghanaPostGps?: string | null
+    createdBy?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
     claimedByRatepayerId?: string | null
     verificationStatus?: string
+    verifiedBy?: string | null
+    verifiedAt?: Date | string | null
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
@@ -20582,11 +20738,16 @@ export namespace Prisma {
     propertyUse: string
     tenureType?: string | null
     structureType?: string | null
+    version?: number
+    ghanaPostGps?: string | null
+    createdBy?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
     claimedByRatepayerId?: string | null
     verificationStatus?: string
+    verifiedBy?: string | null
+    verifiedAt?: Date | string | null
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
@@ -20627,11 +20788,16 @@ export namespace Prisma {
     propertyUse?: StringFieldUpdateOperationsInput | string
     tenureType?: NullableStringFieldUpdateOperationsInput | string | null
     structureType?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    ghanaPostGps?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
     claimedByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     verificationStatus?: StringFieldUpdateOperationsInput | string
+    verifiedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    verifiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -20656,11 +20822,16 @@ export namespace Prisma {
     propertyUse?: StringFieldUpdateOperationsInput | string
     tenureType?: NullableStringFieldUpdateOperationsInput | string | null
     structureType?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    ghanaPostGps?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
     claimedByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     verificationStatus?: StringFieldUpdateOperationsInput | string
+    verifiedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    verifiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -20685,11 +20856,16 @@ export namespace Prisma {
     propertyUse: string
     tenureType?: string | null
     structureType?: string | null
+    version?: number
+    ghanaPostGps?: string | null
+    createdBy?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
     claimedByRatepayerId?: string | null
     verificationStatus?: string
+    verifiedBy?: string | null
+    verifiedAt?: Date | string | null
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
@@ -20714,11 +20890,16 @@ export namespace Prisma {
     propertyUse: string
     tenureType?: string | null
     structureType?: string | null
+    version?: number
+    ghanaPostGps?: string | null
+    createdBy?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
     claimedByRatepayerId?: string | null
     verificationStatus?: string
+    verifiedBy?: string | null
+    verifiedAt?: Date | string | null
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
@@ -20759,11 +20940,16 @@ export namespace Prisma {
     propertyUse?: StringFieldUpdateOperationsInput | string
     tenureType?: NullableStringFieldUpdateOperationsInput | string | null
     structureType?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    ghanaPostGps?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
     claimedByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     verificationStatus?: StringFieldUpdateOperationsInput | string
+    verifiedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    verifiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -20788,11 +20974,16 @@ export namespace Prisma {
     propertyUse?: StringFieldUpdateOperationsInput | string
     tenureType?: NullableStringFieldUpdateOperationsInput | string | null
     structureType?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    ghanaPostGps?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
     claimedByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     verificationStatus?: StringFieldUpdateOperationsInput | string
+    verifiedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    verifiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -20817,11 +21008,16 @@ export namespace Prisma {
     propertyUse: string
     tenureType?: string | null
     structureType?: string | null
+    version?: number
+    ghanaPostGps?: string | null
+    createdBy?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
     claimedByRatepayerId?: string | null
     verificationStatus?: string
+    verifiedBy?: string | null
+    verifiedAt?: Date | string | null
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
@@ -20846,11 +21042,16 @@ export namespace Prisma {
     propertyUse: string
     tenureType?: string | null
     structureType?: string | null
+    version?: number
+    ghanaPostGps?: string | null
+    createdBy?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
     claimedByRatepayerId?: string | null
     verificationStatus?: string
+    verifiedBy?: string | null
+    verifiedAt?: Date | string | null
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
@@ -20891,11 +21092,16 @@ export namespace Prisma {
     propertyUse?: StringFieldUpdateOperationsInput | string
     tenureType?: NullableStringFieldUpdateOperationsInput | string | null
     structureType?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    ghanaPostGps?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
     claimedByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     verificationStatus?: StringFieldUpdateOperationsInput | string
+    verifiedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    verifiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -20920,11 +21126,16 @@ export namespace Prisma {
     propertyUse?: StringFieldUpdateOperationsInput | string
     tenureType?: NullableStringFieldUpdateOperationsInput | string | null
     structureType?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    ghanaPostGps?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
     claimedByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     verificationStatus?: StringFieldUpdateOperationsInput | string
+    verifiedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    verifiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -20995,11 +21206,16 @@ export namespace Prisma {
     propertyUse: string
     tenureType?: string | null
     structureType?: string | null
+    version?: number
+    ghanaPostGps?: string | null
+    createdBy?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
     claimedByRatepayerId?: string | null
     verificationStatus?: string
+    verifiedBy?: string | null
+    verifiedAt?: Date | string | null
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
@@ -21024,11 +21240,16 @@ export namespace Prisma {
     propertyUse: string
     tenureType?: string | null
     structureType?: string | null
+    version?: number
+    ghanaPostGps?: string | null
+    createdBy?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
     claimedByRatepayerId?: string | null
     verificationStatus?: string
+    verifiedBy?: string | null
+    verifiedAt?: Date | string | null
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
@@ -21090,11 +21311,16 @@ export namespace Prisma {
     propertyUse?: StringFieldUpdateOperationsInput | string
     tenureType?: NullableStringFieldUpdateOperationsInput | string | null
     structureType?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    ghanaPostGps?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
     claimedByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     verificationStatus?: StringFieldUpdateOperationsInput | string
+    verifiedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    verifiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -21119,11 +21345,16 @@ export namespace Prisma {
     propertyUse?: StringFieldUpdateOperationsInput | string
     tenureType?: NullableStringFieldUpdateOperationsInput | string | null
     structureType?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    ghanaPostGps?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
     claimedByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     verificationStatus?: StringFieldUpdateOperationsInput | string
+    verifiedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    verifiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -21175,11 +21406,16 @@ export namespace Prisma {
     propertyUse: string
     tenureType?: string | null
     structureType?: string | null
+    version?: number
+    ghanaPostGps?: string | null
+    createdBy?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
     claimedByRatepayerId?: string | null
     verificationStatus?: string
+    verifiedBy?: string | null
+    verifiedAt?: Date | string | null
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
@@ -21204,11 +21440,16 @@ export namespace Prisma {
     propertyUse: string
     tenureType?: string | null
     structureType?: string | null
+    version?: number
+    ghanaPostGps?: string | null
+    createdBy?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
     claimedByRatepayerId?: string | null
     verificationStatus?: string
+    verifiedBy?: string | null
+    verifiedAt?: Date | string | null
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
@@ -21249,11 +21490,16 @@ export namespace Prisma {
     propertyUse?: StringFieldUpdateOperationsInput | string
     tenureType?: NullableStringFieldUpdateOperationsInput | string | null
     structureType?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    ghanaPostGps?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
     claimedByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     verificationStatus?: StringFieldUpdateOperationsInput | string
+    verifiedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    verifiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
@@ -21278,11 +21524,16 @@ export namespace Prisma {
     propertyUse?: StringFieldUpdateOperationsInput | string
     tenureType?: NullableStringFieldUpdateOperationsInput | string | null
     structureType?: NullableStringFieldUpdateOperationsInput | string | null
+    version?: IntFieldUpdateOperationsInput | number
+    ghanaPostGps?: NullableStringFieldUpdateOperationsInput | string | null
+    createdBy?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
     claimedByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     verificationStatus?: StringFieldUpdateOperationsInput | string
+    verifiedBy?: NullableStringFieldUpdateOperationsInput | string | null
+    verifiedAt?: NullableDateTimeFieldUpdateOperationsInput | Date | string | null
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null

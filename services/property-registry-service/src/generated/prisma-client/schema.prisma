@@ -9,28 +9,33 @@ datasource db {
 }
 
 model Property {
-  id                       String   @id @default(uuid()) @db.Uuid
-  code                     String   @unique @db.VarChar(50)
-  accountNumber            String?  @unique @map("account_number") @db.VarChar(50)
-  propertyName             String?  @map("property_name") @db.VarChar(150)
-  assemblyId               String   @map("assembly_id") @db.Uuid
-  propertyClass            String?  @map("property_class") @db.VarChar(50)
-  buildingStatus           String?  @map("building_status") @db.VarChar(50)
-  propertyStatus           String   @default("UNASSESSED") @map("property_status") @db.VarChar(50)
-  propertyUse              String   @map("property_use") @db.VarChar(50)
-  tenureType               String?  @map("tenure_type") @db.VarChar(50)
-  structureType            String?  @map("structure_type") @db.VarChar(50)
-  createdByRatepayerId     String?  @map("created_by_ratepayer_id") @db.Uuid
-  registrationSource       String   @default("CONCESSION") @map("registration_source") @db.VarChar(30)
-  registeredByConcessionId String?  @map("registered_by_concession_id") @db.Uuid
-  claimedByRatepayerId     String?  @map("claimed_by_ratepayer_id") @db.Uuid
-  verificationStatus       String   @default("PENDING") @map("verification_status") @db.VarChar(30)
-  polygonGeoJson           Json     @map("polygon_geojson")
-  leaseDurationYears       Int?     @map("lease_duration_years")
-  landAreaSqm              Float?   @map("land_area_sqm")
-  numberOfFloors           Int?     @map("number_of_floors")
-  createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt                DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  id                       String    @id @default(uuid()) @db.Uuid
+  code                     String    @unique @db.VarChar(50)
+  accountNumber            String?   @unique @map("account_number") @db.VarChar(50)
+  propertyName             String?   @map("property_name") @db.VarChar(150)
+  assemblyId               String    @map("assembly_id") @db.Uuid
+  propertyClass            String?   @map("property_class") @db.VarChar(50)
+  buildingStatus           String?   @map("building_status") @db.VarChar(50)
+  propertyStatus           String    @default("UNASSESSED") @map("property_status") @db.VarChar(50)
+  propertyUse              String    @map("property_use") @db.VarChar(50)
+  tenureType               String?   @map("tenure_type") @db.VarChar(50)
+  structureType            String?   @map("structure_type") @db.VarChar(50)
+  version                  Int       @default(1) @map("version")
+  ghanaPostGps             String?   @map("ghana_post_gps") @db.VarChar(50)
+  createdBy                String?   @map("created_by") @db.VarChar(150)
+  createdByRatepayerId     String?   @map("created_by_ratepayer_id") @db.Uuid
+  registrationSource       String    @default("CONCESSION") @map("registration_source") @db.VarChar(30)
+  registeredByConcessionId String?   @map("registered_by_concession_id") @db.Uuid
+  claimedByRatepayerId     String?   @map("claimed_by_ratepayer_id") @db.Uuid
+  verificationStatus       String    @default("PENDING") @map("verification_status") @db.VarChar(30)
+  verifiedBy               String?   @map("verified_by") @db.VarChar(150)
+  verifiedAt               DateTime? @map("verified_at") @db.Timestamptz
+  polygonGeoJson           Json      @map("polygon_geojson")
+  leaseDurationYears       Int?      @map("lease_duration_years")
+  landAreaSqm              Float?    @map("land_area_sqm")
+  numberOfFloors           Int?      @map("number_of_floors")
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 
   units         PropertyUnit[]
   photos        PropertyPhoto[]

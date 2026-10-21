@@ -35,6 +35,10 @@ export interface CreatePropertyInput {
   numberOfFloors?: number;
   ownershipType?: string;
   ownershipPercentage?: number;
+  version?: number;
+  ghanaPostGps?: string;
+  createdBy?: string;
+  verifiedBy?: string;
   polygonGeoJson: Record<string, unknown>;
   registrationSource?: 'CONCESSION' | 'RATEPAYER';
   createdByRatepayerId?: string;
@@ -105,6 +109,9 @@ export interface UpdatePropertyInput {
   numberOfFloors?: number;
   landAreaSqm?: number;
   leaseDurationYears?: number;
+  version?: number;
+  ghanaPostGps?: string;
+  verifiedBy?: string;
   polygonGeoJson?: Record<string, unknown>;
   claimedByRatepayerId?: string;
   createdByRatepayerId?: string;
@@ -294,8 +301,8 @@ async function assertNoConflictingOverlap(
 /**
 /**
  * Auto-generates property ID (UUID) and canonical property code in the format:
- * PROP-[year of addition]-[the first four characters of the ID which is UUID]
- * e.g. PROP-2026-B3D4
+ * PROP-[year of addition]-[first 4 chars of UUID]-[last 4 chars of UUID]
+ * e.g. PROP-2026-B3D4-9A2F
  */
 async function generatePropertyIdAndCode(
   tx: any,
@@ -304,8 +311,9 @@ async function generatePropertyIdAndCode(
   const year = new Date().getFullYear();
   while (true) {
     const id = crypto.randomUUID();
-    const shortCode = id.slice(0, 4).toUpperCase();
-    const code = `PROP-${year}-${shortCode}`;
+    const first4 = id.slice(0, 4).toUpperCase();
+    const last4 = id.slice(-4).toUpperCase();
+    const code = `PROP-${year}-${first4}-${last4}`;
 
     if (reservedCodes && reservedCodes.has(code)) {
       continue;
@@ -408,6 +416,9 @@ export function propertyService(app: FastifyInstance) {
             data: {
               id,
               code,
+              version: 1,
+              ghanaPostGps: input.ghanaPostGps?.trim() || null,
+              createdBy: input.createdBy || (isRatepayerCreation ? (input.createdByRatepayerId ?? input.actorId) : (input.actorId ?? 'CONCESSION_STAFF')),
               accountNumber: input.accountNumber ?? null,
               propertyName: input.propertyName ?? null,
               assemblyId: effectiveAssemblyId,
@@ -578,6 +589,9 @@ export function propertyService(app: FastifyInstance) {
               data: {
                 id,
                 code,
+                version: 1,
+                ghanaPostGps: item.ghanaPostGps?.trim() || null,
+                createdBy: item.createdBy || input.actorId || 'CONCESSION_STAFF',
                 accountNumber: item.accountNumber ?? null,
                 propertyName: item.propertyName ?? null,
                 assemblyId: assembly.id,
@@ -758,6 +772,7 @@ export function propertyService(app: FastifyInstance) {
 
       return app.prisma.$transaction(async (tx) => {
         const updateData: any = {
+          version: { increment: 1 },
           ...(input.propertyName !== undefined ? { propertyName: input.propertyName } : {}),
           ...(input.accountNumber !== undefined ? { accountNumber: input.accountNumber } : {}),
           ...(input.propertyUse !== undefined ? { propertyUse: input.propertyUse } : {}),
@@ -769,6 +784,8 @@ export function propertyService(app: FastifyInstance) {
           ...(input.landAreaSqm !== undefined ? { landAreaSqm: input.landAreaSqm } : {}),
           ...(input.leaseDurationYears !== undefined ? { leaseDurationYears: input.leaseDurationYears } : {}),
           ...(input.polygonGeoJson !== undefined ? { polygonGeoJson: input.polygonGeoJson } : {}),
+          ...(input.ghanaPostGps !== undefined ? { ghanaPostGps: input.ghanaPostGps?.trim() || null } : {}),
+          ...(input.verifiedBy !== undefined ? { verifiedBy: input.verifiedBy, verifiedAt: new Date() } : {}),
           ...(input.claimedByRatepayerId !== undefined ? { claimedByRatepayerId: input.claimedByRatepayerId } : {}),
           ...(input.createdByRatepayerId !== undefined ? { createdByRatepayerId: input.createdByRatepayerId } : {})
         };
@@ -1023,7 +1040,11 @@ export function propertyService(app: FastifyInstance) {
         if (input.reviewStatus === 'APPROVED') {
           await tx.property.update({
             where: { id: verification.propertyId },
-            data: { verificationStatus: 'VERIFIED' }
+            data: {
+              verificationStatus: 'VERIFIED',
+              verifiedBy: input.reviewedByPersonnelId,
+              verifiedAt: new Date()
+            }
           });
         }
 

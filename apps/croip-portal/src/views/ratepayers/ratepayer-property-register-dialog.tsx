@@ -41,6 +41,7 @@ export function RatepayerPropertyRegisterDialog({
   const [propertyName, setPropertyName] = useState('')
   const [propertyType, setPropertyType] = useState('RESIDENTIAL')
   const [ownershipType, setOwnershipType] = useState('FREEHOLD')
+  const [ghanaPostGps, setGhanaPostGps] = useState(ratepayer?.ghanaPostGps || '')
   const [streetName, setStreetName] = useState(ratepayer?.address || '')
   const [houseNumber, setHouseNumber] = useState('')
   const [documentRef, setDocumentRef] = useState('')
@@ -94,6 +95,8 @@ export function RatepayerPropertyRegisterDialog({
         propertyName: propertyName.trim(),
         propertyType,
         ownershipType,
+        ghanaPostGps: ghanaPostGps.trim() || undefined,
+        createdBy: ratepayer?.legalName || ratepayer?.code || 'Ratepayer',
         streetName: streetName.trim() || ratepayer.address || 'Main Street',
         houseNumber: houseNumber.trim() || 'Plot 1',
         polygonGeoJson,
@@ -118,6 +121,7 @@ export function RatepayerPropertyRegisterDialog({
         onSuccess(data.data)
         onOpenChange(false)
         setPropertyName('')
+        setGhanaPostGps('')
         setHouseNumber('')
       } else {
         toast.error(data.error || 'Failed to register property')
@@ -245,6 +249,20 @@ export function RatepayerPropertyRegisterDialog({
                 disabled={!isEligible}
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium flex items-center gap-1.5">
+              <MapPinIcon className="size-3 text-muted-foreground" />
+              Ghana Post GPS Digital Address
+            </Label>
+            <Input
+              placeholder="e.g. GA-183-9024"
+              value={ghanaPostGps}
+              onChange={e => setGhanaPostGps(e.target.value.toUpperCase())}
+              className="text-xs h-9 font-mono"
+              disabled={!isEligible}
+            />
           </div>
 
           <div className="space-y-1.5">

@@ -13,7 +13,8 @@ import {
   EyeIcon,
   Building2Icon,
   UserIcon,
-  LandmarkIcon
+  LandmarkIcon,
+  MapPinIcon
 } from 'lucide-react'
 
 import { toast } from 'sonner'
@@ -46,8 +47,13 @@ import {
 export interface PropertyRecord {
   id: string
   code: string
+  version?: number
   accountNumber?: string | null
   propertyName?: string | null
+  ghanaPostGps?: string | null
+  createdBy?: string | null
+  verifiedBy?: string | null
+  verifiedAt?: string | null
   assemblyId: string
   propertyClass: string
   buildingStatus?: string
@@ -177,6 +183,9 @@ export function PropertiesDataTable({
         item.code,
         item.propertyName,
         item.accountNumber,
+        item.ghanaPostGps,
+        item.createdBy,
+        item.verifiedBy,
         assembly?.name,
         assembly?.code,
         item.propertyClass
@@ -435,14 +444,30 @@ export function PropertiesDataTable({
                       />
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col">
-                        <span className="font-semibold text-xs text-foreground">
-                          {row.propertyName || 'Unnamed Property'}
-                        </span>
-                        <span className="font-mono text-[11px] text-muted-foreground">
-                          {row.code}
-                          {row.accountNumber ? ` • A/C ${row.accountNumber}` : ''}
-                        </span>
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-semibold text-xs text-foreground">
+                            {row.propertyName || 'Unnamed Property'}
+                          </span>
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] font-mono px-1.5 py-0 h-4 border-muted-foreground/30 bg-muted/40 text-muted-foreground"
+                          >
+                            v{row.version ?? 1}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1.5 flex-wrap font-mono text-[11px] text-muted-foreground">
+                          <span>
+                            {row.code}
+                            {row.accountNumber ? ` • A/C ${row.accountNumber}` : ''}
+                          </span>
+                          {row.ghanaPostGps && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
+                              <MapPinIcon className="size-2.5" />
+                              {row.ghanaPostGps}
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </TableCell>
 
@@ -460,7 +485,14 @@ export function PropertiesDataTable({
                     </TableCell>
 
                     <TableCell>
-                      <VerificationBadge status={row.verificationStatus} />
+                      <div className="flex flex-col gap-0.5">
+                        <VerificationBadge status={row.verificationStatus} />
+                        {row.verifiedBy && (
+                          <span className="text-[10px] text-muted-foreground truncate max-w-[120px]" title={row.verifiedBy}>
+                            by {row.verifiedBy}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
 
                     <TableCell>
@@ -468,9 +500,16 @@ export function PropertiesDataTable({
                     </TableCell>
 
                     <TableCell>
-                      <span className="text-xs text-muted-foreground">
-                        {row.createdAt ? new Date(row.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                      </span>
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground">
+                          {row.createdAt ? new Date(row.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                        </span>
+                        {row.createdBy && (
+                          <span className="text-[10px] text-muted-foreground/80 truncate max-w-[120px]" title={row.createdBy}>
+                            by {row.createdBy}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
 
                     <TableCell className="text-center pr-6">

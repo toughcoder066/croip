@@ -30,6 +30,11 @@ export const propertyResponseSchema = {
     registrationSource: { type: 'string', enum: ['CONCESSION', 'RATEPAYER'] },
     registeredByConcessionId: { type: ['string', 'null'], format: 'uuid' },
     createdByRatepayerId: { type: ['string', 'null'], format: 'uuid' },
+    version: { type: 'integer' },
+    ghanaPostGps: { type: ['string', 'null'] },
+    createdBy: { type: ['string', 'null'] },
+    verifiedBy: { type: ['string', 'null'] },
+    verifiedAt: { type: ['string', 'null'], format: 'date-time' },
     polygonGeoJson: { type: 'object', additionalProperties: true },
     createdAt: { type: 'string', format: 'date-time' }
   }
@@ -79,6 +84,9 @@ export const createPropertyBodySchema = {
     ownershipPercentage: { type: 'number', minimum: 0, maximum: 100 },
     registrationSource: { type: 'string', enum: ['CONCESSION', 'RATEPAYER'], default: 'CONCESSION' },
     createdByRatepayerId: { type: 'string', format: 'uuid' },
+    version: { type: 'integer' },
+    ghanaPostGps: { type: 'string', maxLength: 50 },
+    createdBy: { type: 'string', maxLength: 150 },
     assemblyId: {
       type: 'string',
       format: 'uuid',
@@ -228,6 +236,8 @@ export const updatePropertyBodySchema = {
     landAreaSqm: { type: 'number', minimum: 0 },
     leaseDurationYears: { type: 'integer', minimum: 0 },
     polygonGeoJson: { type: 'object' },
+    ghanaPostGps: { type: 'string', maxLength: 50 },
+    verifiedBy: { type: 'string', maxLength: 150 },
     claimedByRatepayerId: { type: 'string', format: 'uuid' },
     createdByRatepayerId: { type: 'string', format: 'uuid' }
   }

@@ -57,6 +57,11 @@ const PropertyPolygonMap = dynamic(() => import('@/views/properties/property-pol
 interface PropertyDetail {
   id: string
   code: string
+  version?: number
+  ghanaPostGps?: string | null
+  createdBy?: string | null
+  verifiedBy?: string | null
+  verifiedAt?: string | null
   accountNumber?: string | null
   propertyName?: string | null
   assemblyId: string
@@ -344,12 +349,18 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
             <ArrowLeftIcon className="size-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              {property.propertyName || 'Unnamed Property'}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                {property.propertyName || 'Unnamed Property'}
+              </h1>
+              <Badge variant="outline" className="font-mono text-xs font-semibold px-2 py-0.5 border-primary/30 text-primary bg-primary/5">
+                v{property.version ?? 1}
+              </Badge>
+            </div>
             <p className="font-mono text-xs text-muted-foreground mt-0.5">
               {property.code}
               {property.accountNumber ? ` • A/C ${property.accountNumber}` : ''}
+              {property.ghanaPostGps ? ` • GPS: ${property.ghanaPostGps}` : ''}
             </p>
           </div>
         </div>
@@ -401,6 +412,26 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               <OverviewField label="Property Code" value={<span className="font-mono">{property.code}</span>} />
+              <OverviewField
+                label="Property Version"
+                value={
+                  <Badge variant="outline" className="font-mono text-xs font-semibold px-2 py-0.5">
+                    v{property.version ?? 1}
+                  </Badge>
+                }
+              />
+              <OverviewField
+                label="Ghana Post GPS"
+                value={
+                  property.ghanaPostGps ? (
+                    <span className="font-mono font-medium text-xs text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+                      {property.ghanaPostGps}
+                    </span>
+                  ) : (
+                    '—'
+                  )
+                }
+              />
               <OverviewField label="Account Number" value={property.accountNumber} />
               <OverviewField label="Property Class" value={humanize(property.propertyClass)} />
               <OverviewField label="Property Use" value={humanize(property.propertyUse)} />
@@ -432,8 +463,20 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
                   )
                 }
               />
-              <OverviewField label="Registered" value={formatDate(property.createdAt)} />
-              <OverviewField label="Last Updated" value={formatDate(property.updatedAt)} />
+              <OverviewField
+                label="Created By"
+                value={property.createdBy || (property.createdByRatepayerId ? `Ratepayer (${property.createdByRatepayerId.slice(0, 8)})` : '—')}
+              />
+              <OverviewField
+                label="Verified By"
+                value={property.verifiedBy || '—'}
+              />
+              <OverviewField
+                label="Verified At"
+                value={property.verifiedAt ? formatDateTime(property.verifiedAt) : '—'}
+              />
+              <OverviewField label="Created At" value={formatDateTime(property.createdAt)} />
+              <OverviewField label="Last Updated" value={formatDateTime(property.updatedAt)} />
             </CardContent>
           </Card>
 

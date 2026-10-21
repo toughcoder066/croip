@@ -397,10 +397,10 @@ export function ratepayerService(app: FastifyInstance) {
       const created = await app.prisma.$transaction(async (tx) => {
         const year = new Date().getFullYear();
         let id = crypto.randomUUID();
-        let code = `RP-${year}-${id.slice(0, 4).toUpperCase()}`;
+        let code = `RP-${year}-${id.slice(0, 4).toUpperCase()}-${id.slice(-4).toUpperCase()}`;
         while (await tx.ratepayer.findUnique({ where: { code } })) {
           id = crypto.randomUUID();
-          code = `RP-${year}-${id.slice(0, 4).toUpperCase()}`;
+          code = `RP-${year}-${id.slice(0, 4).toUpperCase()}-${id.slice(-4).toUpperCase()}`;
         }
 
         const ratepayer = await tx.ratepayer.create({

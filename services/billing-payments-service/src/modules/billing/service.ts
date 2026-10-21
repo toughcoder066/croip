@@ -56,8 +56,9 @@ export interface CreatePaymentLinkInput {
 function generateBillIdAndNumber(): { id: string; billNumber: string } {
   const id = randomUUID();
   const year = new Date().getFullYear();
-  const shortCode = id.slice(0, 4).toUpperCase();
-  return { id, billNumber: `BILL-${year}-${shortCode}` };
+  const first4 = id.slice(0, 4).toUpperCase();
+  const last4 = id.slice(-4).toUpperCase();
+  return { id, billNumber: `BILL-${year}-${first4}-${last4}` };
 }
 
 export function billingService(app: FastifyInstance) {
