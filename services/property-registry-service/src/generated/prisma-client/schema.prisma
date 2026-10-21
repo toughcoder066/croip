@@ -14,12 +14,12 @@ model Property {
   accountNumber            String?  @unique @map("account_number") @db.VarChar(50)
   propertyName             String?  @map("property_name") @db.VarChar(150)
   assemblyId               String   @map("assembly_id") @db.Uuid
-  propertyClass            String   @default("RESIDENTIAL_CLASS_1") @map("property_class") @db.VarChar(50)
-  buildingStatus           String   @default("COMPLETED") @map("building_status") @db.VarChar(50)
-  propertyStatus           String   @default("ASSESSED") @map("property_status") @db.VarChar(50)
-  propertyUse              String   @default("RESIDENTIAL") @map("property_use") @db.VarChar(50)
-  tenureType               String   @default("FREEHOLD") @map("tenure_type") @db.VarChar(50)
-  structureType            String   @default("CONCRETE") @map("structure_type") @db.VarChar(50)
+  propertyClass            String?  @map("property_class") @db.VarChar(50)
+  buildingStatus           String?  @map("building_status") @db.VarChar(50)
+  propertyStatus           String   @default("UNASSESSED") @map("property_status") @db.VarChar(50)
+  propertyUse              String   @map("property_use") @db.VarChar(50)
+  tenureType               String?  @map("tenure_type") @db.VarChar(50)
+  structureType            String?  @map("structure_type") @db.VarChar(50)
   createdByRatepayerId     String?  @map("created_by_ratepayer_id") @db.Uuid
   registrationSource       String   @default("CONCESSION") @map("registration_source") @db.VarChar(30)
   registeredByConcessionId String?  @map("registered_by_concession_id") @db.Uuid
@@ -28,7 +28,7 @@ model Property {
   polygonGeoJson           Json     @map("polygon_geojson")
   leaseDurationYears       Int?     @map("lease_duration_years")
   landAreaSqm              Float?   @map("land_area_sqm")
-  numberOfFloors           Int      @default(1) @map("number_of_floors")
+  numberOfFloors           Int?     @map("number_of_floors")
   createdAt                DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt                DateTime @updatedAt @map("updated_at") @db.Timestamptz
 

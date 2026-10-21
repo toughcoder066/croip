@@ -32,6 +32,7 @@ export interface CreatePropertyInput {
   propertyUse?: string;
   tenureType?: string;
   structureType?: string;
+  numberOfFloors?: number;
   ownershipType?: string;
   ownershipPercentage?: number;
   polygonGeoJson: Record<string, unknown>;
@@ -425,10 +426,7 @@ export function propertyService(app: FastifyInstance) {
           });
 
           const code = input.code?.trim() || (await generatePropertyCode(tx, matchedAssembly.code, isRatepayerCreation));
-          const effectivePropertyStatus = isRatepayerCreation ? 'UNASSESSED' : input.propertyStatus!;
-          const defaultClass = (input.propertyUse?.toUpperCase() === 'COMMERCIAL' || input.propertyUse?.toUpperCase() === 'INDUSTRIAL')
-            ? 'COMMERCIAL_CLASS_1'
-            : 'RESIDENTIAL_CLASS_1';
+          const effectivePropertyStatus = isRatepayerCreation ? 'UNASSESSED' : (input.propertyStatus || 'UNASSESSED');
 
           const property = await tx.property.create({
             data: {
@@ -436,12 +434,13 @@ export function propertyService(app: FastifyInstance) {
               accountNumber: input.accountNumber ?? null,
               propertyName: input.propertyName ?? null,
               assemblyId: effectiveAssemblyId,
-              propertyClass: input.propertyClass ?? defaultClass,
-              buildingStatus: input.buildingStatus ?? 'COMPLETED',
+              propertyClass: input.propertyClass ?? null,
+              buildingStatus: input.buildingStatus ?? null,
               propertyStatus: effectivePropertyStatus,
-              propertyUse: input.propertyUse ?? 'RESIDENTIAL',
-              tenureType: input.tenureType ?? 'FREEHOLD',
-              structureType: input.structureType ?? 'CONCRETE',
+              propertyUse: input.propertyUse!,
+              tenureType: input.tenureType ?? null,
+              structureType: input.structureType ?? null,
+              numberOfFloors: input.numberOfFloors ?? null,
               registrationSource: isRatepayerCreation ? 'RATEPAYER' : 'CONCESSION',
               registeredByConcessionId: isRatepayerCreation ? null : input.concessionId,
               createdByRatepayerId: isRatepayerCreation ? (input.createdByRatepayerId ?? input.actorId) : null,

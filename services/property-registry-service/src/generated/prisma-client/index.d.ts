@@ -2236,12 +2236,12 @@ export namespace Prisma {
     accountNumber: string | null
     propertyName: string | null
     assemblyId: string
-    propertyClass: string
-    buildingStatus: string
+    propertyClass: string | null
+    buildingStatus: string | null
     propertyStatus: string
     propertyUse: string
-    tenureType: string
-    structureType: string
+    tenureType: string | null
+    structureType: string | null
     createdByRatepayerId: string | null
     registrationSource: string
     registeredByConcessionId: string | null
@@ -2250,7 +2250,7 @@ export namespace Prisma {
     polygonGeoJson: JsonValue
     leaseDurationYears: number | null
     landAreaSqm: number | null
-    numberOfFloors: number
+    numberOfFloors: number | null
     createdAt: Date
     updatedAt: Date
     _count: PropertyCountAggregateOutputType | null
@@ -2407,12 +2407,12 @@ export namespace Prisma {
       accountNumber: string | null
       propertyName: string | null
       assemblyId: string
-      propertyClass: string
-      buildingStatus: string
+      propertyClass: string | null
+      buildingStatus: string | null
       propertyStatus: string
       propertyUse: string
-      tenureType: string
-      structureType: string
+      tenureType: string | null
+      structureType: string | null
       createdByRatepayerId: string | null
       registrationSource: string
       registeredByConcessionId: string | null
@@ -2421,7 +2421,7 @@ export namespace Prisma {
       polygonGeoJson: Prisma.JsonValue
       leaseDurationYears: number | null
       landAreaSqm: number | null
-      numberOfFloors: number
+      numberOfFloors: number | null
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["property"]>
@@ -16092,12 +16092,12 @@ export namespace Prisma {
     accountNumber?: StringNullableFilter<"Property"> | string | null
     propertyName?: StringNullableFilter<"Property"> | string | null
     assemblyId?: UuidFilter<"Property"> | string
-    propertyClass?: StringFilter<"Property"> | string
-    buildingStatus?: StringFilter<"Property"> | string
+    propertyClass?: StringNullableFilter<"Property"> | string | null
+    buildingStatus?: StringNullableFilter<"Property"> | string | null
     propertyStatus?: StringFilter<"Property"> | string
     propertyUse?: StringFilter<"Property"> | string
-    tenureType?: StringFilter<"Property"> | string
-    structureType?: StringFilter<"Property"> | string
+    tenureType?: StringNullableFilter<"Property"> | string | null
+    structureType?: StringNullableFilter<"Property"> | string | null
     createdByRatepayerId?: UuidNullableFilter<"Property"> | string | null
     registrationSource?: StringFilter<"Property"> | string
     registeredByConcessionId?: UuidNullableFilter<"Property"> | string | null
@@ -16106,7 +16106,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonFilter<"Property">
     leaseDurationYears?: IntNullableFilter<"Property"> | number | null
     landAreaSqm?: FloatNullableFilter<"Property"> | number | null
-    numberOfFloors?: IntFilter<"Property"> | number
+    numberOfFloors?: IntNullableFilter<"Property"> | number | null
     createdAt?: DateTimeFilter<"Property"> | Date | string
     updatedAt?: DateTimeFilter<"Property"> | Date | string
     units?: PropertyUnitListRelationFilter
@@ -16122,12 +16122,12 @@ export namespace Prisma {
     accountNumber?: SortOrderInput | SortOrder
     propertyName?: SortOrderInput | SortOrder
     assemblyId?: SortOrder
-    propertyClass?: SortOrder
-    buildingStatus?: SortOrder
+    propertyClass?: SortOrderInput | SortOrder
+    buildingStatus?: SortOrderInput | SortOrder
     propertyStatus?: SortOrder
     propertyUse?: SortOrder
-    tenureType?: SortOrder
-    structureType?: SortOrder
+    tenureType?: SortOrderInput | SortOrder
+    structureType?: SortOrderInput | SortOrder
     createdByRatepayerId?: SortOrderInput | SortOrder
     registrationSource?: SortOrder
     registeredByConcessionId?: SortOrderInput | SortOrder
@@ -16136,7 +16136,7 @@ export namespace Prisma {
     polygonGeoJson?: SortOrder
     leaseDurationYears?: SortOrderInput | SortOrder
     landAreaSqm?: SortOrderInput | SortOrder
-    numberOfFloors?: SortOrder
+    numberOfFloors?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     units?: PropertyUnitOrderByRelationAggregateInput
@@ -16155,12 +16155,12 @@ export namespace Prisma {
     NOT?: PropertyWhereInput | PropertyWhereInput[]
     propertyName?: StringNullableFilter<"Property"> | string | null
     assemblyId?: UuidFilter<"Property"> | string
-    propertyClass?: StringFilter<"Property"> | string
-    buildingStatus?: StringFilter<"Property"> | string
+    propertyClass?: StringNullableFilter<"Property"> | string | null
+    buildingStatus?: StringNullableFilter<"Property"> | string | null
     propertyStatus?: StringFilter<"Property"> | string
     propertyUse?: StringFilter<"Property"> | string
-    tenureType?: StringFilter<"Property"> | string
-    structureType?: StringFilter<"Property"> | string
+    tenureType?: StringNullableFilter<"Property"> | string | null
+    structureType?: StringNullableFilter<"Property"> | string | null
     createdByRatepayerId?: UuidNullableFilter<"Property"> | string | null
     registrationSource?: StringFilter<"Property"> | string
     registeredByConcessionId?: UuidNullableFilter<"Property"> | string | null
@@ -16169,7 +16169,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonFilter<"Property">
     leaseDurationYears?: IntNullableFilter<"Property"> | number | null
     landAreaSqm?: FloatNullableFilter<"Property"> | number | null
-    numberOfFloors?: IntFilter<"Property"> | number
+    numberOfFloors?: IntNullableFilter<"Property"> | number | null
     createdAt?: DateTimeFilter<"Property"> | Date | string
     updatedAt?: DateTimeFilter<"Property"> | Date | string
     units?: PropertyUnitListRelationFilter
@@ -16185,12 +16185,12 @@ export namespace Prisma {
     accountNumber?: SortOrderInput | SortOrder
     propertyName?: SortOrderInput | SortOrder
     assemblyId?: SortOrder
-    propertyClass?: SortOrder
-    buildingStatus?: SortOrder
+    propertyClass?: SortOrderInput | SortOrder
+    buildingStatus?: SortOrderInput | SortOrder
     propertyStatus?: SortOrder
     propertyUse?: SortOrder
-    tenureType?: SortOrder
-    structureType?: SortOrder
+    tenureType?: SortOrderInput | SortOrder
+    structureType?: SortOrderInput | SortOrder
     createdByRatepayerId?: SortOrderInput | SortOrder
     registrationSource?: SortOrder
     registeredByConcessionId?: SortOrderInput | SortOrder
@@ -16199,7 +16199,7 @@ export namespace Prisma {
     polygonGeoJson?: SortOrder
     leaseDurationYears?: SortOrderInput | SortOrder
     landAreaSqm?: SortOrderInput | SortOrder
-    numberOfFloors?: SortOrder
+    numberOfFloors?: SortOrderInput | SortOrder
     createdAt?: SortOrder
     updatedAt?: SortOrder
     _count?: PropertyCountOrderByAggregateInput
@@ -16218,12 +16218,12 @@ export namespace Prisma {
     accountNumber?: StringNullableWithAggregatesFilter<"Property"> | string | null
     propertyName?: StringNullableWithAggregatesFilter<"Property"> | string | null
     assemblyId?: UuidWithAggregatesFilter<"Property"> | string
-    propertyClass?: StringWithAggregatesFilter<"Property"> | string
-    buildingStatus?: StringWithAggregatesFilter<"Property"> | string
+    propertyClass?: StringNullableWithAggregatesFilter<"Property"> | string | null
+    buildingStatus?: StringNullableWithAggregatesFilter<"Property"> | string | null
     propertyStatus?: StringWithAggregatesFilter<"Property"> | string
     propertyUse?: StringWithAggregatesFilter<"Property"> | string
-    tenureType?: StringWithAggregatesFilter<"Property"> | string
-    structureType?: StringWithAggregatesFilter<"Property"> | string
+    tenureType?: StringNullableWithAggregatesFilter<"Property"> | string | null
+    structureType?: StringNullableWithAggregatesFilter<"Property"> | string | null
     createdByRatepayerId?: UuidNullableWithAggregatesFilter<"Property"> | string | null
     registrationSource?: StringWithAggregatesFilter<"Property"> | string
     registeredByConcessionId?: UuidNullableWithAggregatesFilter<"Property"> | string | null
@@ -16232,7 +16232,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonWithAggregatesFilter<"Property">
     leaseDurationYears?: IntNullableWithAggregatesFilter<"Property"> | number | null
     landAreaSqm?: FloatNullableWithAggregatesFilter<"Property"> | number | null
-    numberOfFloors?: IntWithAggregatesFilter<"Property"> | number
+    numberOfFloors?: IntNullableWithAggregatesFilter<"Property"> | number | null
     createdAt?: DateTimeWithAggregatesFilter<"Property"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Property"> | Date | string
   }
@@ -17146,12 +17146,12 @@ export namespace Prisma {
     accountNumber?: string | null
     propertyName?: string | null
     assemblyId: string
-    propertyClass?: string
-    buildingStatus?: string
+    propertyClass?: string | null
+    buildingStatus?: string | null
     propertyStatus?: string
-    propertyUse?: string
-    tenureType?: string
-    structureType?: string
+    propertyUse: string
+    tenureType?: string | null
+    structureType?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
@@ -17160,7 +17160,7 @@ export namespace Prisma {
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
-    numberOfFloors?: number
+    numberOfFloors?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     units?: PropertyUnitCreateNestedManyWithoutPropertyInput
@@ -17176,12 +17176,12 @@ export namespace Prisma {
     accountNumber?: string | null
     propertyName?: string | null
     assemblyId: string
-    propertyClass?: string
-    buildingStatus?: string
+    propertyClass?: string | null
+    buildingStatus?: string | null
     propertyStatus?: string
-    propertyUse?: string
-    tenureType?: string
-    structureType?: string
+    propertyUse: string
+    tenureType?: string | null
+    structureType?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
@@ -17190,7 +17190,7 @@ export namespace Prisma {
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
-    numberOfFloors?: number
+    numberOfFloors?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     units?: PropertyUnitUncheckedCreateNestedManyWithoutPropertyInput
@@ -17206,12 +17206,12 @@ export namespace Prisma {
     accountNumber?: NullableStringFieldUpdateOperationsInput | string | null
     propertyName?: NullableStringFieldUpdateOperationsInput | string | null
     assemblyId?: StringFieldUpdateOperationsInput | string
-    propertyClass?: StringFieldUpdateOperationsInput | string
-    buildingStatus?: StringFieldUpdateOperationsInput | string
+    propertyClass?: NullableStringFieldUpdateOperationsInput | string | null
+    buildingStatus?: NullableStringFieldUpdateOperationsInput | string | null
     propertyStatus?: StringFieldUpdateOperationsInput | string
     propertyUse?: StringFieldUpdateOperationsInput | string
-    tenureType?: StringFieldUpdateOperationsInput | string
-    structureType?: StringFieldUpdateOperationsInput | string
+    tenureType?: NullableStringFieldUpdateOperationsInput | string | null
+    structureType?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -17220,7 +17220,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
-    numberOfFloors?: IntFieldUpdateOperationsInput | number
+    numberOfFloors?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     units?: PropertyUnitUpdateManyWithoutPropertyNestedInput
@@ -17236,12 +17236,12 @@ export namespace Prisma {
     accountNumber?: NullableStringFieldUpdateOperationsInput | string | null
     propertyName?: NullableStringFieldUpdateOperationsInput | string | null
     assemblyId?: StringFieldUpdateOperationsInput | string
-    propertyClass?: StringFieldUpdateOperationsInput | string
-    buildingStatus?: StringFieldUpdateOperationsInput | string
+    propertyClass?: NullableStringFieldUpdateOperationsInput | string | null
+    buildingStatus?: NullableStringFieldUpdateOperationsInput | string | null
     propertyStatus?: StringFieldUpdateOperationsInput | string
     propertyUse?: StringFieldUpdateOperationsInput | string
-    tenureType?: StringFieldUpdateOperationsInput | string
-    structureType?: StringFieldUpdateOperationsInput | string
+    tenureType?: NullableStringFieldUpdateOperationsInput | string | null
+    structureType?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -17250,7 +17250,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
-    numberOfFloors?: IntFieldUpdateOperationsInput | number
+    numberOfFloors?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     units?: PropertyUnitUncheckedUpdateManyWithoutPropertyNestedInput
@@ -17266,12 +17266,12 @@ export namespace Prisma {
     accountNumber?: string | null
     propertyName?: string | null
     assemblyId: string
-    propertyClass?: string
-    buildingStatus?: string
+    propertyClass?: string | null
+    buildingStatus?: string | null
     propertyStatus?: string
-    propertyUse?: string
-    tenureType?: string
-    structureType?: string
+    propertyUse: string
+    tenureType?: string | null
+    structureType?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
@@ -17280,7 +17280,7 @@ export namespace Prisma {
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
-    numberOfFloors?: number
+    numberOfFloors?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -17291,12 +17291,12 @@ export namespace Prisma {
     accountNumber?: NullableStringFieldUpdateOperationsInput | string | null
     propertyName?: NullableStringFieldUpdateOperationsInput | string | null
     assemblyId?: StringFieldUpdateOperationsInput | string
-    propertyClass?: StringFieldUpdateOperationsInput | string
-    buildingStatus?: StringFieldUpdateOperationsInput | string
+    propertyClass?: NullableStringFieldUpdateOperationsInput | string | null
+    buildingStatus?: NullableStringFieldUpdateOperationsInput | string | null
     propertyStatus?: StringFieldUpdateOperationsInput | string
     propertyUse?: StringFieldUpdateOperationsInput | string
-    tenureType?: StringFieldUpdateOperationsInput | string
-    structureType?: StringFieldUpdateOperationsInput | string
+    tenureType?: NullableStringFieldUpdateOperationsInput | string | null
+    structureType?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -17305,7 +17305,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
-    numberOfFloors?: IntFieldUpdateOperationsInput | number
+    numberOfFloors?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -17316,12 +17316,12 @@ export namespace Prisma {
     accountNumber?: NullableStringFieldUpdateOperationsInput | string | null
     propertyName?: NullableStringFieldUpdateOperationsInput | string | null
     assemblyId?: StringFieldUpdateOperationsInput | string
-    propertyClass?: StringFieldUpdateOperationsInput | string
-    buildingStatus?: StringFieldUpdateOperationsInput | string
+    propertyClass?: NullableStringFieldUpdateOperationsInput | string | null
+    buildingStatus?: NullableStringFieldUpdateOperationsInput | string | null
     propertyStatus?: StringFieldUpdateOperationsInput | string
     propertyUse?: StringFieldUpdateOperationsInput | string
-    tenureType?: StringFieldUpdateOperationsInput | string
-    structureType?: StringFieldUpdateOperationsInput | string
+    tenureType?: NullableStringFieldUpdateOperationsInput | string | null
+    structureType?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -17330,7 +17330,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
-    numberOfFloors?: IntFieldUpdateOperationsInput | number
+    numberOfFloors?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -18461,17 +18461,6 @@ export namespace Prisma {
     not?: NestedFloatNullableFilter<$PrismaModel> | number | null
   }
 
-  export type IntFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntFilter<$PrismaModel> | number
-  }
-
   export type DateTimeFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -18747,22 +18736,6 @@ export namespace Prisma {
     _max?: NestedFloatNullableFilter<$PrismaModel>
   }
 
-  export type IntWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedFloatFilter<$PrismaModel>
-    _sum?: NestedIntFilter<$PrismaModel>
-    _min?: NestedIntFilter<$PrismaModel>
-    _max?: NestedIntFilter<$PrismaModel>
-  }
-
   export type DateTimeWithAggregatesFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -18948,6 +18921,17 @@ export namespace Prisma {
     _max?: NestedDateTimeNullableFilter<$PrismaModel>
   }
 
+  export type IntFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntFilter<$PrismaModel> | number
+  }
+
   export type PropertyUnitCountOrderByAggregateInput = {
     id?: SortOrder
     propertyId?: SortOrder
@@ -18981,6 +18965,22 @@ export namespace Prisma {
 
   export type PropertyUnitSumOrderByAggregateInput = {
     floorLevel?: SortOrder
+  }
+
+  export type IntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
   }
 
   export type PropertyPhotoCountOrderByAggregateInput = {
@@ -19526,14 +19526,6 @@ export namespace Prisma {
     divide?: number
   }
 
-  export type IntFieldUpdateOperationsInput = {
-    set?: number
-    increment?: number
-    decrement?: number
-    multiply?: number
-    divide?: number
-  }
-
   export type DateTimeFieldUpdateOperationsInput = {
     set?: Date | string
   }
@@ -19704,6 +19696,14 @@ export namespace Prisma {
     create?: XOR<PropertyCreateWithoutUnitsInput, PropertyUncheckedCreateWithoutUnitsInput>
     connectOrCreate?: PropertyCreateOrConnectWithoutUnitsInput
     connect?: PropertyWhereUniqueInput
+  }
+
+  export type IntFieldUpdateOperationsInput = {
+    set?: number
+    increment?: number
+    decrement?: number
+    multiply?: number
+    divide?: number
   }
 
   export type PropertyUpdateOneRequiredWithoutUnitsNestedInput = {
@@ -19900,17 +19900,6 @@ export namespace Prisma {
     not?: NestedFloatNullableFilter<$PrismaModel> | number | null
   }
 
-  export type NestedIntFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntFilter<$PrismaModel> | number
-  }
-
   export type NestedDateTimeFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -19934,6 +19923,17 @@ export namespace Prisma {
     _count?: NestedIntFilter<$PrismaModel>
     _min?: NestedStringFilter<$PrismaModel>
     _max?: NestedStringFilter<$PrismaModel>
+  }
+
+  export type NestedIntFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntFilter<$PrismaModel> | number
   }
 
   export type NestedStringWithAggregatesFilter<$PrismaModel = never> = {
@@ -20039,33 +20039,6 @@ export namespace Prisma {
     _max?: NestedFloatNullableFilter<$PrismaModel>
   }
 
-  export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
-    equals?: number | IntFieldRefInput<$PrismaModel>
-    in?: number[] | ListIntFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
-    lt?: number | IntFieldRefInput<$PrismaModel>
-    lte?: number | IntFieldRefInput<$PrismaModel>
-    gt?: number | IntFieldRefInput<$PrismaModel>
-    gte?: number | IntFieldRefInput<$PrismaModel>
-    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
-    _count?: NestedIntFilter<$PrismaModel>
-    _avg?: NestedFloatFilter<$PrismaModel>
-    _sum?: NestedIntFilter<$PrismaModel>
-    _min?: NestedIntFilter<$PrismaModel>
-    _max?: NestedIntFilter<$PrismaModel>
-  }
-
-  export type NestedFloatFilter<$PrismaModel = never> = {
-    equals?: number | FloatFieldRefInput<$PrismaModel>
-    in?: number[] | ListFloatFieldRefInput<$PrismaModel>
-    notIn?: number[] | ListFloatFieldRefInput<$PrismaModel>
-    lt?: number | FloatFieldRefInput<$PrismaModel>
-    lte?: number | FloatFieldRefInput<$PrismaModel>
-    gt?: number | FloatFieldRefInput<$PrismaModel>
-    gte?: number | FloatFieldRefInput<$PrismaModel>
-    not?: NestedFloatFilter<$PrismaModel> | number
-  }
-
   export type NestedDateTimeWithAggregatesFilter<$PrismaModel = never> = {
     equals?: Date | string | DateTimeFieldRefInput<$PrismaModel>
     in?: Date[] | string[] | ListDateTimeFieldRefInput<$PrismaModel>
@@ -20116,6 +20089,33 @@ export namespace Prisma {
     _count?: NestedIntNullableFilter<$PrismaModel>
     _min?: NestedDateTimeNullableFilter<$PrismaModel>
     _max?: NestedDateTimeNullableFilter<$PrismaModel>
+  }
+
+  export type NestedIntWithAggregatesFilter<$PrismaModel = never> = {
+    equals?: number | IntFieldRefInput<$PrismaModel>
+    in?: number[] | ListIntFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListIntFieldRefInput<$PrismaModel>
+    lt?: number | IntFieldRefInput<$PrismaModel>
+    lte?: number | IntFieldRefInput<$PrismaModel>
+    gt?: number | IntFieldRefInput<$PrismaModel>
+    gte?: number | IntFieldRefInput<$PrismaModel>
+    not?: NestedIntWithAggregatesFilter<$PrismaModel> | number
+    _count?: NestedIntFilter<$PrismaModel>
+    _avg?: NestedFloatFilter<$PrismaModel>
+    _sum?: NestedIntFilter<$PrismaModel>
+    _min?: NestedIntFilter<$PrismaModel>
+    _max?: NestedIntFilter<$PrismaModel>
+  }
+
+  export type NestedFloatFilter<$PrismaModel = never> = {
+    equals?: number | FloatFieldRefInput<$PrismaModel>
+    in?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    notIn?: number[] | ListFloatFieldRefInput<$PrismaModel>
+    lt?: number | FloatFieldRefInput<$PrismaModel>
+    lte?: number | FloatFieldRefInput<$PrismaModel>
+    gt?: number | FloatFieldRefInput<$PrismaModel>
+    gte?: number | FloatFieldRefInput<$PrismaModel>
+    not?: NestedFloatFilter<$PrismaModel> | number
   }
 
   export type NestedDecimalFilter<$PrismaModel = never> = {
@@ -20547,12 +20547,12 @@ export namespace Prisma {
     accountNumber?: string | null
     propertyName?: string | null
     assemblyId: string
-    propertyClass?: string
-    buildingStatus?: string
+    propertyClass?: string | null
+    buildingStatus?: string | null
     propertyStatus?: string
-    propertyUse?: string
-    tenureType?: string
-    structureType?: string
+    propertyUse: string
+    tenureType?: string | null
+    structureType?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
@@ -20561,7 +20561,7 @@ export namespace Prisma {
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
-    numberOfFloors?: number
+    numberOfFloors?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     units?: PropertyUnitCreateNestedManyWithoutPropertyInput
@@ -20576,12 +20576,12 @@ export namespace Prisma {
     accountNumber?: string | null
     propertyName?: string | null
     assemblyId: string
-    propertyClass?: string
-    buildingStatus?: string
+    propertyClass?: string | null
+    buildingStatus?: string | null
     propertyStatus?: string
-    propertyUse?: string
-    tenureType?: string
-    structureType?: string
+    propertyUse: string
+    tenureType?: string | null
+    structureType?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
@@ -20590,7 +20590,7 @@ export namespace Prisma {
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
-    numberOfFloors?: number
+    numberOfFloors?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     units?: PropertyUnitUncheckedCreateNestedManyWithoutPropertyInput
@@ -20621,12 +20621,12 @@ export namespace Prisma {
     accountNumber?: NullableStringFieldUpdateOperationsInput | string | null
     propertyName?: NullableStringFieldUpdateOperationsInput | string | null
     assemblyId?: StringFieldUpdateOperationsInput | string
-    propertyClass?: StringFieldUpdateOperationsInput | string
-    buildingStatus?: StringFieldUpdateOperationsInput | string
+    propertyClass?: NullableStringFieldUpdateOperationsInput | string | null
+    buildingStatus?: NullableStringFieldUpdateOperationsInput | string | null
     propertyStatus?: StringFieldUpdateOperationsInput | string
     propertyUse?: StringFieldUpdateOperationsInput | string
-    tenureType?: StringFieldUpdateOperationsInput | string
-    structureType?: StringFieldUpdateOperationsInput | string
+    tenureType?: NullableStringFieldUpdateOperationsInput | string | null
+    structureType?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -20635,7 +20635,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
-    numberOfFloors?: IntFieldUpdateOperationsInput | number
+    numberOfFloors?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     units?: PropertyUnitUpdateManyWithoutPropertyNestedInput
@@ -20650,12 +20650,12 @@ export namespace Prisma {
     accountNumber?: NullableStringFieldUpdateOperationsInput | string | null
     propertyName?: NullableStringFieldUpdateOperationsInput | string | null
     assemblyId?: StringFieldUpdateOperationsInput | string
-    propertyClass?: StringFieldUpdateOperationsInput | string
-    buildingStatus?: StringFieldUpdateOperationsInput | string
+    propertyClass?: NullableStringFieldUpdateOperationsInput | string | null
+    buildingStatus?: NullableStringFieldUpdateOperationsInput | string | null
     propertyStatus?: StringFieldUpdateOperationsInput | string
     propertyUse?: StringFieldUpdateOperationsInput | string
-    tenureType?: StringFieldUpdateOperationsInput | string
-    structureType?: StringFieldUpdateOperationsInput | string
+    tenureType?: NullableStringFieldUpdateOperationsInput | string | null
+    structureType?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -20664,7 +20664,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
-    numberOfFloors?: IntFieldUpdateOperationsInput | number
+    numberOfFloors?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     units?: PropertyUnitUncheckedUpdateManyWithoutPropertyNestedInput
@@ -20679,12 +20679,12 @@ export namespace Prisma {
     accountNumber?: string | null
     propertyName?: string | null
     assemblyId: string
-    propertyClass?: string
-    buildingStatus?: string
+    propertyClass?: string | null
+    buildingStatus?: string | null
     propertyStatus?: string
-    propertyUse?: string
-    tenureType?: string
-    structureType?: string
+    propertyUse: string
+    tenureType?: string | null
+    structureType?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
@@ -20693,7 +20693,7 @@ export namespace Prisma {
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
-    numberOfFloors?: number
+    numberOfFloors?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     photos?: PropertyPhotoCreateNestedManyWithoutPropertyInput
@@ -20708,12 +20708,12 @@ export namespace Prisma {
     accountNumber?: string | null
     propertyName?: string | null
     assemblyId: string
-    propertyClass?: string
-    buildingStatus?: string
+    propertyClass?: string | null
+    buildingStatus?: string | null
     propertyStatus?: string
-    propertyUse?: string
-    tenureType?: string
-    structureType?: string
+    propertyUse: string
+    tenureType?: string | null
+    structureType?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
@@ -20722,7 +20722,7 @@ export namespace Prisma {
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
-    numberOfFloors?: number
+    numberOfFloors?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     photos?: PropertyPhotoUncheckedCreateNestedManyWithoutPropertyInput
@@ -20753,12 +20753,12 @@ export namespace Prisma {
     accountNumber?: NullableStringFieldUpdateOperationsInput | string | null
     propertyName?: NullableStringFieldUpdateOperationsInput | string | null
     assemblyId?: StringFieldUpdateOperationsInput | string
-    propertyClass?: StringFieldUpdateOperationsInput | string
-    buildingStatus?: StringFieldUpdateOperationsInput | string
+    propertyClass?: NullableStringFieldUpdateOperationsInput | string | null
+    buildingStatus?: NullableStringFieldUpdateOperationsInput | string | null
     propertyStatus?: StringFieldUpdateOperationsInput | string
     propertyUse?: StringFieldUpdateOperationsInput | string
-    tenureType?: StringFieldUpdateOperationsInput | string
-    structureType?: StringFieldUpdateOperationsInput | string
+    tenureType?: NullableStringFieldUpdateOperationsInput | string | null
+    structureType?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -20767,7 +20767,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
-    numberOfFloors?: IntFieldUpdateOperationsInput | number
+    numberOfFloors?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     photos?: PropertyPhotoUpdateManyWithoutPropertyNestedInput
@@ -20782,12 +20782,12 @@ export namespace Prisma {
     accountNumber?: NullableStringFieldUpdateOperationsInput | string | null
     propertyName?: NullableStringFieldUpdateOperationsInput | string | null
     assemblyId?: StringFieldUpdateOperationsInput | string
-    propertyClass?: StringFieldUpdateOperationsInput | string
-    buildingStatus?: StringFieldUpdateOperationsInput | string
+    propertyClass?: NullableStringFieldUpdateOperationsInput | string | null
+    buildingStatus?: NullableStringFieldUpdateOperationsInput | string | null
     propertyStatus?: StringFieldUpdateOperationsInput | string
     propertyUse?: StringFieldUpdateOperationsInput | string
-    tenureType?: StringFieldUpdateOperationsInput | string
-    structureType?: StringFieldUpdateOperationsInput | string
+    tenureType?: NullableStringFieldUpdateOperationsInput | string | null
+    structureType?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -20796,7 +20796,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
-    numberOfFloors?: IntFieldUpdateOperationsInput | number
+    numberOfFloors?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     photos?: PropertyPhotoUncheckedUpdateManyWithoutPropertyNestedInput
@@ -20811,12 +20811,12 @@ export namespace Prisma {
     accountNumber?: string | null
     propertyName?: string | null
     assemblyId: string
-    propertyClass?: string
-    buildingStatus?: string
+    propertyClass?: string | null
+    buildingStatus?: string | null
     propertyStatus?: string
-    propertyUse?: string
-    tenureType?: string
-    structureType?: string
+    propertyUse: string
+    tenureType?: string | null
+    structureType?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
@@ -20825,7 +20825,7 @@ export namespace Prisma {
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
-    numberOfFloors?: number
+    numberOfFloors?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     units?: PropertyUnitCreateNestedManyWithoutPropertyInput
@@ -20840,12 +20840,12 @@ export namespace Prisma {
     accountNumber?: string | null
     propertyName?: string | null
     assemblyId: string
-    propertyClass?: string
-    buildingStatus?: string
+    propertyClass?: string | null
+    buildingStatus?: string | null
     propertyStatus?: string
-    propertyUse?: string
-    tenureType?: string
-    structureType?: string
+    propertyUse: string
+    tenureType?: string | null
+    structureType?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
@@ -20854,7 +20854,7 @@ export namespace Prisma {
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
-    numberOfFloors?: number
+    numberOfFloors?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     units?: PropertyUnitUncheckedCreateNestedManyWithoutPropertyInput
@@ -20885,12 +20885,12 @@ export namespace Prisma {
     accountNumber?: NullableStringFieldUpdateOperationsInput | string | null
     propertyName?: NullableStringFieldUpdateOperationsInput | string | null
     assemblyId?: StringFieldUpdateOperationsInput | string
-    propertyClass?: StringFieldUpdateOperationsInput | string
-    buildingStatus?: StringFieldUpdateOperationsInput | string
+    propertyClass?: NullableStringFieldUpdateOperationsInput | string | null
+    buildingStatus?: NullableStringFieldUpdateOperationsInput | string | null
     propertyStatus?: StringFieldUpdateOperationsInput | string
     propertyUse?: StringFieldUpdateOperationsInput | string
-    tenureType?: StringFieldUpdateOperationsInput | string
-    structureType?: StringFieldUpdateOperationsInput | string
+    tenureType?: NullableStringFieldUpdateOperationsInput | string | null
+    structureType?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -20899,7 +20899,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
-    numberOfFloors?: IntFieldUpdateOperationsInput | number
+    numberOfFloors?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     units?: PropertyUnitUpdateManyWithoutPropertyNestedInput
@@ -20914,12 +20914,12 @@ export namespace Prisma {
     accountNumber?: NullableStringFieldUpdateOperationsInput | string | null
     propertyName?: NullableStringFieldUpdateOperationsInput | string | null
     assemblyId?: StringFieldUpdateOperationsInput | string
-    propertyClass?: StringFieldUpdateOperationsInput | string
-    buildingStatus?: StringFieldUpdateOperationsInput | string
+    propertyClass?: NullableStringFieldUpdateOperationsInput | string | null
+    buildingStatus?: NullableStringFieldUpdateOperationsInput | string | null
     propertyStatus?: StringFieldUpdateOperationsInput | string
     propertyUse?: StringFieldUpdateOperationsInput | string
-    tenureType?: StringFieldUpdateOperationsInput | string
-    structureType?: StringFieldUpdateOperationsInput | string
+    tenureType?: NullableStringFieldUpdateOperationsInput | string | null
+    structureType?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -20928,7 +20928,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
-    numberOfFloors?: IntFieldUpdateOperationsInput | number
+    numberOfFloors?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     units?: PropertyUnitUncheckedUpdateManyWithoutPropertyNestedInput
@@ -20989,12 +20989,12 @@ export namespace Prisma {
     accountNumber?: string | null
     propertyName?: string | null
     assemblyId: string
-    propertyClass?: string
-    buildingStatus?: string
+    propertyClass?: string | null
+    buildingStatus?: string | null
     propertyStatus?: string
-    propertyUse?: string
-    tenureType?: string
-    structureType?: string
+    propertyUse: string
+    tenureType?: string | null
+    structureType?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
@@ -21003,7 +21003,7 @@ export namespace Prisma {
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
-    numberOfFloors?: number
+    numberOfFloors?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     units?: PropertyUnitCreateNestedManyWithoutPropertyInput
@@ -21018,12 +21018,12 @@ export namespace Prisma {
     accountNumber?: string | null
     propertyName?: string | null
     assemblyId: string
-    propertyClass?: string
-    buildingStatus?: string
+    propertyClass?: string | null
+    buildingStatus?: string | null
     propertyStatus?: string
-    propertyUse?: string
-    tenureType?: string
-    structureType?: string
+    propertyUse: string
+    tenureType?: string | null
+    structureType?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
@@ -21032,7 +21032,7 @@ export namespace Prisma {
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
-    numberOfFloors?: number
+    numberOfFloors?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     units?: PropertyUnitUncheckedCreateNestedManyWithoutPropertyInput
@@ -21084,12 +21084,12 @@ export namespace Prisma {
     accountNumber?: NullableStringFieldUpdateOperationsInput | string | null
     propertyName?: NullableStringFieldUpdateOperationsInput | string | null
     assemblyId?: StringFieldUpdateOperationsInput | string
-    propertyClass?: StringFieldUpdateOperationsInput | string
-    buildingStatus?: StringFieldUpdateOperationsInput | string
+    propertyClass?: NullableStringFieldUpdateOperationsInput | string | null
+    buildingStatus?: NullableStringFieldUpdateOperationsInput | string | null
     propertyStatus?: StringFieldUpdateOperationsInput | string
     propertyUse?: StringFieldUpdateOperationsInput | string
-    tenureType?: StringFieldUpdateOperationsInput | string
-    structureType?: StringFieldUpdateOperationsInput | string
+    tenureType?: NullableStringFieldUpdateOperationsInput | string | null
+    structureType?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -21098,7 +21098,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
-    numberOfFloors?: IntFieldUpdateOperationsInput | number
+    numberOfFloors?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     units?: PropertyUnitUpdateManyWithoutPropertyNestedInput
@@ -21113,12 +21113,12 @@ export namespace Prisma {
     accountNumber?: NullableStringFieldUpdateOperationsInput | string | null
     propertyName?: NullableStringFieldUpdateOperationsInput | string | null
     assemblyId?: StringFieldUpdateOperationsInput | string
-    propertyClass?: StringFieldUpdateOperationsInput | string
-    buildingStatus?: StringFieldUpdateOperationsInput | string
+    propertyClass?: NullableStringFieldUpdateOperationsInput | string | null
+    buildingStatus?: NullableStringFieldUpdateOperationsInput | string | null
     propertyStatus?: StringFieldUpdateOperationsInput | string
     propertyUse?: StringFieldUpdateOperationsInput | string
-    tenureType?: StringFieldUpdateOperationsInput | string
-    structureType?: StringFieldUpdateOperationsInput | string
+    tenureType?: NullableStringFieldUpdateOperationsInput | string | null
+    structureType?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -21127,7 +21127,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
-    numberOfFloors?: IntFieldUpdateOperationsInput | number
+    numberOfFloors?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     units?: PropertyUnitUncheckedUpdateManyWithoutPropertyNestedInput
@@ -21169,12 +21169,12 @@ export namespace Prisma {
     accountNumber?: string | null
     propertyName?: string | null
     assemblyId: string
-    propertyClass?: string
-    buildingStatus?: string
+    propertyClass?: string | null
+    buildingStatus?: string | null
     propertyStatus?: string
-    propertyUse?: string
-    tenureType?: string
-    structureType?: string
+    propertyUse: string
+    tenureType?: string | null
+    structureType?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
@@ -21183,7 +21183,7 @@ export namespace Prisma {
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
-    numberOfFloors?: number
+    numberOfFloors?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     units?: PropertyUnitCreateNestedManyWithoutPropertyInput
@@ -21198,12 +21198,12 @@ export namespace Prisma {
     accountNumber?: string | null
     propertyName?: string | null
     assemblyId: string
-    propertyClass?: string
-    buildingStatus?: string
+    propertyClass?: string | null
+    buildingStatus?: string | null
     propertyStatus?: string
-    propertyUse?: string
-    tenureType?: string
-    structureType?: string
+    propertyUse: string
+    tenureType?: string | null
+    structureType?: string | null
     createdByRatepayerId?: string | null
     registrationSource?: string
     registeredByConcessionId?: string | null
@@ -21212,7 +21212,7 @@ export namespace Prisma {
     polygonGeoJson: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: number | null
     landAreaSqm?: number | null
-    numberOfFloors?: number
+    numberOfFloors?: number | null
     createdAt?: Date | string
     updatedAt?: Date | string
     units?: PropertyUnitUncheckedCreateNestedManyWithoutPropertyInput
@@ -21243,12 +21243,12 @@ export namespace Prisma {
     accountNumber?: NullableStringFieldUpdateOperationsInput | string | null
     propertyName?: NullableStringFieldUpdateOperationsInput | string | null
     assemblyId?: StringFieldUpdateOperationsInput | string
-    propertyClass?: StringFieldUpdateOperationsInput | string
-    buildingStatus?: StringFieldUpdateOperationsInput | string
+    propertyClass?: NullableStringFieldUpdateOperationsInput | string | null
+    buildingStatus?: NullableStringFieldUpdateOperationsInput | string | null
     propertyStatus?: StringFieldUpdateOperationsInput | string
     propertyUse?: StringFieldUpdateOperationsInput | string
-    tenureType?: StringFieldUpdateOperationsInput | string
-    structureType?: StringFieldUpdateOperationsInput | string
+    tenureType?: NullableStringFieldUpdateOperationsInput | string | null
+    structureType?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -21257,7 +21257,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
-    numberOfFloors?: IntFieldUpdateOperationsInput | number
+    numberOfFloors?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     units?: PropertyUnitUpdateManyWithoutPropertyNestedInput
@@ -21272,12 +21272,12 @@ export namespace Prisma {
     accountNumber?: NullableStringFieldUpdateOperationsInput | string | null
     propertyName?: NullableStringFieldUpdateOperationsInput | string | null
     assemblyId?: StringFieldUpdateOperationsInput | string
-    propertyClass?: StringFieldUpdateOperationsInput | string
-    buildingStatus?: StringFieldUpdateOperationsInput | string
+    propertyClass?: NullableStringFieldUpdateOperationsInput | string | null
+    buildingStatus?: NullableStringFieldUpdateOperationsInput | string | null
     propertyStatus?: StringFieldUpdateOperationsInput | string
     propertyUse?: StringFieldUpdateOperationsInput | string
-    tenureType?: StringFieldUpdateOperationsInput | string
-    structureType?: StringFieldUpdateOperationsInput | string
+    tenureType?: NullableStringFieldUpdateOperationsInput | string | null
+    structureType?: NullableStringFieldUpdateOperationsInput | string | null
     createdByRatepayerId?: NullableStringFieldUpdateOperationsInput | string | null
     registrationSource?: StringFieldUpdateOperationsInput | string
     registeredByConcessionId?: NullableStringFieldUpdateOperationsInput | string | null
@@ -21286,7 +21286,7 @@ export namespace Prisma {
     polygonGeoJson?: JsonNullValueInput | InputJsonValue
     leaseDurationYears?: NullableIntFieldUpdateOperationsInput | number | null
     landAreaSqm?: NullableFloatFieldUpdateOperationsInput | number | null
-    numberOfFloors?: IntFieldUpdateOperationsInput | number
+    numberOfFloors?: NullableIntFieldUpdateOperationsInput | number | null
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
     units?: PropertyUnitUncheckedUpdateManyWithoutPropertyNestedInput

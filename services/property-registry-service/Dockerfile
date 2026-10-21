@@ -8,9 +8,9 @@ RUN npm install --ignore-scripts && npm cache clean --force
 
 FROM dependencies AS build
 COPY prisma ./prisma
-RUN npx prisma generate
 COPY tsconfig.json ./
 COPY src ./src
+RUN npx prisma generate
 RUN npm run build
 RUN cp -r src/generated dist/src/
 
