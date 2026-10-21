@@ -74,6 +74,8 @@ export const createPropertyBodySchema = {
     propertyUse: { type: 'string' },
     tenureType: { type: 'string' },
     structureType: { type: 'string' },
+    ownershipType: { type: 'string', enum: ['FULL', 'PART', 'full', 'part', 'PARTIAL', 'partial', 'OWNER', 'CO_OWNER', 'TENANT'] },
+    ownershipPercentage: { type: 'number', minimum: 0, maximum: 100 },
     registrationSource: { type: 'string', enum: ['CONCESSION', 'RATEPAYER'], default: 'CONCESSION' },
     createdByRatepayerId: { type: 'string', format: 'uuid' },
     assemblyId: {
@@ -84,7 +86,7 @@ export const createPropertyBodySchema = {
     documents: {
       type: 'array',
       items: propertyDocumentInputSchema,
-      description: 'Mandatory ownership verification documents when registered from ratepayer end'
+      description: 'Optional ownership verification documents'
     },
     polygonGeoJson: { type: 'object' }
   }

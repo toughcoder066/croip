@@ -32,6 +32,8 @@ export interface CreatePropertyInput {
   propertyUse?: string;
   tenureType?: string;
   structureType?: string;
+  ownershipType?: string;
+  ownershipPercentage?: number;
   polygonGeoJson: Record<string, unknown>;
   registrationSource?: 'CONCESSION' | 'RATEPAYER';
   createdByRatepayerId?: string;
@@ -356,68 +358,31 @@ export function propertyService(app: FastifyInstance) {
         input.registrationSource === 'RATEPAYER' ||
         Boolean(input.createdByRatepayerId);
 
-      const targetRatepayerId =
-        input.createdByRatepayerId || (input.actorType === 'RATEPAYER' ? input.actorId : undefined);
-
-      if (targetRatepayerId) {
-        try {
-          const rpRes = await fetch(`${app.config.RATEPAYER_SERVICE_URL}/v1/ratepayers/${targetRatepayerId}`, {
-            signal: AbortSignal.timeout(5000)
-          });
-          if (rpRes.ok) {
-            const rpData = (await rpRes.json()) as {
-              legalName?: string;
-              phone?: string;
-              email?: string;
-              address?: string;
-              regionId?: string;
-              assemblyId?: string;
-              locationGeo?: unknown;
-              verifications?: Array<{ verificationStatus: string }>;
-              completion?: {
-                isProfileComplete?: boolean;
-                hasVerifiedKyc?: boolean;
-                isEligibleForPropertyCreation?: boolean;
-                missingSections?: string[];
-              };
-            };
-
-            const isProfileComplete =
-              rpData.completion?.isProfileComplete ??
-              Boolean(rpData.legalName && (rpData.phone || rpData.email) && rpData.regionId && rpData.assemblyId && (rpData.address || rpData.locationGeo));
-
-            const hasVerifiedKyc =
-              rpData.completion?.hasVerifiedKyc ??
-              Boolean(rpData.verifications && rpData.verifications.some((v) => v.verificationStatus === 'VERIFIED'));
-
-            if (!isProfileComplete) {
-              const missing = rpData.completion?.missingSections?.join(', ') || 'personal details, address, or MMDA location';
-              throw new BadRequestError(
-                `Cannot create property: Ratepayer profile is incomplete (missing: ${missing}). The ratepayer must complete their full profile and address before registering a property.`
-              );
-            }
-
-            if (!hasVerifiedKyc) {
-              throw new BadRequestError(
-                'Cannot create property: Ratepayer KYC verification is not approved. A verified identity (KYC) is required before registering a property.'
-              );
-            }
-          }
-        } catch (err: any) {
-          if (err instanceof BadRequestError) throw err;
-          app.log.warn({ err }, 'Failed to check ratepayer completion from ratepayer-service, proceeding with registration');
-        }
-      }
-
       if (isRatepayerCreation) {
-        // Business Rule: For ratepayer registration, propertyName and ownership verification documents are strictly required
+        // Business Rule: For authenticated ratepayer registration, exactly these 4 fields are required:
+        // 1. propertyName
+        // 2. polygonGeoJson
+        // 3. propertyUse
+        // 4. ownershipType ('FULL' or 'PART')
         if (!input.propertyName || !input.propertyName.trim()) {
           throw new BadRequestError('Property name is required when registering a property as a ratepayer.');
         }
-        if (!input.documents || input.documents.length === 0) {
-          throw new BadRequestError(
-            `Ownership verification documents are required to register a property from the ratepayer's end. Please attach at least one proof of ownership (e.g. Land Title Certificate, Indenture, Building Permit, or Purchase Agreement).`
-          );
+
+        if (!input.polygonGeoJson || typeof input.polygonGeoJson !== 'object') {
+          throw new BadRequestError('A valid polygon GeoJSON boundary is required to register a property.');
+        }
+
+        if (!input.propertyUse || !input.propertyUse.trim()) {
+          throw new BadRequestError('Property use (e.g. RESIDENTIAL, COMMERCIAL, INDUSTRIAL, MIXED_USE) is required when registering a property.');
+        }
+
+        if (!input.ownershipType || !input.ownershipType.trim()) {
+          throw new BadRequestError('Ownership type is required when registering a property (either FULL or PART).');
+        }
+
+        const normalizedOwnership = input.ownershipType.trim().toUpperCase();
+        if (!['FULL', 'PART', 'PARTIAL', 'OWNER', 'CO_OWNER'].includes(normalizedOwnership)) {
+          throw new BadRequestError('Ownership type must be either FULL or PART.');
         }
       } else {
         // Business Rule: Concession registration requires all core classification fields
@@ -461,6 +426,9 @@ export function propertyService(app: FastifyInstance) {
 
           const code = input.code?.trim() || (await generatePropertyCode(tx, matchedAssembly.code, isRatepayerCreation));
           const effectivePropertyStatus = isRatepayerCreation ? 'UNASSESSED' : input.propertyStatus!;
+          const defaultClass = (input.propertyUse?.toUpperCase() === 'COMMERCIAL' || input.propertyUse?.toUpperCase() === 'INDUSTRIAL')
+            ? 'COMMERCIAL_CLASS_1'
+            : 'RESIDENTIAL_CLASS_1';
 
           const property = await tx.property.create({
             data: {
@@ -468,7 +436,7 @@ export function propertyService(app: FastifyInstance) {
               accountNumber: input.accountNumber ?? null,
               propertyName: input.propertyName ?? null,
               assemblyId: effectiveAssemblyId,
-              propertyClass: input.propertyClass ?? 'RESIDENTIAL_CLASS_1',
+              propertyClass: input.propertyClass ?? defaultClass,
               buildingStatus: input.buildingStatus ?? 'COMPLETED',
               propertyStatus: effectivePropertyStatus,
               propertyUse: input.propertyUse ?? 'RESIDENTIAL',

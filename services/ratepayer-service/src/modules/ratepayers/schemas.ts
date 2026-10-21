@@ -152,7 +152,8 @@ export const linkOwnPropertyBodySchema = {
   properties: {
     propertyId: { type: 'string', format: 'uuid' },
     unitId: { type: 'string', format: 'uuid' },
-    ownershipType: { type: 'string', default: 'OWNER' }
+    ownershipType: { type: 'string', default: 'FULL' },
+    ownershipPercentage: { type: 'number' }
   }
 };
 

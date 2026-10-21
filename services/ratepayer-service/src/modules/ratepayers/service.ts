@@ -102,6 +102,7 @@ export interface LinkOwnPropertyInput {
   propertyId: string;
   unitId: string;
   ownershipType?: string;
+  ownershipPercentage?: number;
 }
 
 const OTP_TTL_MS = 5 * 60 * 1000;
@@ -732,14 +733,20 @@ export function ratepayerService(app: FastifyInstance) {
       const ratepayer = await app.prisma.ratepayer.findUnique({ where: { id: ratepayerId } });
       if (!ratepayer) throw new NotFoundError('Ratepayer profile not found');
 
+      const rawOwnership = input.ownershipType?.trim().toUpperCase();
+      const normalizedOwnership = (rawOwnership === 'PART' || rawOwnership === 'PARTIAL' || rawOwnership === 'CO_OWNER')
+        ? 'PART'
+        : 'FULL';
+      const ownershipPercentage = input.ownershipPercentage ?? (normalizedOwnership === 'FULL' ? 100.0 : 50.0);
+
       return app.prisma.$transaction(async (tx) => {
         const link = await tx.propertyRatepayerLink.create({
           data: {
             ratepayerId,
             propertyId: input.propertyId,
             unitId: input.unitId,
-            ownershipType: input.ownershipType ?? 'OWNER',
-            ownershipPercentage: 100.0,
+            ownershipType: normalizedOwnership,
+            ownershipPercentage,
             isPrimaryBillingContact: true,
             claimStatus: 'APPROVED',
             effectiveFrom: new Date()

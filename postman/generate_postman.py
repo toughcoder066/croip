@@ -106,10 +106,11 @@ ratepayer_folder = folder("1. Ratepayer", [
     ], "ratepayer-service — citizen plug-and-play signup and profile completion; only registration and login/verify-otp are public; all other endpoints require Bearer authentication."),
     folder("My Properties", [
         item("Register a property (self-service)", "POST", "property_registry_url", "/v1/properties", auth="ratepayer", body={
-            "code": "GH0701-SELF-{{$randomInt}}", "propertyName": "My Residence", "propertyUse": "RESIDENTIAL",
-            "documents": [{"documentType": "LAND_TITLE_CERTIFICATE", "documentNumber": "LTC-00982", "mediaUrl": "https://storage.croip.gov.gh/claims/ltc-00982.pdf"}],
+            "propertyName": "My Residence",
+            "propertyUse": "RESIDENTIAL",
+            "ownershipType": "FULL",
             "polygonGeoJson": {"type": "Polygon", "coordinates": [[[-0.2355, 5.5545], [-0.2355, 5.5555], [-0.2345, 5.5555], [-0.2345, 5.5545], [-0.2355, 5.5545]]]}
-        }, description="Strictly requires ratepayer Bearer session token (HS256). Property creation requires that the ratepayer has completed their profile (including Address & Pinpoint Location) and has an approved KYC verification (isEligibleForPropertyCreation == true). Rejects with 400 Bad Request if KYC is unverified or profile is incomplete. Property is attributed to the logged-in ratepayer (createdByRatepayerId) and automatically linked in ratepayer-service. Ownership documents are mandatory. Spatial restriction: polygons cannot overlap or contain another property parcel if property uses and ownership match."),
+        }, description="Strictly requires ratepayer Bearer session token (HS256). Single unified API to register a property from an authenticated ratepayer. Accepts all property fields, but the required ones are: propertyName, polygonGeoJson, propertyUse (e.g. RESIDENTIAL, COMMERCIAL, MIXED_USE), and ownershipType (either FULL or PART). All other fields (numberOfFloors, propertyClass, structureType, documents, etc.) are optional. Property is attributed to the logged-in ratepayer (createdByRatepayerId) and automatically linked in ratepayer-service with the specified ownership type and percentage."),
         item("Update my property - metadata only (preserves valuation & status)", "PATCH", "property_registry_url", "/v1/properties/{{sample_property_id}}", auth="ratepayer", body={
             "propertyName": "Sunset Heights Villa"
         }, description="Ratepayer updates descriptive metadata (name, description, documents). Since core structural/use fields are unchanged, existing valuation and verification status remain intact."),

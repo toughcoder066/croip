@@ -133,7 +133,7 @@ test('POST /v1/properties rejects ratepayer registration without propertyName (4
   await app.close();
 });
 
-test('POST /v1/properties rejects ratepayer registration without ownership documents (400)', async () => {
+test('POST /v1/properties rejects ratepayer registration without propertyUse (400)', async () => {
   const app = await buildApp({ config, skipInfrastructure: true });
   const response = await app.inject({
     method: 'POST',
@@ -144,6 +144,7 @@ test('POST /v1/properties rejects ratepayer registration without ownership docum
     },
     payload: {
       propertyName: 'My Residence',
+      ownershipType: 'FULL',
       polygonGeoJson: {
         type: 'Polygon',
         coordinates: [
@@ -158,10 +159,41 @@ test('POST /v1/properties rejects ratepayer registration without ownership docum
       }
     }
   });
-  // Ratepayer requires at least 1 ownership document
   assert.equal(response.statusCode, 400);
   assert.equal(response.json().code, 'BAD_REQUEST');
-  assert.match(response.json().title, /ownership verification documents are required/i);
+  assert.match(response.json().title, /property use .* is required/i);
+  await app.close();
+});
+
+test('POST /v1/properties rejects ratepayer registration without ownershipType (400)', async () => {
+  const app = await buildApp({ config, skipInfrastructure: true });
+  const response = await app.inject({
+    method: 'POST',
+    url: '/v1/properties',
+    headers: {
+      'x-dev-actor-type': 'RATEPAYER',
+      'x-dev-subject': '00000000-0000-0000-0000-000000000001'
+    },
+    payload: {
+      propertyName: 'My Residence',
+      propertyUse: 'RESIDENTIAL',
+      polygonGeoJson: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [-0.186964, 5.603716],
+            [-0.185964, 5.603716],
+            [-0.185964, 5.602716],
+            [-0.186964, 5.602716],
+            [-0.186964, 5.603716]
+          ]
+        ]
+      }
+    }
+  });
+  assert.equal(response.statusCode, 400);
+  assert.equal(response.json().code, 'BAD_REQUEST');
+  assert.match(response.json().title, /ownership type is required/i);
   await app.close();
 });
 
@@ -238,10 +270,10 @@ test('POST /v1/properties accepts valid HS256 Bearer token and identifies Ratepa
   });
 
   // Token is verified! Because caller is identified as a Ratepayer,
-  // it enforces ratepayer ownership documents validation rather than rejecting with 401 Unauthorized
+  // it enforces ratepayer required fields (propertyUse, ownershipType) rather than rejecting with 401 Unauthorized
   assert.equal(response.statusCode, 400);
   assert.equal(response.json().code, 'BAD_REQUEST');
-  assert.match(response.json().title, /ownership verification documents are required/i);
+  assert.match(response.json().title, /property use .* is required/i);
   await app.close();
 });
 

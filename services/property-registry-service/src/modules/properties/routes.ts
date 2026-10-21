@@ -54,13 +54,22 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       // token the caller used for this request, so ratepayer-service's authenticateRatepayer
       // resolves the ratepayer id itself rather than trusting a body field.
       try {
+        const rawOwnership = request.body.ownershipType?.trim().toUpperCase();
+        const normalizedOwnership = (rawOwnership === 'PART' || rawOwnership === 'PARTIAL' || rawOwnership === 'CO_OWNER') ? 'PART' : 'FULL';
+        const ownershipPercentage = request.body.ownershipPercentage ?? (normalizedOwnership === 'FULL' ? 100.0 : 50.0);
+
         const response = await fetch(`${app.config.RATEPAYER_SERVICE_URL}/v1/ratepayers/me/properties/link`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(request.headers.authorization ? { Authorization: request.headers.authorization } : {})
           },
-          body: JSON.stringify({ propertyId: created.id, unitId: created.defaultUnitId }),
+          body: JSON.stringify({
+            propertyId: created.id,
+            unitId: created.defaultUnitId,
+            ownershipType: normalizedOwnership,
+            ownershipPercentage
+          }),
           signal: AbortSignal.timeout(5000)
         });
         if (!response.ok) {
