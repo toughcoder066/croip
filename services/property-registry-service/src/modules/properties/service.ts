@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { domainEvent } from '../../events/envelope.js';
 import { appendOutboxEvent } from '../../events/outbox.js';
@@ -31,6 +32,13 @@ export interface CreatePropertyInput {
   propertyUse?: string;
   tenureType?: string;
   structureType?: string;
+  numberOfFloors?: number;
+  ownershipType?: string;
+  ownershipPercentage?: number;
+  version?: number;
+  ghanaPostGps?: string;
+  createdBy?: string;
+  verifiedBy?: string;
   polygonGeoJson: Record<string, unknown>;
   registrationSource?: 'CONCESSION' | 'RATEPAYER';
   createdByRatepayerId?: string;
@@ -88,6 +96,25 @@ export interface UploadPremisesDocumentInput {
   concessionId: string;
   assemblyId: string;
   actorId: string;
+}
+
+export interface UpdatePropertyInput {
+  propertyName?: string;
+  accountNumber?: string;
+  propertyUse?: string;
+  structureType?: string;
+  buildingStatus?: string;
+  propertyClass?: string;
+  tenureType?: string;
+  numberOfFloors?: number;
+  landAreaSqm?: number;
+  leaseDurationYears?: number;
+  version?: number;
+  ghanaPostGps?: string;
+  verifiedBy?: string;
+  polygonGeoJson?: Record<string, unknown>;
+  claimedByRatepayerId?: string;
+  createdByRatepayerId?: string;
 }
 
 const assignedAssembliesCache = new Map<string, { assemblies: string[]; expiresAt: number }>();
@@ -272,62 +299,37 @@ async function assertNoConflictingOverlap(
 }
 
 /**
- * Generates the next sequential property code for an MMDA:
- * - Ratepayer: ${assemblyCode}-SELF-XXXX (e.g. GH0701-SELF-0004)
- * - Concession: ${assemblyCode}-XXXX (e.g. GH0701-0003)
+/**
+ * Auto-generates property ID (UUID) and canonical property code in the format:
+ * PROP-[year of addition]-[first 4 chars of UUID]-[last 4 chars of UUID]
+ * e.g. PROP-2026-B3D4-9A2F
  */
-async function generatePropertyCode(
+async function generatePropertyIdAndCode(
   tx: any,
-  assemblyCode: string,
-  isRatepayer: boolean,
   reservedCodes?: Set<string>
-): Promise<string> {
-  const prefix = isRatepayer ? `${assemblyCode}-SELF-` : `${assemblyCode}-`;
-
-  const existingProperties = await tx.property.findMany({
-    where: {
-      code: {
-        startsWith: prefix
-      }
-    },
-    select: {
-      code: true
-    }
-  });
-
-  let maxSeq = 0;
-  for (const p of existingProperties) {
-    if (!isRatepayer && p.code.startsWith(`${assemblyCode}-SELF-`)) {
-      continue;
-    }
-    const suffix = p.code.slice(prefix.length);
-    if (/^\d{4}$/.test(suffix)) {
-      const num = parseInt(suffix, 10);
-      if (num > maxSeq) {
-        maxSeq = num;
-      }
-    }
-  }
-
-  let candidateSeq = maxSeq + 1;
+): Promise<{ id: string; code: string }> {
+  const year = new Date().getFullYear();
   while (true) {
-    const candidateCode = `${prefix}${String(candidateSeq).padStart(4, '0')}`;
-    if (reservedCodes && reservedCodes.has(candidateCode)) {
-      candidateSeq++;
+    const id = crypto.randomUUID();
+    const first4 = id.slice(0, 4).toUpperCase();
+    const last4 = id.slice(-4).toUpperCase();
+    const code = `PROP-${year}-${first4}-${last4}`;
+
+    if (reservedCodes && reservedCodes.has(code)) {
       continue;
     }
 
     const existing = await tx.property.findUnique({
-      where: { code: candidateCode },
+      where: { code },
       select: { id: true }
     });
+
     if (!existing) {
       if (reservedCodes) {
-        reservedCodes.add(candidateCode);
+        reservedCodes.add(code);
       }
-      return candidateCode;
+      return { id, code };
     }
-    candidateSeq++;
   }
 }
 
@@ -340,14 +342,30 @@ export function propertyService(app: FastifyInstance) {
         Boolean(input.createdByRatepayerId);
 
       if (isRatepayerCreation) {
-        // Business Rule: For ratepayer registration, propertyName and ownership verification documents are strictly required
+        // Business Rule: For authenticated ratepayer registration, exactly these 4 fields are required:
+        // 1. propertyName
+        // 2. polygonGeoJson
+        // 3. propertyUse
+        // 4. ownershipType ('FULL' or 'PART')
         if (!input.propertyName || !input.propertyName.trim()) {
           throw new BadRequestError('Property name is required when registering a property as a ratepayer.');
         }
-        if (!input.documents || input.documents.length === 0) {
-          throw new BadRequestError(
-            `Ownership verification documents are required to register a property from the ratepayer's end. Please attach at least one proof of ownership (e.g. Land Title Certificate, Indenture, Building Permit, or Purchase Agreement).`
-          );
+
+        if (!input.polygonGeoJson || typeof input.polygonGeoJson !== 'object') {
+          throw new BadRequestError('A valid polygon GeoJSON boundary is required to register a property.');
+        }
+
+        if (!input.propertyUse || !input.propertyUse.trim()) {
+          throw new BadRequestError('Property use (e.g. RESIDENTIAL, COMMERCIAL, INDUSTRIAL, MIXED_USE) is required when registering a property.');
+        }
+
+        if (!input.ownershipType || !input.ownershipType.trim()) {
+          throw new BadRequestError('Ownership type is required when registering a property (either FULL or PART).');
+        }
+
+        const normalizedOwnership = input.ownershipType.trim().toUpperCase();
+        if (!['FULL', 'PART', 'PARTIAL', 'OWNER', 'CO_OWNER'].includes(normalizedOwnership)) {
+          throw new BadRequestError('Ownership type must be either FULL or PART.');
         }
       } else {
         // Business Rule: Concession registration requires all core classification fields
@@ -389,21 +407,28 @@ export function propertyService(app: FastifyInstance) {
             propertyCode: input.code
           });
 
-          const code = input.code?.trim() || (await generatePropertyCode(tx, matchedAssembly.code, isRatepayerCreation));
-          const effectivePropertyStatus = isRatepayerCreation ? 'UNASSESSED' : input.propertyStatus!;
+          const { id, code } = input.code?.trim()
+            ? { id: crypto.randomUUID(), code: input.code.trim() }
+            : await generatePropertyIdAndCode(tx);
+          const effectivePropertyStatus = isRatepayerCreation ? 'UNASSESSED' : (input.propertyStatus || 'UNASSESSED');
 
           const property = await tx.property.create({
             data: {
+              id,
               code,
+              version: 1,
+              ghanaPostGps: input.ghanaPostGps?.trim() || null,
+              createdBy: input.createdBy || (isRatepayerCreation ? (input.createdByRatepayerId ?? input.actorId) : (input.actorId ?? 'CONCESSION_STAFF')),
               accountNumber: input.accountNumber ?? null,
               propertyName: input.propertyName ?? null,
               assemblyId: effectiveAssemblyId,
-              propertyClass: input.propertyClass ?? 'RESIDENTIAL_CLASS_1',
-              buildingStatus: input.buildingStatus ?? 'COMPLETED',
+              propertyClass: input.propertyClass ?? null,
+              buildingStatus: input.buildingStatus ?? null,
               propertyStatus: effectivePropertyStatus,
-              propertyUse: input.propertyUse ?? 'RESIDENTIAL',
-              tenureType: input.tenureType ?? 'FREEHOLD',
-              structureType: input.structureType ?? 'CONCRETE',
+              propertyUse: input.propertyUse!,
+              tenureType: input.tenureType ?? null,
+              structureType: input.structureType ?? null,
+              numberOfFloors: input.numberOfFloors ?? null,
               registrationSource: isRatepayerCreation ? 'RATEPAYER' : 'CONCESSION',
               registeredByConcessionId: isRatepayerCreation ? null : input.concessionId,
               createdByRatepayerId: isRatepayerCreation ? (input.createdByRatepayerId ?? input.actorId) : null,
@@ -556,11 +581,17 @@ export function propertyService(app: FastifyInstance) {
               }
             }
 
-            const code = item.code?.trim() || (await generatePropertyCode(tx, assembly.code, false, reservedCodes));
+            const { id, code } = item.code?.trim()
+              ? { id: crypto.randomUUID(), code: item.code.trim() }
+              : await generatePropertyIdAndCode(tx, reservedCodes);
 
             const property = await tx.property.create({
               data: {
+                id,
                 code,
+                version: 1,
+                ghanaPostGps: item.ghanaPostGps?.trim() || null,
+                createdBy: item.createdBy || input.actorId || 'CONCESSION_STAFF',
                 accountNumber: item.accountNumber ?? null,
                 propertyName: item.propertyName ?? null,
                 assemblyId: assembly.id,
@@ -669,6 +700,179 @@ export function propertyService(app: FastifyInstance) {
       });
       if (!prop) throw new NotFoundError('Property not found');
       return prop;
+    },
+
+    async updateProperty(
+      idOrCode: string,
+      input: UpdatePropertyInput,
+      actor: { subject: string; actorType: string; concessionId?: string; assemblyId?: string }
+    ) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrCode);
+      const existing = await app.prisma.property.findFirst({
+        where: isUuid ? { OR: [{ id: idOrCode }, { code: idOrCode }] } : { code: idOrCode },
+        include: { valuations: true }
+      });
+      if (!existing) throw new NotFoundError(`Property '${idOrCode}' not found`);
+
+      // Authorization verification
+      if (actor.actorType === 'RATEPAYER') {
+        const isOwner =
+          existing.createdByRatepayerId === actor.subject ||
+          existing.claimedByRatepayerId === actor.subject;
+        if (!isOwner) {
+          throw new ForbiddenError('You are only authorized to update properties that belong to your ratepayer profile.');
+        }
+      } else if (actor.actorType === 'CONCESSION') {
+        if (actor.assemblyId && actor.assemblyId !== '*' && existing.assemblyId !== actor.assemblyId) {
+          throw new ForbiddenError(
+            `Concessionaire cannot update property outside its assigned assembly scope (${existing.assemblyId} vs ${actor.assemblyId})`
+          );
+        }
+      }
+
+      // Check which fields are modified
+      const structuralFields = [
+        'propertyUse',
+        'structureType',
+        'buildingStatus',
+        'propertyClass',
+        'tenureType',
+        'numberOfFloors',
+        'landAreaSqm',
+        'leaseDurationYears',
+        'polygonGeoJson',
+        'claimedByRatepayerId',
+        'createdByRatepayerId'
+      ] as const;
+
+      const changedStructuralFields: string[] = [];
+      for (const field of structuralFields) {
+        if (input[field] !== undefined) {
+          if (field === 'polygonGeoJson') {
+            if (JSON.stringify(input[field]) !== JSON.stringify(existing.polygonGeoJson)) {
+              changedStructuralFields.push(field);
+            }
+          } else if ((input as any)[field] !== (existing as any)[field]) {
+            changedStructuralFields.push(field);
+          }
+        }
+      }
+
+      const isStructuralChange = changedStructuralFields.length > 0;
+
+      // If polygon changed, validate boundaries
+      if (input.polygonGeoJson && changedStructuralFields.includes('polygonGeoJson')) {
+        await assertNoConflictingOverlap(app.prisma, input.polygonGeoJson, {
+          propertyUse: input.propertyUse || existing.propertyUse,
+          assemblyId: existing.assemblyId,
+          propertyCode: existing.code,
+          excludePropertyId: existing.id
+        });
+      }
+
+      return app.prisma.$transaction(async (tx) => {
+        const updateData: any = {
+          version: { increment: 1 },
+          ...(input.propertyName !== undefined ? { propertyName: input.propertyName } : {}),
+          ...(input.accountNumber !== undefined ? { accountNumber: input.accountNumber } : {}),
+          ...(input.propertyUse !== undefined ? { propertyUse: input.propertyUse } : {}),
+          ...(input.structureType !== undefined ? { structureType: input.structureType } : {}),
+          ...(input.buildingStatus !== undefined ? { buildingStatus: input.buildingStatus } : {}),
+          ...(input.propertyClass !== undefined ? { propertyClass: input.propertyClass } : {}),
+          ...(input.tenureType !== undefined ? { tenureType: input.tenureType } : {}),
+          ...(input.numberOfFloors !== undefined ? { numberOfFloors: input.numberOfFloors } : {}),
+          ...(input.landAreaSqm !== undefined ? { landAreaSqm: input.landAreaSqm } : {}),
+          ...(input.leaseDurationYears !== undefined ? { leaseDurationYears: input.leaseDurationYears } : {}),
+          ...(input.polygonGeoJson !== undefined ? { polygonGeoJson: input.polygonGeoJson } : {}),
+          ...(input.ghanaPostGps !== undefined ? { ghanaPostGps: input.ghanaPostGps?.trim() || null } : {}),
+          ...(input.verifiedBy !== undefined ? { verifiedBy: input.verifiedBy, verifiedAt: new Date() } : {}),
+          ...(input.claimedByRatepayerId !== undefined ? { claimedByRatepayerId: input.claimedByRatepayerId } : {}),
+          ...(input.createdByRatepayerId !== undefined ? { createdByRatepayerId: input.createdByRatepayerId } : {})
+        };
+
+        let decoupledValuationsCount = 0;
+
+        if (isStructuralChange) {
+          // Requirement: When a ratepayer's property is updated (actual property characteristics,
+          // not trivial metadata like name or documents), the property should be assigned UNASSESSED
+          // and PENDING verification, and all active valuations must be decoupled.
+          updateData.propertyStatus = 'UNASSESSED';
+          updateData.verificationStatus = 'PENDING';
+
+          const valResult = await tx.propertyValuation.updateMany({
+            where: { propertyId: existing.id, isCurrent: true },
+            data: { isCurrent: false }
+          });
+          decoupledValuationsCount = valResult.count;
+        }
+
+        const updated = await tx.property.update({
+          where: { id: existing.id },
+          data: updateData,
+          include: {
+            units: true,
+            documents: true,
+            valuations: { where: { isCurrent: true } }
+          }
+        });
+
+        // Audit Record
+        await tx.auditRecord.create({
+          data: {
+            actorId: actor.subject,
+            actorType: actor.actorType,
+            concessionId: existing.registeredByConcessionId ?? (actor.concessionId && actor.concessionId !== '00000000-0000-0000-0000-000000000000' ? actor.concessionId : null),
+            assemblyId: existing.assemblyId,
+            action: isStructuralChange ? 'PROPERTY_STRUCTURAL_UPDATE_VALUATION_DECOUPLED' : 'PROPERTY_METADATA_UPDATE',
+            resourceType: 'Property',
+            resourceId: existing.id,
+            requestId: crypto.randomUUID(),
+            outcome: 'SUCCESS',
+            metadata: {
+              propertyCode: existing.code,
+              changedStructuralFields,
+              isStructuralChange,
+              decoupledValuationsCount,
+              newPropertyStatus: updated.propertyStatus,
+              newVerificationStatus: updated.verificationStatus
+            }
+          }
+        });
+
+        // Outbox Domain Event
+        const evt = domainEvent({
+          eventType: isStructuralChange ? 'PropertyUpdatedAndValuationDecoupled' : 'PropertyMetadataUpdated',
+          eventVersion: 1,
+          producer: app.serviceInfo.name,
+          aggregateType: 'Property',
+          aggregateId: existing.id,
+          aggregateVersion: 2,
+          concessionId: existing.registeredByConcessionId || actor.concessionId || '00000000-0000-0000-0000-000000000000',
+          assemblyId: existing.assemblyId,
+          correlationId: crypto.randomUUID(),
+          data: {
+            propertyId: existing.id,
+            code: existing.code,
+            changedFields: isStructuralChange ? changedStructuralFields : Object.keys(input),
+            isStructuralChange,
+            previousPropertyStatus: existing.propertyStatus,
+            newPropertyStatus: updated.propertyStatus,
+            previousVerificationStatus: existing.verificationStatus,
+            newVerificationStatus: updated.verificationStatus,
+            decoupledValuationsCount,
+            updatedByActorId: actor.subject,
+            updatedByActorType: actor.actorType
+          }
+        });
+
+        await appendOutboxEvent(
+          tx,
+          isStructuralChange ? 'revenue.property.valuation_decoupled.v1' : 'revenue.property.updated.v1',
+          evt
+        );
+
+        return updated;
+      });
     },
 
     async addUnit(propertyId: string, unitIdentifier: string, unitType: string, floorLevel: number, assemblyId: string) {
@@ -836,7 +1040,11 @@ export function propertyService(app: FastifyInstance) {
         if (input.reviewStatus === 'APPROVED') {
           await tx.property.update({
             where: { id: verification.propertyId },
-            data: { verificationStatus: 'VERIFIED' }
+            data: {
+              verificationStatus: 'VERIFIED',
+              verifiedBy: input.reviewedByPersonnelId,
+              verifiedAt: new Date()
+            }
           });
         }
 
@@ -901,6 +1109,103 @@ export function propertyService(app: FastifyInstance) {
       return app.prisma.propertyDocument.findMany({
         where: { propertyId: property.id },
         orderBy: { createdAt: 'desc' }
+      });
+    },
+
+    // Deletes an individual property parcel and severs all links to ratepayers.
+    // Business rule: if that ratepayer (or any ratepayer) has paid bills on that property,
+    // you CANNOT delete that property; you can only sever the link.
+    async deleteProperty(propertyId: string, actorId: string) {
+      const property = await app.prisma.property.findUnique({
+        where: { id: propertyId }
+      });
+      if (!property) throw new NotFoundError('Property record not found');
+
+      // Check with billing service if any bills have been paid on this property
+      let hasPaidBills = false;
+      try {
+        const checkRes = await fetch(`${app.config.BILLING_SERVICE_URL}/v1/bills/property-payment-status/${propertyId}`, {
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(5000)
+        });
+        if (checkRes.ok) {
+          const data = await checkRes.json() as { hasPaidBills: boolean; totalAmountPaid?: string };
+          hasPaidBills = data.hasPaidBills;
+        }
+      } catch (err) {
+        app.log.warn({ err, propertyId }, 'Could not contact billing-payments-service to verify paid bills; proceeding with caution');
+      }
+
+      if (hasPaidBills) {
+        throw new BadRequestError('Cannot delete property with paid bills. You can only sever the link to the ratepayer.');
+      }
+
+      // Sever all ratepayer links for this property in ratepayer-service
+      try {
+        await fetch(`${app.config.RATEPAYER_SERVICE_URL}/v1/properties/${propertyId}/links`, {
+          method: 'DELETE',
+          signal: AbortSignal.timeout(5000)
+        });
+      } catch (err) {
+        app.log.warn({ err, propertyId }, 'Failed to notify ratepayer-service to sever links for property');
+      }
+
+      // Delete the property and its associated records
+      return app.prisma.$transaction(async (tx) => {
+        await tx.propertyVerification.deleteMany({ where: { propertyId } });
+        await tx.propertyValuation.deleteMany({ where: { propertyId } });
+        await tx.propertyPhoto.deleteMany({ where: { propertyId } });
+        await tx.propertyDocument.deleteMany({ where: { propertyId } });
+        await tx.propertyUnit.deleteMany({ where: { propertyId } });
+        await tx.property.delete({ where: { id: propertyId } });
+
+        const evt = domainEvent({
+          eventType: 'PropertyDeleted',
+          eventVersion: 1,
+          producer: app.serviceInfo.name,
+          aggregateType: 'Property',
+          aggregateId: propertyId,
+          aggregateVersion: 1,
+          concessionId: property.registeredByConcessionId || '00000000-0000-0000-0000-000000000000',
+          assemblyId: property.assemblyId,
+          correlationId: crypto.randomUUID(),
+          data: { propertyId, code: property.code, actorId }
+        });
+        await appendOutboxEvent(tx, 'revenue.property.deleted.v1', evt);
+
+        app.log.info({ propertyId, code: property.code, actorId }, 'Property deleted and ratepayer links severed');
+
+        return {
+          success: true,
+          message: `Property ${property.code} deleted and all ratepayer links severed successfully`
+        };
+      });
+    },
+
+    async purgeProperties(actorId: string) {
+      return app.prisma.$transaction(async (tx) => {
+        const deletedVerifications = await tx.propertyVerification.deleteMany({});
+        const deletedValuations = await tx.propertyValuation.deleteMany({});
+        const deletedPhotos = await tx.propertyPhoto.deleteMany({});
+        const deletedDocs = await tx.propertyDocument.deleteMany({});
+        const deletedUnits = await tx.propertyUnit.deleteMany({});
+        const deletedProperties = await tx.property.deleteMany({});
+        const deletedValuationLists = await tx.valuationList.deleteMany({});
+
+        app.log.warn({ actorId, deletedProperties: deletedProperties.count }, 'Admin purged all properties');
+
+        return {
+          success: true,
+          purged: {
+            properties: deletedProperties.count,
+            units: deletedUnits.count,
+            documents: deletedDocs.count,
+            photos: deletedPhotos.count,
+            valuations: deletedValuations.count,
+            verifications: deletedVerifications.count,
+            valuationLists: deletedValuationLists.count
+          }
+        };
       });
     }
   };

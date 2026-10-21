@@ -218,4 +218,43 @@ export const governanceRoutes: FastifyPluginAsync = async (app) => {
   }, async (request) => {
     return service.listPersonnel(request.params.id);
   });
+
+  app.post('/concessions/purge', {
+    preHandler: app.requirePermissions(['concessionaires:manage']),
+    schema: {
+      tags: ['Governance: Concessions'],
+      summary: 'Admin purge all partner concessions, personnel, and API clients, preserving superuser accounts',
+      response: {
+        200: {
+          type: 'object',
+          properties: {
+            success: { type: 'boolean' },
+            purged: {
+              type: 'object',
+              properties: {
+                concessions: { type: 'integer' },
+                personnel: { type: 'integer' },
+                apiClients: { type: 'integer' },
+                assemblies: { type: 'integer' },
+                users: { type: 'integer' },
+                userRoles: { type: 'integer' },
+                socialConnections: { type: 'integer' }
+              }
+            },
+            preserved: {
+              type: 'object',
+              properties: {
+                superusers: { type: 'array', items: { type: 'string' } }
+              }
+            }
+          }
+        },
+        401: problemSchema,
+        403: problemSchema
+      }
+    }
+  }, async (request) => {
+    return service.purgeConcessions(request.auth.subject);
+  });
 };
+

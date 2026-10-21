@@ -375,6 +375,84 @@ export function governanceService(app: FastifyInstance) {
         where: { concessionId },
         orderBy: { fullName: 'asc' }
       });
+    },
+
+    async purgeConcessions(actorId: string) {
+      return app.prisma.$transaction(async (tx) => {
+        // Identify all superuser accounts to preserve without fail
+        const superusers = await tx.user.findMany({
+          where: {
+            OR: [
+              { email: 'superuser@croip.com' },
+              { code: 'SUPERUSER-001' },
+              { userRoles: { some: { role: { code: 'SUPER_ADMIN' } } } }
+            ]
+          },
+          select: { id: true, email: true }
+        });
+        const preservedUserIds = superusers.map(u => u.id);
+
+        // Delete Concession-dependent entities
+        const deletedApiClients = await tx.apiClient.deleteMany({});
+        const deletedPersonnel = await tx.concessionPersonnel.deleteMany({});
+        const deletedAssemblies = await tx.concessionAssembly.deleteMany({});
+        const deletedConcessions = await tx.concession.deleteMany({});
+
+        // Delete non-superuser users (preserving superuser account and super administrator roles)
+        const deletedUserRoles = await tx.userRole.deleteMany({
+          where: { userId: { notIn: preservedUserIds } }
+        });
+        const deletedSocials = await tx.userSocialConnection.deleteMany({
+          where: { userId: { notIn: preservedUserIds } }
+        });
+        const deletedUsers = await tx.user.deleteMany({
+          where: { id: { notIn: preservedUserIds } }
+        });
+
+        await tx.auditRecord.create({
+          data: {
+            actorId,
+            actorType: 'USER',
+            action: 'concessions.purge',
+            resourceType: 'Concession',
+            resourceId: null,
+            requestId: crypto.randomUUID(),
+            outcome: 'SUCCESS',
+            metadata: {
+              deletedConcessions: deletedConcessions.count,
+              deletedPersonnel: deletedPersonnel.count,
+              deletedApiClients: deletedApiClients.count,
+              deletedAssemblies: deletedAssemblies.count,
+              deletedUsers: deletedUsers.count,
+              preservedUsers: superusers.map(u => u.email)
+            }
+          }
+        });
+
+        app.log.warn({
+          actorId,
+          deletedConcessions: deletedConcessions.count,
+          deletedUsers: deletedUsers.count,
+          preservedUsers: superusers.map(u => u.email)
+        }, 'Admin purged concessions and non-superuser data');
+
+        return {
+          success: true,
+          purged: {
+            concessions: deletedConcessions.count,
+            personnel: deletedPersonnel.count,
+            apiClients: deletedApiClients.count,
+            assemblies: deletedAssemblies.count,
+            users: deletedUsers.count,
+            userRoles: deletedUserRoles.count,
+            socialConnections: deletedSocials.count
+          },
+          preserved: {
+            superusers: superusers.map(u => u.email)
+          }
+        };
+      });
     }
   };
 }
+

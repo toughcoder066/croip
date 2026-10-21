@@ -10,6 +10,7 @@ export function proxy(request: NextRequest) {
     pathname.startsWith('/images') ||
     pathname.startsWith('/favicon.ico') ||
     pathname.startsWith('/api/auth/oauth') ||
+    pathname === '/api/auth/login' ||
     pathname === '/api/auth/logout' ||
     pathname === '/api/auth/me' ||
     pathname.startsWith('/api/uploads')

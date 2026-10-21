@@ -53,8 +53,12 @@ export interface CreatePaymentLinkInput {
   gatewayLinkRef: string;
 }
 
-function generateBillNumber(): string {
-  return `BILL-${randomUUID().split('-')[0]!.toUpperCase()}`;
+function generateBillIdAndNumber(): { id: string; billNumber: string } {
+  const id = randomUUID();
+  const year = new Date().getFullYear();
+  const first4 = id.slice(0, 4).toUpperCase();
+  const last4 = id.slice(-4).toUpperCase();
+  return { id, billNumber: `BILL-${year}-${first4}-${last4}` };
 }
 
 export function billingService(app: FastifyInstance) {
@@ -66,9 +70,11 @@ export function billingService(app: FastifyInstance) {
         // billNumber is generated, not caller-supplied; retry on the extremely unlikely collision.
         for (;;) {
           try {
+            const { id, billNumber } = generateBillIdAndNumber();
             bill = await tx.propertyBill.create({
               data: {
-                billNumber: generateBillNumber(),
+                id,
+                billNumber,
                 propertyId: input.propertyId,
                 ratepayerId: input.ratepayerId,
                 concessionId: input.concessionId,
@@ -285,6 +291,48 @@ export function billingService(app: FastifyInstance) {
       const byId = new Map<string, (typeof ownBills)[number]>();
       for (const bill of [...ownBills, ...paidForBills]) byId.set(bill.id, bill);
       return [...byId.values()];
+    },
+
+    async checkPropertyPaidBills(propertyId: string) {
+      const bills = await app.prisma.propertyBill.findMany({
+        where: { propertyId },
+        include: { payments: true }
+      });
+
+      const paidBills = bills.filter(b =>
+        Number(b.amountPaid) > 0 ||
+        b.payments.length > 0 ||
+        b.paymentStatus === 'PAID' ||
+        b.paymentStatus === 'PARTIALLY_PAID'
+      );
+
+      const totalPaid = paidBills.reduce((acc, b) => acc + Number(b.amountPaid), 0);
+
+      return {
+        propertyId,
+        hasPaidBills: paidBills.length > 0,
+        paidBillsCount: paidBills.length,
+        totalBillsCount: bills.length,
+        totalAmountPaid: totalPaid.toFixed(2)
+      };
+    },
+
+    async purgeBills() {
+      return app.prisma.$transaction(async (tx) => {
+        const deletedPayments = await tx.billPayment.deleteMany({});
+        const deletedLinks = await tx.paymentLink.deleteMany({});
+        const deletedBills = await tx.propertyBill.deleteMany({});
+
+        return {
+          success: true,
+          purged: {
+            payments: deletedPayments.count,
+            paymentLinks: deletedLinks.count,
+            bills: deletedBills.count
+          }
+        };
+      });
     }
   };
 }
+

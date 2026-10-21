@@ -23,9 +23,11 @@ import { toast } from 'sonner'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/ui/spinner'
+import { BatchActionBar } from '@/components/data-table/batch-action-bar'
 import {
   Select,
   SelectContent,
@@ -62,10 +64,15 @@ export interface ConcessionRecord {
 interface ConcessionsDataTableProps {
   data: ConcessionRecord[]
   loading?: boolean
+  onRefresh?: () => void
 }
 
-export function ConcessionsDataTable({ data, loading = false }: ConcessionsDataTableProps) {
+export function ConcessionsDataTable({ data, loading = false, onRefresh }: ConcessionsDataTableProps) {
   const router = useRouter()
+
+  // Row selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isDeletingBatch, setIsDeletingBatch] = useState(false)
 
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState<string>('all')
@@ -106,6 +113,71 @@ export function ConcessionsDataTable({ data, loading = false }: ConcessionsDataT
   const paginatedData = filteredData.slice(startIndex, startIndex + rowsPerPage)
   const showingFrom = totalEntries === 0 ? 0 : startIndex + 1
   const showingTo = Math.min(startIndex + rowsPerPage, totalEntries)
+
+  const allCurrentPageSelected =
+    paginatedData.length > 0 && paginatedData.every(r => selectedIds.has(r.id))
+
+  const toggleSelectAll = () => {
+    const next = new Set(selectedIds)
+    if (allCurrentPageSelected) {
+      paginatedData.forEach(r => next.delete(r.id))
+    } else {
+      paginatedData.forEach(r => next.add(r.id))
+    }
+    setSelectedIds(next)
+  }
+
+  const toggleSelectRow = (id: string) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) {
+      next.delete(id)
+    } else {
+      next.add(id)
+    }
+    setSelectedIds(next)
+  }
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Are you sure you want to delete/offboard ${selectedIds.size} selected concessionaire(s)? Items that cannot be deleted will be skipped.`)) {
+      return
+    }
+
+    setIsDeletingBatch(true)
+    let deletedCount = 0
+    let skippedCount = 0
+
+    for (const id of Array.from(selectedIds)) {
+      try {
+        const res = await fetch(`/api/concessions/${id}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'deactivate' })
+        })
+        const json = await res.json().catch(() => ({}))
+        if (res.ok && json.success) {
+          deletedCount++
+        } else {
+          skippedCount++
+        }
+      } catch {
+        skippedCount++
+      }
+    }
+
+    setIsDeletingBatch(false)
+    setSelectedIds(new Set())
+
+    if (deletedCount > 0 && skippedCount === 0) {
+      toast.success(`Successfully offboarded ${deletedCount} concessionaire${deletedCount > 1 ? 's' : ''}.`)
+    } else if (deletedCount > 0 && skippedCount > 0) {
+      toast.warning(`Offboarded ${deletedCount} concessionaire${deletedCount > 1 ? 's' : ''}. ${skippedCount} concessionaire${skippedCount > 1 ? 's' : ''} could not be modified and were skipped.`)
+    } else if (deletedCount === 0 && skippedCount > 0) {
+      toast.error(`Could not delete selected concessions (${skippedCount} skipped — offboarding concessionaires is restricted or unsupported).`)
+    }
+
+    onRefresh?.()
+  }
 
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text)
@@ -220,11 +292,27 @@ export function ConcessionsDataTable({ data, loading = false }: ConcessionsDataT
           </div>
         </div>
 
+        {/* Batch Action Bar */}
+        <BatchActionBar
+          selectedCount={selectedIds.size}
+          onDelete={handleBatchDelete}
+          onClear={() => setSelectedIds(new Set())}
+          isDeleting={isDeletingBatch}
+          entityName="concession"
+        />
+
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-6">
+                <TableHead className="w-12 pl-6">
+                  <Checkbox
+                    checked={allCurrentPageSelected}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Select all concessions on current page"
+                  />
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Concessionaire
                 </TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -248,7 +336,7 @@ export function ConcessionsDataTable({ data, loading = false }: ConcessionsDataT
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-48 text-center">
+                  <TableCell colSpan={7} className="h-48 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <Spinner className="size-6 text-primary" />
                       <p className="text-xs text-muted-foreground">Loading concessions...</p>
@@ -257,15 +345,28 @@ export function ConcessionsDataTable({ data, loading = false }: ConcessionsDataT
                 </TableRow>
               ) : paginatedData.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-40 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={7} className="h-40 text-center text-sm text-muted-foreground">
                     No concessions match your filters.
                   </TableCell>
                 </TableRow>
               ) : (
-                paginatedData.map(row => (
-                  <TableRow key={row.id} className="hover:bg-muted/30 transition-colors">
-                    <TableCell className="pl-6">
-                      <div className="flex items-center gap-2.5">
+                paginatedData.map(row => {
+                  const isSelected = selectedIds.has(row.id)
+                  return (
+                    <TableRow
+                      key={row.id}
+                      data-state={isSelected ? 'selected' : undefined}
+                      className="hover:bg-muted/30 transition-colors"
+                    >
+                      <TableCell className="pl-6">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelectRow(row.id)}
+                          aria-label={`Select ${row.name}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2.5">
                         <div className="flex size-8 items-center justify-center rounded-md bg-primary/10 text-primary">
                           <Building2Icon className="size-4" />
                         </div>
@@ -346,8 +447,9 @@ export function ConcessionsDataTable({ data, loading = false }: ConcessionsDataT
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
+                )
+              })
+            )}
             </TableBody>
           </Table>
         </div>

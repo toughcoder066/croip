@@ -35,7 +35,15 @@ interface StoredTokens {
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000
 const REFRESH_BUFFER_MS = 60 * 1000
 
-const store = new Map<string, StoredTokens>()
+const globalForTokens = globalThis as unknown as {
+  tokenStore?: Map<string, StoredTokens>
+}
+
+const store = globalForTokens.tokenStore ?? new Map<string, StoredTokens>()
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForTokens.tokenStore = store
+}
 
 export function createTokenSession(
   accessToken: string,

@@ -45,7 +45,13 @@ async function resolveSessionAccessToken(): Promise<string | null> {
 
     if (!sessionCookie?.value) return null
 
-    const session = JSON.parse(sessionCookie.value)
+    let raw = sessionCookie.value
+    if (raw.startsWith('%')) {
+      try {
+        raw = decodeURIComponent(raw)
+      } catch {}
+    }
+    const session = JSON.parse(raw)
     const tokens = await touchTokenSession(session.tokenSessionId)
 
     return tokens?.accessToken ?? null
@@ -221,7 +227,13 @@ export const croipApi = {
     deactivateConcession: (id: string) =>
       fetchCroipService<any>(CROIP_SERVICES.PLATFORM_GOVERNANCE, `/v1/concessions/${encodeURIComponent(id)}/deactivate`, {
         method: 'POST',
-      })
+      }),
+    purgeConcessions: () =>
+      fetchCroipService<{ success: boolean; purged: any; preserved: any }>(
+        CROIP_SERVICES.PLATFORM_GOVERNANCE,
+        '/v1/concessions/purge',
+        { method: 'POST' }
+      )
   },
   propertyRegistry: {
     getProperties: () =>
@@ -260,7 +272,25 @@ export const croipApi = {
     // composes this across every property (see /api/properties/valuations) the same way
     // /api/dashboard/metrics already does for its rateable-value aggregates.
     getValuations: (propertyId: string) =>
-      fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${propertyId}`).then((property: any) => (Array.isArray(property?.valuations) ? property.valuations : []))
+      fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${propertyId}`).then((property: any) => (Array.isArray(property?.valuations) ? property.valuations : [])),
+    updateProperty: (id: string, data: any, options?: RequestOptions) =>
+      fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        ...options
+      }),
+    deleteProperty: (id: string, options?: RequestOptions) =>
+      fetchCroipService<{ success: boolean; message: string }>(
+        CROIP_SERVICES.PROPERTY_REGISTRY,
+        `/v1/properties/${encodeURIComponent(id)}`,
+        { method: 'DELETE', ...options }
+      ),
+    purgeProperties: () =>
+      fetchCroipService<{ success: boolean; purged: any }>(
+        CROIP_SERVICES.PROPERTY_REGISTRY,
+        '/v1/properties/purge',
+        { method: 'POST' }
+      )
   },
   ratepayers: {
     getSummary: () =>
@@ -278,6 +308,12 @@ export const croipApi = {
     claimProperty: (data: any) =>
       fetchCroipService<any>(CROIP_SERVICES.RATEPAYER_CORE, '/v1/ratepayers/claims', {
         method: 'POST',
+        body: JSON.stringify(data)
+      }),
+    updateProfile: (id: string, data: any, accessToken?: string) =>
+      fetchCroipService<any>(CROIP_SERVICES.RATEPAYER_CORE, `/v1/ratepayers/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        accessToken,
         body: JSON.stringify(data)
       }),
 
@@ -300,6 +336,9 @@ export const croipApi = {
           id: string
           code: string
           ratepayerType: string
+          firstName?: string | null
+          middleName?: string | null
+          lastName?: string | null
           legalName: string
           phone: string
           email?: string | null
@@ -354,6 +393,44 @@ export const croipApi = {
           method: 'PATCH',
           body: JSON.stringify({ status })
         }
+      ),
+    verifyKyc: (
+      id: string,
+      data?: { provider?: string; providerReference?: string; autoVerify?: boolean },
+      options?: RequestOptions
+    ) =>
+      fetchCroipService<any>(
+        CROIP_SERVICES.RATEPAYER_CORE,
+        `/v1/ratepayers/${encodeURIComponent(id)}/verifications`,
+        {
+          method: 'POST',
+          body: JSON.stringify(data ?? {}),
+          ...options
+        }
+      ),
+    deleteRatepayer: (id: string, options?: RequestOptions) =>
+      fetchCroipService<{ success: boolean; message: string }>(
+        CROIP_SERVICES.RATEPAYER_CORE,
+        `/v1/ratepayers/${encodeURIComponent(id)}`,
+        {
+          method: 'DELETE',
+          ...options
+        }
+      ),
+    severPropertyLink: (ratepayerId: string, propertyId: string, options?: RequestOptions) =>
+      fetchCroipService<{ success: boolean; message: string }>(
+        CROIP_SERVICES.RATEPAYER_CORE,
+        `/v1/ratepayers/${encodeURIComponent(ratepayerId)}/properties/${encodeURIComponent(propertyId)}`,
+        {
+          method: 'DELETE',
+          ...options
+        }
+      ),
+    purgeRatepayers: () =>
+      fetchCroipService<{ success: boolean; purged: any }>(
+        CROIP_SERVICES.RATEPAYER_CORE,
+        '/v1/ratepayers/purge',
+        { method: 'POST' }
       )
   },
   billing: {
@@ -439,7 +516,14 @@ export const croipApi = {
         pageSize: number
         totalPages: number
       }>(CROIP_SERVICES.BILLING_PAYMENTS, `/v1/payments${qs ? `?${qs}` : ''}`)
-    }
+    },
+
+    purgeBills: () =>
+      fetchCroipService<{ success: boolean; purged: any }>(
+        CROIP_SERVICES.BILLING_PAYMENTS,
+        '/v1/bills/purge',
+        { method: 'POST' }
+      )
   },
   disputes: {
     // CROIP portal: review queue for disputes raised by ratepayers (billing/boundary/valuation).
@@ -477,7 +561,13 @@ export const croipApi = {
       fetchCroipService<any>(CROIP_SERVICES.DISPUTE, `/v1/disputes/${encodeURIComponent(code)}/status`, {
         method: 'PATCH',
         body: JSON.stringify(data),
-      })
+      }),
+    purgeDisputes: () =>
+      fetchCroipService<{ success: boolean; purged: any }>(
+        CROIP_SERVICES.DISPUTE,
+        '/v1/disputes/purge',
+        { method: 'POST' }
+      )
   },
   reporting: {
     ingestEvent: (event: any) =>
@@ -576,6 +666,10 @@ export const croipApi = {
         method: 'PATCH',
         body: JSON.stringify({ polygonGeoJson }),
       }),
+    deleteRegion: (id: string) =>
+      fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, `/v1/regions/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }),
     listAssemblies: (regionId?: string) =>
       fetchCroipService<
         Array<{
@@ -633,6 +727,10 @@ export const croipApi = {
       fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, `/v1/assemblies/${encodeURIComponent(id)}/boundary`, {
         method: 'PATCH',
         body: JSON.stringify({ polygonGeoJson }),
+      }),
+    deleteAssembly: (id: string) =>
+      fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, `/v1/assemblies/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
       }),
     detectZone: (latitude: number, longitude: number) =>
       fetchCroipService<{

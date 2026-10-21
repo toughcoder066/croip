@@ -46,3 +46,22 @@ export async function PATCH(request: Request, { params }: RouteProps) {
     )
   }
 }
+
+export async function DELETE(_request: Request, { params }: RouteProps) {
+  try {
+    const { id } = await params
+    const result = await croipApi.geo.deleteRegion(id)
+
+    return NextResponse.json({ success: true, data: result })
+  } catch (error: any) {
+    console.error('Failed to delete region from Shared Services:', error)
+
+    const notFound = /404|not found/i.test(error.message || '')
+    const badRequest = /cannot delete|associated assemblies|referenced|foreign key/i.test(error.message || '')
+
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to delete region' },
+      { status: notFound ? 404 : badRequest ? 400 : 500 }
+    )
+  }
+}

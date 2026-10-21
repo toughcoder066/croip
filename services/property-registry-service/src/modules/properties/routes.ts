@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { propertyService, type CreatePropertyInput, type UploadPremisesDocumentInput, type SubmitVerificationInput, type ReviewVerificationInput } from './service.js';
+import { propertyService, type CreatePropertyInput, type UploadPremisesDocumentInput, type SubmitVerificationInput, type ReviewVerificationInput, type UpdatePropertyInput } from './service.js';
 import {
   problemSchema,
   propertyResponseSchema,
@@ -10,7 +10,8 @@ import {
   uploadPremisesDocumentBodySchema,
   submitVerificationBodySchema,
   reviewVerificationBodySchema,
-  verificationResponseSchema
+  verificationResponseSchema,
+  updatePropertyBodySchema
 } from './schemas.js';
 
 export const propertyRoutes: FastifyPluginAsync = async (app) => {
@@ -53,13 +54,22 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       // token the caller used for this request, so ratepayer-service's authenticateRatepayer
       // resolves the ratepayer id itself rather than trusting a body field.
       try {
+        const rawOwnership = request.body.ownershipType?.trim().toUpperCase();
+        const normalizedOwnership = (rawOwnership === 'PART' || rawOwnership === 'PARTIAL' || rawOwnership === 'CO_OWNER') ? 'PART' : 'FULL';
+        const ownershipPercentage = request.body.ownershipPercentage ?? (normalizedOwnership === 'FULL' ? 100.0 : 50.0);
+
         const response = await fetch(`${app.config.RATEPAYER_SERVICE_URL}/v1/ratepayers/me/properties/link`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(request.headers.authorization ? { Authorization: request.headers.authorization } : {})
           },
-          body: JSON.stringify({ propertyId: created.id, unitId: created.defaultUnitId }),
+          body: JSON.stringify({
+            propertyId: created.id,
+            unitId: created.defaultUnitId,
+            ownershipType: normalizedOwnership,
+            ownershipPercentage
+          }),
           signal: AbortSignal.timeout(5000)
         });
         if (!response.ok) {
@@ -120,7 +130,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get<{ Params: { id: string } }>('/properties/:id', {
-    preHandler: app.requirePermissions(['properties:read']),
+    preHandler: app.authenticateStaffOrRatepayer(['properties:read']),
     schema: {
       tags: ['Property Registry'],
       summary: 'Retrieve property parcel details, units, and valuation roll status',
@@ -129,6 +139,30 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
     }
   }, async (request) => {
     return service.getProperty(request.params.id);
+  });
+
+  app.patch<{ Params: { id: string }; Body: UpdatePropertyInput }>('/properties/:id', {
+    preHandler: app.authenticateStaffOrRatepayer(['properties:manage']),
+    schema: {
+      tags: ['Property Registry'],
+      summary: 'Update property details. If actual property characteristics (use, floors, boundaries, area, structure) are changed, marks property UNASSESSED, unverified, and decouples active valuations.',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+      body: updatePropertyBodySchema,
+      response: {
+        200: { type: 'object', additionalProperties: true },
+        400: problemSchema,
+        401: problemSchema,
+        403: problemSchema,
+        404: problemSchema
+      }
+    }
+  }, async (request) => {
+    return service.updateProperty(request.params.id, request.body, {
+      subject: request.auth.subject,
+      actorType: request.auth.actorType,
+      concessionId: request.auth.concessionId,
+      assemblyId: request.auth.assemblyId
+    });
   });
 
   app.post<{ Params: { id: string }; Body: { unitIdentifier: string; unitType?: string; floorLevel?: number } }>('/properties/:id/units', {
@@ -230,5 +264,27 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       concessionId: request.auth.concessionId,
       assemblyId: request.auth.assemblyId
     });
+  });
+
+  app.delete<{ Params: { id: string } }>('/properties/:id', {
+    schema: {
+      tags: ['Property Registry'],
+      summary: 'Delete individual property parcel and sever all ratepayer links (rejected if property has paid bills)',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+      response: { 200: { type: 'object', additionalProperties: true }, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
+    }
+  }, async (request) => {
+    return service.deleteProperty(request.params.id, request.auth?.subject ?? 'portal-admin');
+  });
+
+  app.post('/properties/purge', {
+    preHandler: app.requirePermissions(['properties:manage']),
+    schema: {
+      tags: ['Property Registry'],
+      summary: 'Admin purge all registered property records, units, valuations, and verifications',
+      response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema }
+    }
+  }, async (request) => {
+    return service.purgeProperties(request.auth.subject);
   });
 };

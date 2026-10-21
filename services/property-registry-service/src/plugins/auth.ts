@@ -177,7 +177,7 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
             actorType: 'RATEPAYER',
             concessionId: '00000000-0000-0000-0000-000000000000',
             assemblyId: claims.assemblyId,
-            permissions: ['properties:manage'],
+            permissions: ['properties:manage', 'properties:read'],
             claims: {}
           };
           return;

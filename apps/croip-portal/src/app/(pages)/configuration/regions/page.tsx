@@ -43,22 +43,40 @@ interface GisAssembly {
 // without this every real region would default to "Northern Belt" regardless of where it
 // actually sits.
 const REGION_ZONE: Record<string, string> = {
-  GH01: 'Middle Belt', // Ahafo
-  GH02: 'Middle Belt', // Ashanti
-  GH03: 'Middle Belt', // Bono
-  GH04: 'Middle Belt', // Bono East
-  GH05: 'Coastal Zone', // Central
-  GH06: 'Middle Belt', // Eastern
-  GH07: 'Coastal Zone', // Greater Accra
-  GH08: 'Northern Belt', // Northern
-  GH09: 'Northern Belt', // North East
-  GH10: 'Middle Belt', // Oti
-  GH11: 'Northern Belt', // Savannah
-  GH12: 'Northern Belt', // Upper East
-  GH13: 'Northern Belt', // Upper West
-  GH14: 'Coastal Zone', // Volta
-  GH15: 'Coastal Zone', // Western
-  GH16: 'Coastal Zone' // Western North
+  // Canonical CROIP 2026 Region Codes
+  'REG-2026-GHAF': 'Middle Belt', // Ahafo
+  'REG-2026-GHAH': 'Middle Belt', // Ashanti
+  'REG-2026-GHBO': 'Middle Belt', // Bono
+  'REG-2026-GHBE': 'Middle Belt', // Bono East
+  'REG-2026-GHCP': 'Coastal Zone', // Central
+  'REG-2026-GHEP': 'Middle Belt', // Eastern
+  'REG-2026-GHAA': 'Coastal Zone', // Greater Accra
+  'REG-2026-GHNP': 'Northern Belt', // Northern
+  'REG-2026-GHNE': 'Northern Belt', // North East
+  'REG-2026-GHOT': 'Middle Belt', // Oti
+  'REG-2026-GHSV': 'Northern Belt', // Savannah
+  'REG-2026-GHUE': 'Northern Belt', // Upper East
+  'REG-2026-GHUW': 'Northern Belt', // Upper West
+  'REG-2026-GHTV': 'Coastal Zone', // Volta
+  'REG-2026-GHWP': 'Coastal Zone', // Western
+  'REG-2026-GHWN': 'Coastal Zone', // Western North
+  // Backward compatibility
+  GH01: 'Middle Belt',
+  GH02: 'Middle Belt',
+  GH03: 'Middle Belt',
+  GH04: 'Middle Belt',
+  GH05: 'Coastal Zone',
+  GH06: 'Middle Belt',
+  GH07: 'Coastal Zone',
+  GH08: 'Northern Belt',
+  GH09: 'Northern Belt',
+  GH10: 'Middle Belt',
+  GH11: 'Northern Belt',
+  GH12: 'Northern Belt',
+  GH13: 'Northern Belt',
+  GH14: 'Coastal Zone',
+  GH15: 'Coastal Zone',
+  GH16: 'Coastal Zone'
 }
 
 export default function RegionsConfigPage() {

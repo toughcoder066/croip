@@ -79,9 +79,32 @@ pnpm docker:down     # docker compose down
 pnpm docker:logs     # docker compose logs -f
 pnpm docker:ps       # docker compose ps
 pnpm docker:infra    # start only postgres + rabbitmq
+pnpm docker:prune    # stop services and prune containers/networks
+pnpm docker:reset    # complete purge of containers, volumes, and cached images
 ```
 
-### 5.2 Start the admin portal
+### 5.2 Pruning and Cleaning Docker Containers & Volumes
+
+To clean up stopped containers, rebuild from scratch, or reclaim disk space from old image layers and volumes:
+
+```bash
+# 1. Stop all services and remove active containers, networks, and persistent database volumes:
+docker compose down -v
+
+# 2. Prune all stopped containers:
+docker container prune -f
+
+# 3. Prune unused Docker networks:
+docker network prune -f
+
+# 4. Prune dangling build images:
+docker image prune -f
+
+# 5. Full system purge (stops and wipes ALL unused containers, volumes, networks, and cached images):
+docker system prune -a --volumes -f
+```
+
+### 5.3 Start the admin portal
 
 The portal is part of the pnpm workspace (it has its own `pnpm-lock.yaml`) — install and run it with **pnpm, not npm**. Running `npm install` here fails (npm doesn't understand pnpm's hoisted `.pnpm` store layout and can't resolve nested dependencies' own install scripts, e.g. `husky: command not found`) and, even if it somehow completed, would create a conflicting `package-lock.json`.
 
@@ -95,7 +118,7 @@ Or from the repo root, without `cd`-ing in: `pnpm install && pnpm --filter croip
 
 The portal starts on **http://localhost:3050** and proxies all data through the 11 services above (see `apps/croip-portal/src/lib/croip-api.ts`); it never talks to a database directly. If you get `EADDRINUSE: address already in use :::3050`, something is already serving the portal on that port (check for another terminal, or a `next dev` process left running) — stop it first, or use a different port with `pnpm dev -- -p 3051`.
 
-### 5.3 Sign in
+### 5.4 Sign in
 
 | Field | Value |
 |---|---|

@@ -208,6 +208,24 @@ export function disputeService(app: FastifyInstance) {
           body: input.body
         }
       });
+    },
+
+    async purgeDisputes() {
+      return app.prisma.$transaction(async (tx) => {
+        const deletedEvidence = await tx.disputeEvidence.deleteMany({});
+        const deletedComments = await tx.disputeComment.deleteMany({});
+        const deletedDisputes = await tx.dispute.deleteMany({});
+
+        return {
+          success: true,
+          purged: {
+            evidence: deletedEvidence.count,
+            comments: deletedComments.count,
+            disputes: deletedDisputes.count
+          }
+        };
+      });
     }
   };
 }
+

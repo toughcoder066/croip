@@ -86,6 +86,7 @@ export default function PropertyBillsPage() {
         total={total}
         totalPages={totalPages}
         onPageChange={setPage}
+        onRefresh={fetchBills}
       />
     </div>
   )

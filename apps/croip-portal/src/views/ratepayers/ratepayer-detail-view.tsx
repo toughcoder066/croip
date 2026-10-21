@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import {
@@ -28,6 +29,8 @@ import {
   ShieldAlertIcon,
   ShieldCheckIcon,
   SlidersHorizontalIcon,
+  Trash2Icon,
+  UnlinkIcon,
   UserCheckIcon,
   UserIcon,
   XCircleIcon
@@ -53,6 +56,9 @@ import {
   VerificationReviewDialog,
   type PendingVerification
 } from '@/views/ratepayers/verification-review-dialog'
+import { AddressLocationDialog } from '@/views/ratepayers/address-location-dialog'
+import { RatepayerPropertyRegisterDialog } from '@/views/ratepayers/ratepayer-property-register-dialog'
+import { RatepayerKycDialog } from '@/views/ratepayers/ratepayer-kyc-dialog'
 
 interface RatepayerVerification {
   id: string
@@ -64,13 +70,25 @@ interface RatepayerVerification {
   createdAt: string
 }
 
+export interface RatepayerCompletion {
+  completionPercentage: number
+  isProfileComplete: boolean
+  hasVerifiedKyc: boolean
+  isEligibleForPropertyCreation: boolean
+  missingSections: string[]
+}
+
 interface RatepayerDetail {
   id: string
   code: string
   ratepayerType: string
+  firstName?: string | null
+  middleName?: string | null
+  lastName?: string | null
   legalName: string
   phone: string
   email?: string | null
+  address?: string | null
   regionId: string
   assemblyId: string
   status: string
@@ -78,6 +96,7 @@ interface RatepayerDetail {
   updatedAt?: string
   locationGeo?: any
   verifications?: RatepayerVerification[]
+  completion?: RatepayerCompletion
 }
 
 interface RatepayerPayment {
@@ -216,7 +235,15 @@ function VerificationStatusBadge({ status }: { status: string }) {
     return (
       <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 text-[10px] font-medium">
         <CheckCircle2Icon className="size-2.5 mr-1" />
-        Verified
+        Verified (Active)
+      </Badge>
+    )
+  }
+  if (s === 'ARCHIVED') {
+    return (
+      <Badge variant="outline" className="bg-muted text-muted-foreground border-border text-[10px] font-medium">
+        <ClockIcon className="size-2.5 mr-1" />
+        Archived (Audit Trail)
       </Badge>
     )
   }
@@ -258,6 +285,28 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
   // Review Dialog
   const [reviewTarget, setReviewTarget] = useState<PendingVerification | null>(null)
   const [reviewDecision, setReviewDecision] = useState<'VERIFIED' | 'REJECTED' | null>(null)
+
+  // Address & Location Dialog
+  const [addressDialogOpen, setAddressDialogOpen] = useState(false)
+
+  // KYC Verification Dialog
+  const [kycDialogOpen, setKycDialogOpen] = useState(false)
+
+  // Property Registration Dialog
+  const [propertyDialogOpen, setPropertyDialogOpen] = useState(false)
+
+  const router = useRouter()
+
+  // KYC Verification Action
+  const [kycVerifying, setKycVerifying] = useState(false)
+
+  // Ratepayer Delete Dialog
+  const [deleteRatepayerDialogOpen, setDeleteRatepayerDialogOpen] = useState(false)
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+
+  // Sever Property Link Dialog
+  const [severTarget, setSeverTarget] = useState<{ propertyId: string } | null>(null)
+  const [severSubmitting, setSeverSubmitting] = useState(false)
 
   const fetchRatepayer = useCallback(() => {
     setLoading(true)
@@ -411,6 +460,78 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
     window.print()
   }
 
+  const handleVerifyKyc = async () => {
+    setKycVerifying(true)
+    try {
+      const res = await fetch(`/api/ratepayers/${ratepayerId}/verifications`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: 'GHANA_CARD_NIA',
+          autoVerify: true
+        })
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(`KYC verified successfully (${data.data?.providerReference || 'Ghana Card NIA'})`)
+        fetchRatepayer()
+      } else {
+        toast.error(data.error || 'Failed to verify KYC')
+      }
+    } catch (err) {
+      console.error('Failed to verify KYC:', err)
+      toast.error('An unexpected error occurred while verifying KYC')
+    } finally {
+      setKycVerifying(false)
+    }
+  }
+
+  const handleDeleteRatepayer = async () => {
+    setDeleteSubmitting(true)
+    try {
+      const res = await fetch(`/api/ratepayers/${ratepayerId}`, {
+        method: 'DELETE'
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(data.data?.message || 'Ratepayer deleted successfully')
+        setDeleteRatepayerDialogOpen(false)
+        router.push('/ratepayers')
+      } else {
+        toast.error(data.error || 'Failed to delete ratepayer')
+      }
+    } catch (err) {
+      console.error('Failed to delete ratepayer:', err)
+      toast.error('An unexpected error occurred while deleting ratepayer')
+    } finally {
+      setDeleteSubmitting(false)
+    }
+  }
+
+  const handleSeverPropertyLink = async () => {
+    if (!severTarget) return
+    setSeverSubmitting(true)
+    try {
+      const res = await fetch(`/api/ratepayers/${ratepayerId}/properties/${severTarget.propertyId}`, {
+        method: 'DELETE'
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success('Property link severed successfully')
+        setSeverTarget(null)
+        fetchProperties()
+        fetchRatepayer()
+      } else {
+        toast.error(data.error || 'Failed to sever property link')
+      }
+    } catch (err) {
+      console.error('Failed to sever property link:', err)
+      toast.error('An unexpected error occurred while severing property link')
+    } finally {
+      setSeverSubmitting(false)
+    }
+  }
+
   if (loading) {
     return <PageLoader />
   }
@@ -437,6 +558,7 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
     .toUpperCase() || 'RP'
 
   const verifications = ratepayer.verifications ?? []
+  const activeVerification = verifications.find(v => (v.verificationStatus || '').toUpperCase() === 'VERIFIED')
   const pendingCount = verifications.filter(v => (v.verificationStatus || 'PENDING').toUpperCase() === 'PENDING').length
   const totalPaidSum = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
   const openDisputesCount = disputes.filter(d => ['OPEN', 'UNDER_REVIEW'].includes(d.status.toUpperCase())).length
@@ -522,10 +644,28 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
                   variant="outline"
                   size="sm"
                   className="gap-1.5 text-xs"
+                  onClick={() => setAddressDialogOpen(true)}
+                >
+                  <UserCheckIcon className="size-3.5" />
+                  Edit Profile
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs"
                   onClick={handlePrintStatement}
                 >
                   <DownloadIcon className="size-3.5" />
                   Statement
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 border-rose-500/30"
+                  onClick={() => setDeleteRatepayerDialogOpen(true)}
+                >
+                  <Trash2Icon className="size-3.5" />
+                  Delete
                 </Button>
                 <Button
                   size="sm"
@@ -593,16 +733,101 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
             TAB 1: BIO
            ========================================================================= */}
         <TabsContent value="bio" className="space-y-6">
+          {/* Profile Completion Overview Banner */}
+          {ratepayer.completion && (
+            <Card className="border-border/60 bg-linear-to-r from-primary/5 via-background to-background">
+              <CardContent className="p-4 sm:p-5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="space-y-1.5 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Profile Completion Score
+                      </span>
+                      <Badge
+                        variant="outline"
+                        className={
+                          ratepayer.completion.completionPercentage === 100
+                            ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 font-bold'
+                            : 'bg-primary/10 text-primary border-primary/30 font-bold'
+                        }
+                      >
+                        {ratepayer.completion.completionPercentage}%
+                      </Badge>
+                      {ratepayer.completion.hasVerifiedKyc ? (
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 text-[10px]">
+                          <ShieldCheckIcon className="size-2.5 mr-1" />
+                          KYC Verified
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 text-[10px]">
+                          <ClockIcon className="size-2.5 mr-1" />
+                          KYC Pending
+                        </Badge>
+                      )}
+                      {ratepayer.completion.isEligibleForPropertyCreation ? (
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 text-[10px]">
+                          <CheckCircle2Icon className="size-2.5 mr-1" />
+                          Eligible for Properties
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-rose-500/10 text-rose-700 dark:text-rose-400 border-rose-500/20 text-[10px]">
+                          <AlertCircleIcon className="size-2.5 mr-1" />
+                          Property Creation Ineligible
+                        </Badge>
+                      )}
+                    </div>
+                    {/* Progress Bar */}
+                    <div className="w-full bg-muted rounded-full h-2 overflow-hidden border border-border/40">
+                      <div
+                        className="bg-primary h-full transition-all duration-500 rounded-full"
+                        style={{ width: `${ratepayer.completion.completionPercentage}%` }}
+                      />
+                    </div>
+                    {ratepayer.completion.missingSections?.length > 0 && (
+                      <p className="text-[11px] text-muted-foreground pt-0.5">
+                        Incomplete sections: <strong>{ratepayer.completion.missingSections.join(', ')}</strong>.
+                        <span className="text-primary cursor-pointer hover:underline ml-1 font-medium" onClick={() => setAddressDialogOpen(true)}>
+                          Complete missing profile information now &rarr;
+                        </span>
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 self-stretch sm:self-center shrink-0">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs gap-1.5 h-8 w-full sm:w-auto"
+                      onClick={() => setAddressDialogOpen(true)}
+                    >
+                      <MapPinIcon className="size-3.5 text-primary" />
+                      Pinpoint Location
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <div className="grid grid-cols-12 gap-6">
             {/* Left Column (4 cols): Profile Details & Contacts */}
             <div className="col-span-12 lg:col-span-4 space-y-6">
               {/* About Ratepayer */}
               <Card>
                 <CardHeader className="pb-3 border-b border-border/40">
-                  <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <UserIcon className="size-4 text-primary" />
-                    Ratepayer Bio
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                      <UserIcon className="size-4 text-primary" />
+                      Ratepayer Bio
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-1.5 text-[11px] text-primary hover:text-primary"
+                      onClick={() => setAddressDialogOpen(true)}
+                    >
+                      Edit Profile
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="pt-4 space-y-4">
                   <div className="space-y-3">
@@ -610,6 +835,23 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
                       <span className="text-muted-foreground text-xs font-medium">Legal Name:</span>
                       <span className="font-semibold text-foreground text-right">{ratepayer.legalName}</span>
                     </div>
+
+                    {(ratepayer.firstName || ratepayer.lastName) && (
+                      <div className="grid grid-cols-3 gap-2 p-2.5 rounded-lg bg-muted/40 border border-border/50 text-xs">
+                        <div>
+                          <div className="text-[10px] uppercase font-semibold text-muted-foreground">First</div>
+                          <div className="font-medium text-foreground truncate">{ratepayer.firstName || '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase font-semibold text-muted-foreground">Middle</div>
+                          <div className="font-medium text-foreground truncate">{ratepayer.middleName || '—'}</div>
+                        </div>
+                        <div>
+                          <div className="text-[10px] uppercase font-semibold text-muted-foreground">Last</div>
+                          <div className="font-medium text-foreground truncate">{ratepayer.lastName || '—'}</div>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex items-center justify-between gap-2 text-sm">
                       <span className="text-muted-foreground text-xs font-medium">Ratepayer Code:</span>
@@ -649,10 +891,20 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
               {/* Contact & Jurisdiction */}
               <Card>
                 <CardHeader className="pb-3 border-b border-border/40">
-                  <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <MapPinIcon className="size-4 text-primary" />
-                    Jurisdiction & Contact
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                      <MapPinIcon className="size-4 text-primary" />
+                      Jurisdiction & Address
+                    </CardTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 px-1.5 text-[11px] text-primary hover:text-primary"
+                      onClick={() => setAddressDialogOpen(true)}
+                    >
+                      Edit
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="pt-4 space-y-4">
                   <div className="space-y-3">
@@ -661,7 +913,7 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
                         <PhoneIcon className="size-3.5 text-muted-foreground" />
                         Phone:
                       </span>
-                      <span className="font-mono text-xs font-semibold text-foreground">{ratepayer.phone}</span>
+                      <span className="font-mono text-xs font-semibold text-foreground">{ratepayer.phone || '—'}</span>
                     </div>
 
                     <div className="flex items-center justify-between gap-2 text-sm">
@@ -674,19 +926,50 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
 
                     <div className="flex items-start justify-between gap-2 text-sm">
                       <span className="text-muted-foreground text-xs font-medium inline-flex items-center gap-1.5 shrink-0">
+                        <MapPinIcon className="size-3.5 text-muted-foreground" />
+                        Address:
+                      </span>
+                      <span className="text-xs text-foreground text-right font-medium">
+                        {ratepayer.address || (
+                          <span className="text-muted-foreground italic">Not provided</span>
+                        )}
+                      </span>
+                    </div>
+
+                    <div className="flex items-start justify-between gap-2 text-sm">
+                      <span className="text-muted-foreground text-xs font-medium inline-flex items-center gap-1.5 shrink-0">
                         <Building2Icon className="size-3.5 text-muted-foreground" />
-                        MMDA:
+                        MMDA (Zone):
                       </span>
                       <span className="text-xs text-foreground text-right font-medium">{assemblyName}</span>
                     </div>
 
                     <div className="flex items-start justify-between gap-2 text-sm">
                       <span className="text-muted-foreground text-xs font-medium inline-flex items-center gap-1.5 shrink-0">
-                        <MapPinIcon className="size-3.5 text-muted-foreground" />
+                        <LandmarkIcon className="size-3.5 text-muted-foreground" />
                         Region:
                       </span>
                       <span className="text-xs text-foreground text-right">{regionName}</span>
                     </div>
+
+                    <div className="flex items-center justify-between gap-2 text-sm pt-1 border-t border-border/40">
+                      <span className="text-muted-foreground text-xs font-medium">Pinpoint Coordinates:</span>
+                      <span className="font-mono text-[11px] text-foreground">
+                        {ratepayer.locationGeo?.coordinates
+                          ? `[${Number(ratepayer.locationGeo.coordinates[0]).toFixed(4)}, ${Number(ratepayer.locationGeo.coordinates[1]).toFixed(4)}]`
+                          : 'Not pinned'}
+                      </span>
+                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full mt-2 text-xs gap-1.5 h-8"
+                      onClick={() => setAddressDialogOpen(true)}
+                    >
+                      <MapPinIcon className="size-3.5 text-primary" />
+                      {ratepayer.address ? 'Edit Profile & Pin Location' : 'Complete Profile & Pin Location'}
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -730,11 +1013,28 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
                       <ShieldCheckIcon className="size-4 text-primary" />
                       KYC & Citizen Identity Verifications
                     </CardTitle>
-                    {pendingCount > 0 && (
-                      <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 text-xs">
-                        {pendingCount} Pending Review
-                      </Badge>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {activeVerification && (
+                        <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 text-xs font-medium">
+                          <CheckCircle2Icon className="size-3 mr-1" />
+                          Active: {humanize(activeVerification.provider)}
+                        </Badge>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="gap-1.5 text-xs h-7 text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                        onClick={() => setKycDialogOpen(true)}
+                      >
+                        <ShieldCheckIcon className="size-3.5" />
+                        Verify / Change ID
+                      </Button>
+                      {pendingCount > 0 && (
+                        <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 text-xs">
+                          {pendingCount} Pending Review
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </CardHeader>
                 <div className="overflow-x-auto">
@@ -765,12 +1065,25 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
                       {verifications.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={6} className="h-32 text-center text-sm text-muted-foreground">
-                            No KYC verification records found for this ratepayer profile.
+                            <div className="flex flex-col items-center justify-center gap-2 py-4">
+                              <p>No KYC verification records found for this ratepayer profile.</p>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="gap-1.5 text-xs text-emerald-700 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
+                                onClick={() => setKycDialogOpen(true)}
+                              >
+                                <ShieldCheckIcon className="size-3.5" />
+                                Verify Citizen Identity (Ghana Card, Passport, Driver&apos;s License)
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ) : (
                         verifications.map(v => {
                           const isPending = (v.verificationStatus || 'PENDING').toUpperCase() === 'PENDING'
+                          const isArchived = (v.verificationStatus || '').toUpperCase() === 'ARCHIVED'
+                          const isVerified = (v.verificationStatus || '').toUpperCase() === 'VERIFIED'
                           return (
                             <TableRow key={v.id} className="hover:bg-muted/30 transition-colors">
                               <TableCell className="pl-6 text-xs font-medium text-foreground">
@@ -813,6 +1126,13 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
                                       Reject
                                     </Button>
                                   </div>
+                                ) : isArchived ? (
+                                  <span className="text-[11px] text-muted-foreground font-mono">Archived (Audit)</span>
+                                ) : isVerified ? (
+                                  <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium inline-flex items-center gap-1">
+                                    <CheckCircle2Icon className="size-3" />
+                                    Active
+                                  </span>
                                 ) : (
                                   <span className="text-xs text-muted-foreground font-medium">Reviewed</span>
                                 )}
@@ -929,6 +1249,22 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
             </Card>
           </div>
 
+          {/* Property Creation Gate Notice */}
+          {ratepayer.completion && !ratepayer.completion.isEligibleForPropertyCreation && (
+            <div className="p-3.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 flex items-start gap-3 text-xs">
+              <ShieldAlertIcon className="size-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-semibold">KYC Verification & Complete Profile Required to Register Properties</p>
+                <p className="text-[11px] text-muted-foreground">
+                  In accordance with CROIP revenue governance, properties cannot be created or registered for this ratepayer until profile completion is 100% and citizen identity (KYC) is verified.
+                  {ratepayer.completion.missingSections?.length > 0 && (
+                    <span className="block mt-0.5">Missing: {ratepayer.completion.missingSections.join(', ')}.</span>
+                  )}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Properties Table */}
           <Card className="shadow-2xs overflow-hidden py-0 gap-0">
             <CardHeader className="border-b py-4">
@@ -937,9 +1273,19 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
                   <LandmarkIcon className="size-4 text-primary" />
                   Linked Properties & Land Parcels
                 </CardTitle>
-                <span className="text-xs text-muted-foreground">
-                  {properties.length} parcel{properties.length === 1 ? '' : 's'} linked
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground">
+                    {properties.length} parcel{properties.length === 1 ? '' : 's'} linked
+                  </span>
+                  <Button
+                    size="sm"
+                    className="gap-1.5 text-xs h-8"
+                    onClick={() => setPropertyDialogOpen(true)}
+                  >
+                    <Building2Icon className="size-3.5" />
+                    Register Property
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <div className="overflow-x-auto">
@@ -1018,16 +1364,27 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
                           {formatDate(link.effectiveFrom)}
                         </TableCell>
                         <TableCell className="text-center pr-6">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-7 text-xs gap-1"
-                            render={<Link href={`/properties/${link.propertyId}`} />}
-                            nativeButton={false}
-                          >
-                            <EyeIcon className="size-3.5" />
-                            View Property
-                          </Button>
+                          <div className="flex items-center justify-center gap-1.5">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs gap-1"
+                              render={<Link href={`/properties/${link.propertyId}`} />}
+                              nativeButton={false}
+                            >
+                              <EyeIcon className="size-3.5" />
+                              View
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 text-xs gap-1 text-rose-600 hover:text-rose-700 hover:bg-rose-500/10"
+                              onClick={() => setSeverTarget({ propertyId: link.propertyId })}
+                            >
+                              <UnlinkIcon className="size-3.5" />
+                              Sever Link
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -1551,6 +1908,146 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
             >
               {statusSubmitting ? <Spinner className="size-3.5" /> : null}
               Confirm Status Change
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Address & Pinpoint Location Dialog */}
+      <AddressLocationDialog
+        open={addressDialogOpen}
+        onOpenChange={setAddressDialogOpen}
+        ratepayerId={ratepayer.id}
+        currentFirstName={ratepayer.firstName}
+        currentMiddleName={ratepayer.middleName}
+        currentLastName={ratepayer.lastName}
+        currentLegalName={ratepayer.legalName}
+        currentPhone={ratepayer.phone}
+        currentEmail={ratepayer.email}
+        currentAddress={ratepayer.address}
+        currentLocationGeo={ratepayer.locationGeo}
+        onSuccess={() => {
+          fetchRatepayer()
+        }}
+      />
+
+      {/* Citizen Identity Verification (KYC) Dialog */}
+      <RatepayerKycDialog
+        open={kycDialogOpen}
+        onOpenChange={setKycDialogOpen}
+        ratepayerId={ratepayer.id}
+        ratepayerName={ratepayer.legalName}
+        currentActiveProvider={activeVerification?.provider}
+        currentActiveReference={activeVerification?.providerReference}
+        onSuccess={() => {
+          fetchRatepayer()
+        }}
+      />
+
+      {/* Register Property Dialog */}
+      <RatepayerPropertyRegisterDialog
+        open={propertyDialogOpen}
+        onOpenChange={setPropertyDialogOpen}
+        ratepayer={ratepayer}
+        onSuccess={() => {
+          fetchRatepayer()
+          fetchProperties()
+        }}
+      />
+
+      {/* Delete Ratepayer Confirmation Dialog */}
+      <Dialog open={deleteRatepayerDialogOpen} onOpenChange={setDeleteRatepayerDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold text-rose-600 flex items-center gap-2">
+              <Trash2Icon className="size-4" />
+              Delete Ratepayer Profile
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Are you sure you want to delete ratepayer{' '}
+              <strong className="text-foreground">{ratepayer.legalName} ({ratepayer.code})</strong>?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs text-rose-800 dark:text-rose-300 space-y-1.5">
+            <p className="font-semibold flex items-center gap-1.5">
+              <ShieldAlertIcon className="size-3.5" />
+              Governance & Integrity Restriction:
+            </p>
+            <p className="text-[11px]">
+              You <strong>cannot delete a ratepayer who has active linked properties</strong>. All property links must be severed or properties reassigned before this profile can be removed.
+            </p>
+            {properties.length > 0 && (
+              <p className="text-[11px] font-medium text-rose-900 dark:text-rose-200">
+                Currently linked to {properties.length} parcel(s). Sever these links first in the &quot;Linked Properties&quot; tab.
+              </p>
+            )}
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteRatepayerDialogOpen(false)}
+              disabled={deleteSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDeleteRatepayer}
+              disabled={deleteSubmitting || properties.length > 0}
+              className="gap-1.5"
+            >
+              {deleteSubmitting ? <Spinner className="size-3.5" /> : <Trash2Icon className="size-3.5" />}
+              Confirm Deletion
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sever Property Link Dialog */}
+      <Dialog open={!!severTarget} onOpenChange={open => !open && setSeverTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold text-foreground flex items-center gap-2">
+              <UnlinkIcon className="size-4 text-primary" />
+              Sever Property Parcel Link
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Are you sure you want to sever the ownership link between{' '}
+              <strong className="text-foreground">{ratepayer.legalName}</strong> and this property parcel?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3 rounded-lg bg-muted/40 border border-border/40 text-xs text-muted-foreground space-y-1">
+            <p>
+              The cadastral parcel will remain intact in the national property registry, but will no longer appear under this ratepayer&apos;s account.
+            </p>
+            <p className="text-[11px]">
+              If this property has paid bills, severing the link preserves audit compliance while freeing the property for reassignment.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSeverTarget(null)}
+              disabled={severSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleSeverPropertyLink}
+              disabled={severSubmitting}
+              className="gap-1.5"
+            >
+              {severSubmitting ? <Spinner className="size-3.5" /> : <UnlinkIcon className="size-3.5" />}
+              Sever Link
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -20,16 +20,21 @@ export const propertyResponseSchema = {
     accountNumber: { type: ['string', 'null'] },
     propertyName: { type: ['string', 'null'] },
     assemblyId: { type: 'string', format: 'uuid' },
-    propertyClass: { type: 'string' },
-    buildingStatus: { type: 'string' },
+    propertyClass: { type: ['string', 'null'] },
+    buildingStatus: { type: ['string', 'null'] },
     propertyStatus: { type: 'string' },
-    propertyUse: { type: 'string' },
-    tenureType: { type: 'string' },
-    structureType: { type: 'string' },
+    propertyUse: { type: ['string', 'null'] },
+    tenureType: { type: ['string', 'null'] },
+    structureType: { type: ['string', 'null'] },
     verificationStatus: { type: 'string' },
     registrationSource: { type: 'string', enum: ['CONCESSION', 'RATEPAYER'] },
     registeredByConcessionId: { type: ['string', 'null'], format: 'uuid' },
     createdByRatepayerId: { type: ['string', 'null'], format: 'uuid' },
+    version: { type: 'integer' },
+    ghanaPostGps: { type: ['string', 'null'] },
+    createdBy: { type: ['string', 'null'] },
+    verifiedBy: { type: ['string', 'null'] },
+    verifiedAt: { type: ['string', 'null'], format: 'date-time' },
     polygonGeoJson: { type: 'object', additionalProperties: true },
     createdAt: { type: 'string', format: 'date-time' }
   }
@@ -74,8 +79,14 @@ export const createPropertyBodySchema = {
     propertyUse: { type: 'string' },
     tenureType: { type: 'string' },
     structureType: { type: 'string' },
+    numberOfFloors: { type: 'integer', minimum: 1 },
+    ownershipType: { type: 'string', enum: ['FULL', 'PART', 'full', 'part', 'PARTIAL', 'partial', 'OWNER', 'CO_OWNER', 'TENANT'] },
+    ownershipPercentage: { type: 'number', minimum: 0, maximum: 100 },
     registrationSource: { type: 'string', enum: ['CONCESSION', 'RATEPAYER'], default: 'CONCESSION' },
     createdByRatepayerId: { type: 'string', format: 'uuid' },
+    version: { type: 'integer' },
+    ghanaPostGps: { type: 'string', maxLength: 50 },
+    createdBy: { type: 'string', maxLength: 150 },
     assemblyId: {
       type: 'string',
       format: 'uuid',
@@ -84,7 +95,7 @@ export const createPropertyBodySchema = {
     documents: {
       type: 'array',
       items: propertyDocumentInputSchema,
-      description: 'Mandatory ownership verification documents when registered from ratepayer end'
+      description: 'Optional ownership verification documents'
     },
     polygonGeoJson: { type: 'object' }
   }
@@ -208,5 +219,26 @@ export const verificationResponseSchema = {
     reviewedAt: { type: ['string', 'null'], format: 'date-time' },
     reviewNotes: { type: ['string', 'null'] },
     capturedAt: { type: 'string', format: 'date-time' }
+  }
+};
+
+export const updatePropertyBodySchema = {
+  type: 'object',
+  properties: {
+    propertyName: { type: 'string', maxLength: 150 },
+    accountNumber: { type: 'string', maxLength: 50 },
+    propertyUse: { type: 'string' },
+    structureType: { type: 'string' },
+    buildingStatus: { type: 'string' },
+    propertyClass: { type: 'string' },
+    tenureType: { type: 'string' },
+    numberOfFloors: { type: 'integer', minimum: 1 },
+    landAreaSqm: { type: 'number', minimum: 0 },
+    leaseDurationYears: { type: 'integer', minimum: 0 },
+    polygonGeoJson: { type: 'object' },
+    ghanaPostGps: { type: 'string', maxLength: 50 },
+    verifiedBy: { type: 'string', maxLength: 150 },
+    claimedByRatepayerId: { type: 'string', format: 'uuid' },
+    createdByRatepayerId: { type: 'string', format: 'uuid' }
   }
 };

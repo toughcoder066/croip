@@ -125,10 +125,14 @@ exports.Prisma.RatepayerScalarFieldEnum = {
   id: 'id',
   code: 'code',
   ratepayerType: 'ratepayerType',
+  firstName: 'firstName',
+  middleName: 'middleName',
+  lastName: 'lastName',
   legalName: 'legalName',
   phone: 'phone',
   email: 'email',
   passwordHash: 'passwordHash',
+  address: 'address',
   regionId: 'regionId',
   assemblyId: 'assemblyId',
   locationGeo: 'locationGeo',
@@ -243,12 +247,12 @@ exports.Prisma.SortOrder = {
   desc: 'desc'
 };
 
-exports.Prisma.JsonNullValueInput = {
+exports.Prisma.NullableJsonNullValueInput = {
+  DbNull: Prisma.DbNull,
   JsonNull: Prisma.JsonNull
 };
 
-exports.Prisma.NullableJsonNullValueInput = {
-  DbNull: Prisma.DbNull,
+exports.Prisma.JsonNullValueInput = {
   JsonNull: Prisma.JsonNull
 };
 

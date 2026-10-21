@@ -74,6 +74,28 @@ export function geoService(app: FastifyInstance) {
       return app.prisma.region.update({ where: { id }, data: { polygonGeoJson: input.polygonGeoJson as any } });
     },
 
+    async deleteRegion(id: string) {
+      const region = await app.prisma.region.findUnique({
+        where: { id },
+        include: { assemblies: { select: { id: true } } }
+      });
+      if (!region) throw new NotFoundError('Region not found');
+      if (region.assemblies.length > 0) {
+        throw new BadRequestError(`Cannot delete region '${region.name}' because it contains ${region.assemblies.length} assemblies`);
+      }
+      return app.prisma.region.delete({ where: { id } });
+    },
+
+    async deleteAssembly(id: string) {
+      const assembly = await app.prisma.municipalAssembly.findUnique({ where: { id } });
+      if (!assembly) throw new NotFoundError('Municipal assembly not found');
+      try {
+        return await app.prisma.municipalAssembly.delete({ where: { id } });
+      } catch (err: any) {
+        throw new BadRequestError(`Cannot delete assembly '${assembly.name}' because it is referenced by other records`);
+      }
+    },
+
     async listAssemblies(regionId?: string) {
       return app.prisma.municipalAssembly.findMany({
         ...(regionId ? { where: { regionId } } : {}),

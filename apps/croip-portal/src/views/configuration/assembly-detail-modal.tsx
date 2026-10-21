@@ -242,8 +242,6 @@ export function AssemblyDetailModal({
     }
   }
 
-  if (!assembly) return null
-
   const currentRegion = useMemo(() => {
     if (!regionId) return null
     return (
@@ -255,6 +253,8 @@ export function AssemblyDetailModal({
       ) || null
     )
   }, [regions, regionId])
+
+  if (!assembly) return null
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

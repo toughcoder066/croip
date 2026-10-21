@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { AssemblyDetailModal } from './assembly-detail-modal'
+import { BatchActionBar } from '@/components/data-table/batch-action-bar'
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -95,6 +96,7 @@ export function AssembliesDataTable({
 }: AssembliesDataTableProps) {
   // Row selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isDeletingBatch, setIsDeletingBatch] = useState(false)
 
   // Detail & Map Modal
   const [detailModalOpen, setDetailModalOpen] = useState(false)
@@ -236,9 +238,64 @@ export function AssembliesDataTable({
       if (onDelete) {
         await onDelete(item.id, item.name)
       } else {
-        toast.info(`Deleted ${item.name}`)
+        try {
+          const res = await fetch(`/api/geo/assemblies/${item.id}`, { method: 'DELETE' })
+          const json = await res.json().catch(() => ({}))
+          if (res.ok && json.success) {
+            toast.success(`Deleted ${item.name}`)
+            onRefresh?.()
+          } else {
+            toast.error(json.error || `Could not delete ${item.name}`)
+          }
+        } catch {
+          toast.error(`Failed to delete ${item.name}`)
+        }
       }
     }
+  }
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Are you sure you want to delete ${selectedIds.size} selected assembly/assemblies? Any assembly that cannot be deleted (e.g. referenced by properties or concessions) will be skipped.`)) {
+      return
+    }
+
+    setIsDeletingBatch(true)
+    let deletedCount = 0
+    let skippedCount = 0
+
+    for (const id of Array.from(selectedIds)) {
+      try {
+        if (onDelete) {
+          const item = data.find(a => a.id === id)
+          await onDelete(id, item?.name || id)
+          deletedCount++
+        } else {
+          const res = await fetch(`/api/geo/assemblies/${id}`, { method: 'DELETE' })
+          const json = await res.json().catch(() => ({}))
+          if (res.ok && json.success) {
+            deletedCount++
+          } else {
+            skippedCount++
+          }
+        }
+      } catch {
+        skippedCount++
+      }
+    }
+
+    setIsDeletingBatch(false)
+    setSelectedIds(new Set())
+
+    if (deletedCount > 0 && skippedCount === 0) {
+      toast.success(`Successfully deleted ${deletedCount} assembly record${deletedCount > 1 ? 's' : ''}.`)
+    } else if (deletedCount > 0 && skippedCount > 0) {
+      toast.warning(`Deleted ${deletedCount} assembly record${deletedCount > 1 ? 's' : ''}. ${skippedCount} record${skippedCount > 1 ? 's' : ''} could not be deleted and were skipped.`)
+    } else if (deletedCount === 0 && skippedCount > 0) {
+      toast.error(`Could not delete selected assemblies (${skippedCount} skipped due to referenced records or dependencies).`)
+    }
+
+    onRefresh?.()
   }
 
   const copyToClipboard = (text: string, label: string) => {
@@ -347,6 +404,15 @@ export function AssembliesDataTable({
             </div>
           </div>
         </div>
+
+        {/* Batch Action Bar */}
+        <BatchActionBar
+          selectedCount={selectedIds.size}
+          onDelete={handleBatchDelete}
+          onClear={() => setSelectedIds(new Set())}
+          isDeleting={isDeletingBatch}
+          entityName="assembly"
+        />
 
         {/* The Table */}
         <div className="overflow-x-auto">

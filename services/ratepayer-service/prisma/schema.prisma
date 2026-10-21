@@ -12,13 +12,17 @@ model Ratepayer {
   id            String   @id @default(uuid()) @db.Uuid
   code          String   @unique @db.VarChar(50)
   ratepayerType String   @default("INDIVIDUAL") @map("ratepayer_type") @db.VarChar(20)
-  legalName     String   @map("legal_name") @db.VarChar(200)
-  phone         String   @db.VarChar(30)
+  firstName     String?  @map("first_name") @db.VarChar(100)
+  middleName    String?  @map("middle_name") @db.VarChar(100)
+  lastName      String?  @map("last_name") @db.VarChar(100)
+  legalName     String?  @map("legal_name") @db.VarChar(200)
+  phone         String?  @db.VarChar(30)
   email         String?  @db.VarChar(255)
   passwordHash  String?  @map("password_hash") @db.VarChar(255)
-  regionId      String   @map("region_id") @db.Uuid
-  assemblyId    String   @map("assembly_id") @db.Uuid
-  locationGeo   Json     @map("location_geo")
+  address       String?  @db.VarChar(255)
+  regionId      String?  @map("region_id") @db.Uuid
+  assemblyId    String?  @map("assembly_id") @db.Uuid
+  locationGeo   Json?    @map("location_geo")
   status        String   @default("ACTIVE") @db.VarChar(20)
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
@@ -29,6 +33,7 @@ model Ratepayer {
 
   @@index([assemblyId, status])
   @@index([phone])
+  @@index([lastName, firstName])
   @@map("ratepayers")
 }
 

@@ -6,14 +6,12 @@ import { touchTokenSession } from '@/lib/token-store'
 export const dynamic = 'force-dynamic'
 
 /**
- * Reports the real signed-in session (set by the Zitadel OIDC callback) — no fabricated
- * fallback user. Callers already guard on `authenticated && user` before reading fields.
+ * Reports the real signed-in session (set by Zitadel authentication) — no fabricated
+ * fallback user. Callers guard on `authenticated && user` before reading fields.
  *
- * Also enforces the inactivity timeout: the cookie alone only proves a login happened
- * at some point in the last 7 days, so this checks the server-side token session too —
- * if it's gone idle (or the underlying tokens were revoked/rejected on refresh), this
- * reports logged-out and clears the cookie, rather than letting the UI believe the
- * officer is still signed in while every real API call would 401.
+ * Enforces the inactivity timeout: checks the server-side token session — if it has gone
+ * idle (or the underlying tokens were revoked/rejected on refresh), this reports
+ * logged-out and clears the cookie.
  */
 export async function GET() {
   const cookieStore = await cookies()
@@ -24,7 +22,13 @@ export async function GET() {
   }
 
   try {
-    const session = JSON.parse(sessionCookie.value)
+    let raw = sessionCookie.value
+    if (raw.startsWith('%')) {
+      try {
+        raw = decodeURIComponent(raw)
+      } catch {}
+    }
+    const session = JSON.parse(raw)
     const tokens = await touchTokenSession(session.tokenSessionId)
 
     if (!tokens) {

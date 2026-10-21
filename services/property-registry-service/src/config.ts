@@ -29,6 +29,7 @@ const schema = z.object({
   // profile on the ratepayer-service side (see assertZoneMembership's sibling call in
   // service.ts's createProperty).
   RATEPAYER_SERVICE_URL: z.string().url().default('http://ratepayer-service:3030'),
+  BILLING_SERVICE_URL: z.string().url().default('http://billing-payments-service:3007'),
   // Platform Governance Service provides concessionaire assignments and MMDA boundary authorizations
   PLATFORM_GOVERNANCE_URL: z.string().url().default('http://platform-governance-service:3010'),
   RABBITMQ_URL: z.string().min(1),

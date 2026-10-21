@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
   ArrowLeftIcon,
@@ -16,6 +17,8 @@ import {
   UserIcon,
   BanknoteIcon,
   ShieldCheckIcon,
+  ShieldAlertIcon,
+  Trash2Icon,
   ChevronDownIcon
 } from 'lucide-react'
 
@@ -26,6 +29,14 @@ import { PageLoader, Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import {
   VerificationReviewDialog,
   type PendingVerification
@@ -46,6 +57,11 @@ const PropertyPolygonMap = dynamic(() => import('@/views/properties/property-pol
 interface PropertyDetail {
   id: string
   code: string
+  version?: number
+  ghanaPostGps?: string | null
+  createdBy?: string | null
+  verifiedBy?: string | null
+  verifiedAt?: string | null
   accountNumber?: string | null
   propertyName?: string | null
   assemblyId: string
@@ -190,6 +206,10 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
   const [reviewTarget, setReviewTarget] = useState<PendingVerification | null>(null)
   const [reviewDecision, setReviewDecision] = useState<'APPROVED' | 'REJECTED' | null>(null)
 
+  const router = useRouter()
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false)
+
   const fetchProperty = useCallback(() => {
     setLoading(true)
     return fetch(`/api/properties/${propertyId}`)
@@ -271,6 +291,28 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
     fetchProperty()
   }
 
+  const handleDeleteProperty = async () => {
+    setDeleteSubmitting(true)
+    try {
+      const res = await fetch(`/api/properties/${propertyId}`, {
+        method: 'DELETE'
+      })
+      const data = await res.json()
+      if (data.success) {
+        toast.success(data.data?.message || 'Property deleted successfully')
+        setDeleteDialogOpen(false)
+        router.push('/properties')
+      } else {
+        toast.error(data.error || 'Failed to delete property')
+      }
+    } catch (err) {
+      console.error('Failed to delete property:', err)
+      toast.error('An unexpected error occurred while deleting property')
+    } finally {
+      setDeleteSubmitting(false)
+    }
+  }
+
   if (loading) {
     return <PageLoader />
   }
@@ -307,12 +349,18 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
             <ArrowLeftIcon className="size-4" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
-              {property.propertyName || 'Unnamed Property'}
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight text-foreground">
+                {property.propertyName || 'Unnamed Property'}
+              </h1>
+              <Badge variant="outline" className="font-mono text-xs font-semibold px-2 py-0.5 border-primary/30 text-primary bg-primary/5">
+                v{property.version ?? 1}
+              </Badge>
+            </div>
             <p className="font-mono text-xs text-muted-foreground mt-0.5">
               {property.code}
               {property.accountNumber ? ` • A/C ${property.accountNumber}` : ''}
+              {property.ghanaPostGps ? ` • GPS: ${property.ghanaPostGps}` : ''}
             </p>
           </div>
         </div>
@@ -323,6 +371,15 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
               {pendingCount} verification{pendingCount > 1 ? 's' : ''} awaiting review
             </Badge>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs text-rose-600 hover:text-rose-700 hover:bg-rose-500/10 border-rose-500/30"
+            onClick={() => setDeleteDialogOpen(true)}
+          >
+            <Trash2Icon className="size-3.5" />
+            Delete Property
+          </Button>
         </div>
       </div>
 
@@ -355,6 +412,26 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
             </CardHeader>
             <CardContent className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
               <OverviewField label="Property Code" value={<span className="font-mono">{property.code}</span>} />
+              <OverviewField
+                label="Property Version"
+                value={
+                  <Badge variant="outline" className="font-mono text-xs font-semibold px-2 py-0.5">
+                    v{property.version ?? 1}
+                  </Badge>
+                }
+              />
+              <OverviewField
+                label="Ghana Post GPS"
+                value={
+                  property.ghanaPostGps ? (
+                    <span className="font-mono font-medium text-xs text-primary bg-primary/10 px-2 py-0.5 rounded border border-primary/20">
+                      {property.ghanaPostGps}
+                    </span>
+                  ) : (
+                    '—'
+                  )
+                }
+              />
               <OverviewField label="Account Number" value={property.accountNumber} />
               <OverviewField label="Property Class" value={humanize(property.propertyClass)} />
               <OverviewField label="Property Use" value={humanize(property.propertyUse)} />
@@ -386,8 +463,20 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
                   )
                 }
               />
-              <OverviewField label="Registered" value={formatDate(property.createdAt)} />
-              <OverviewField label="Last Updated" value={formatDate(property.updatedAt)} />
+              <OverviewField
+                label="Created By"
+                value={property.createdBy || (property.createdByRatepayerId ? `Ratepayer (${property.createdByRatepayerId.slice(0, 8)})` : '—')}
+              />
+              <OverviewField
+                label="Verified By"
+                value={property.verifiedBy || '—'}
+              />
+              <OverviewField
+                label="Verified At"
+                value={property.verifiedAt ? formatDateTime(property.verifiedAt) : '—'}
+              />
+              <OverviewField label="Created At" value={formatDateTime(property.createdAt)} />
+              <OverviewField label="Last Updated" value={formatDateTime(property.updatedAt)} />
             </CardContent>
           </Card>
 
@@ -733,6 +822,56 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
         onClose={closeReview}
         onReviewed={handleReviewed}
       />
+
+      {/* Delete Property Confirmation Dialog */}
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base font-semibold text-rose-600 flex items-center gap-2">
+              <Trash2Icon className="size-4" />
+              Delete Property Parcel
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Are you sure you want to delete cadastral parcel{' '}
+              <strong className="text-foreground">{property.propertyName || property.code} ({property.code})</strong>?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="p-3.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs text-rose-800 dark:text-rose-300 space-y-1.5">
+            <p className="font-semibold flex items-center gap-1.5">
+              <ShieldAlertIcon className="size-3.5" />
+              Statutory Protection Rule:
+            </p>
+            <p className="text-[11px]">
+              If any citizen has <strong>paid bills on this property</strong>, the parcel <strong>cannot be deleted</strong> to maintain financial audit integrity. In that scenario, only severing the ratepayer link is permitted.
+            </p>
+            <p className="text-[11px]">
+              If no bills have been paid, deleting this property will remove its units, valuations, documents, and <strong>sever all ratepayer links automatically</strong>.
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteDialogOpen(false)}
+              disabled={deleteSubmitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDeleteProperty}
+              disabled={deleteSubmitting}
+              className="gap-1.5"
+            >
+              {deleteSubmitting ? <Spinner className="size-3.5" /> : <Trash2Icon className="size-3.5" />}
+              Confirm Deletion
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -48,7 +48,7 @@ export default function ValuationRollsPage() {
         </div>
       </div>
 
-      <ValuationRollsTable data={rows} loading={loading} />
+      <ValuationRollsTable data={rows} loading={loading} onRefresh={fetchRolls} />
     </div>
   )
 }

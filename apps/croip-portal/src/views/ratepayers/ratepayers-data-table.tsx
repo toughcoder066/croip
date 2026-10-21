@@ -15,12 +15,16 @@ import {
   Building2Icon
 } from 'lucide-react'
 
+import { toast } from 'sonner'
+
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { Spinner } from '@/components/ui/spinner'
+import { BatchActionBar } from '@/components/data-table/batch-action-bar'
 import {
   Select,
   SelectContent,
@@ -52,6 +56,9 @@ export interface RatepayerDirectoryRecord {
   id: string
   code: string
   ratepayerType: string
+  firstName?: string | null
+  middleName?: string | null
+  lastName?: string | null
   legalName: string
   phone: string
   email?: string | null
@@ -74,6 +81,7 @@ interface RatepayersDataTableProps {
   total: number
   totalPages: number
   onPageChange: (page: number) => void
+  onRefresh?: () => void
 }
 
 function RatepayerTypeBadge({ type }: { type: string }) {
@@ -168,8 +176,13 @@ export function RatepayersDataTable({
   pageSize,
   total,
   totalPages,
-  onPageChange
+  onPageChange,
+  onRefresh
 }: RatepayersDataTableProps) {
+  // Row selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isDeletingBatch, setIsDeletingBatch] = useState(false)
+
   // Local echo of the search box so every keystroke feels immediate, debounced before it is
   // pushed up to the parent page (which re-queries the server-side directory endpoint).
   const [searchInput, setSearchInput] = useState(search)
@@ -199,6 +212,67 @@ export function RatepayersDataTable({
   let end = Math.min(totalPages, start + windowSize - 1)
   start = Math.max(1, end - windowSize + 1)
   for (let p = start; p <= end; p++) pageButtons.push(p)
+
+  const allCurrentPageSelected =
+    data.length > 0 && data.every(r => selectedIds.has(r.id))
+
+  const toggleSelectAll = () => {
+    const next = new Set(selectedIds)
+    if (allCurrentPageSelected) {
+      data.forEach(r => next.delete(r.id))
+    } else {
+      data.forEach(r => next.add(r.id))
+    }
+    setSelectedIds(next)
+  }
+
+  const toggleSelectRow = (id: string) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) {
+      next.delete(id)
+    } else {
+      next.add(id)
+    }
+    setSelectedIds(next)
+  }
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Are you sure you want to delete ${selectedIds.size} selected ratepayer(s)? Any ratepayer that cannot be deleted (e.g. has linked properties or active records) will be skipped.`)) {
+      return
+    }
+
+    setIsDeletingBatch(true)
+    let deletedCount = 0
+    let skippedCount = 0
+
+    for (const id of Array.from(selectedIds)) {
+      try {
+        const res = await fetch(`/api/ratepayers/${id}`, { method: 'DELETE' })
+        const json = await res.json().catch(() => ({}))
+        if (res.ok && json.success) {
+          deletedCount++
+        } else {
+          skippedCount++
+        }
+      } catch {
+        skippedCount++
+      }
+    }
+
+    setIsDeletingBatch(false)
+    setSelectedIds(new Set())
+
+    if (deletedCount > 0 && skippedCount === 0) {
+      toast.success(`Successfully deleted ${deletedCount} ratepayer record${deletedCount > 1 ? 's' : ''}.`)
+    } else if (deletedCount > 0 && skippedCount > 0) {
+      toast.warning(`Deleted ${deletedCount} ratepayer record${deletedCount > 1 ? 's' : ''}. ${skippedCount} record${skippedCount > 1 ? 's' : ''} could not be deleted and were skipped.`)
+    } else if (deletedCount === 0 && skippedCount > 0) {
+      toast.error(`Could not delete selected ratepayers (${skippedCount} skipped due to linked properties or active records).`)
+    }
+
+    onRefresh?.()
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -265,12 +339,28 @@ export function RatepayersDataTable({
           </div>
         </div>
 
+        {/* Batch Action Bar */}
+        <BatchActionBar
+          selectedCount={selectedIds.size}
+          onDelete={handleBatchDelete}
+          onClear={() => setSelectedIds(new Set())}
+          isDeleting={isDeletingBatch}
+          entityName="ratepayer"
+        />
+
         {/* Table */}
         <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-6">
+                <TableHead className="w-12 pl-6">
+                  <Checkbox
+                    checked={allCurrentPageSelected}
+                    onCheckedChange={toggleSelectAll}
+                    aria-label="Select all ratepayers on current page"
+                  />
+                </TableHead>
+                <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                   Ratepayer
                 </TableHead>
                 <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -294,7 +384,7 @@ export function RatepayersDataTable({
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-48 text-center">
+                  <TableCell colSpan={7} className="h-48 text-center">
                     <div className="flex flex-col items-center justify-center gap-3">
                       <Spinner className="size-6 text-primary" />
                       <p className="text-xs text-muted-foreground">Loading ratepayers...</p>
@@ -303,15 +393,28 @@ export function RatepayersDataTable({
                 </TableRow>
               ) : data.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-40 text-center text-sm text-muted-foreground">
+                  <TableCell colSpan={7} className="h-40 text-center text-sm text-muted-foreground">
                     No ratepayers match your filters.
                   </TableCell>
                 </TableRow>
               ) : (
-                data.map(row => (
-                  <TableRow key={row.id} className="hover:bg-muted/30 transition-colors">
-                    <TableCell className="pl-6">
-                      <div className="flex flex-col">
+                data.map(row => {
+                  const isSelected = selectedIds.has(row.id)
+                  return (
+                    <TableRow
+                      key={row.id}
+                      data-state={isSelected ? 'selected' : undefined}
+                      className="hover:bg-muted/30 transition-colors"
+                    >
+                      <TableCell className="pl-6">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleSelectRow(row.id)}
+                          aria-label={`Select ${row.legalName}`}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex flex-col">
                         <span className="font-semibold text-xs text-foreground">{row.legalName}</span>
                         <span className="font-mono text-[11px] text-muted-foreground">{row.code}</span>
                       </div>
@@ -339,8 +442,9 @@ export function RatepayersDataTable({
                       </Button>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
+                )
+              })
+            )}
             </TableBody>
           </Table>
         </div>

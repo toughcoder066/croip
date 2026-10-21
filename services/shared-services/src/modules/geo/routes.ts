@@ -73,6 +73,16 @@ export const geoRoutes: FastifyPluginAsync = async (app) => {
     }
   }, async (request) => service.updateRegionBoundary(request.params.id, request.body));
 
+  app.delete<{ Params: { id: string } }>('/regions/:id', {
+    preHandler: app.requirePermissions(['reference:manage']),
+    schema: {
+      tags: ['Geography'],
+      summary: 'Delete a region',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+      response: { 200: { type: 'object', additionalProperties: true }, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
+    }
+  }, async (request) => service.deleteRegion(request.params.id));
+
   app.get<{ Querystring: { regionId?: string } }>('/assemblies', {
     preHandler: app.requirePermissions(['reference:read']),
     schema: {
@@ -127,6 +137,16 @@ export const geoRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: assemblyResponseSchema, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
     }
   }, async (request) => service.updateAssemblyBoundary(request.params.id, request.body));
+
+  app.delete<{ Params: { id: string } }>('/assemblies/:id', {
+    preHandler: app.requirePermissions(['reference:manage']),
+    schema: {
+      tags: ['Geography'],
+      summary: 'Delete a municipal assembly (MMDA)',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+      response: { 200: { type: 'object', additionalProperties: true }, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
+    }
+  }, async (request) => service.deleteAssembly(request.params.id));
 
   app.post<{ Body: { latitude: number; longitude: number } }>('/assemblies/detect-zone', {
     preHandler: app.requirePermissions(['reference:read']),
