@@ -37,7 +37,7 @@ ASSEMBLY = "{{sample_assembly_id}}"
 
 collection = {
     "info": {
-        "_postman_id": str(uuid.uuid4()),
+        "_postman_id": "07427078-6693-4b1f-9c5d-414bf49ec021",
         "name": "CROIP Central Platform API",
         "description": "Central Revenue Oversight & Integration Platform — all 11 microservice APIs, organized by WHO calls them rather than which service owns them:\n\n- **1. Ratepayer** — citizen self-service: register, log in (password + OTP), complete profile, self-service property registration, own bills/disputes, receipt verification.\n- **2. Concession** — revenue-collection partner field staff: property registration/verification in the field, billing and payment collection, event reporting, reference-data lookups.\n- **3. CROIP Admin** — central platform/oversight staff: user & RBAC management, concession onboarding, reconciliation, audit, boundary/reference-data management, review/approval steps.\n- **Platform Health Checks** — infra liveness/readiness, not tied to any persona.\n\nSome endpoints are genuinely cross-cutting (e.g. a property verification is *submitted* by Concession staff but *reviewed* by CROIP Admin) — each lives under the persona who actually calls that specific endpoint, with a note where the split matters.\n\n**Auth model**\n- Ratepayer: no auth for register/claims/receipt-verification; phone/email + password + OTP issues `{{ratepayer_access_token}}` (HS256, ratepayer-service). Running 'Verify OTP' auto-saves it.\n- Concession & CROIP Admin: both use the same real Zitadel-issued `{{staff_access_token}}` (RBAC permissions decide what each officer can actually do) — there's no API-only login by design; sign into the portal (http://localhost:3050) as a real officer and copy the access token (see README).",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
@@ -49,23 +49,39 @@ collection = {
 # ======================================================================
 # 1. RATEPAYER
 # ======================================================================
-rp_register_item = item("Register (public)", "POST", "ratepayer_url", "/v1/ratepayers", body={
+rp_register_item = item("Register (full/credentials)", "POST", "ratepayer_url", "/v1/ratepayers", body={
     "firstName": "{{ratepayer_first_name}}",
     "middleName": "{{ratepayer_middle_name}}",
     "lastName": "{{ratepayer_last_name}}",
     "email": "{{ratepayer_email}}",
     "password": "{{ratepayer_password}}",
     "confirmPassword": "{{ratepayer_password}}"
-}, description="Register citizen/corporate ratepayer profile with minimal credentials: just email or phone number with a password and confirm password. Can accept firstName, middleName, lastName (or legalName) which are assembled into legalName. When registering via email, the OTP is dispatched directly to Mailpit (viewable at http://localhost:8025). Phone OTPs are prepared for Arkasel gateway. The rest of the profile is completed incrementally with dynamic completion metrics (completionPercentage, missingSections, isProfileComplete, hasVerifiedKyc, isEligibleForPropertyCreation).")
+}, description="Register citizen/corporate ratepayer profile with full initial fields. Password and legalName are optional; only email or phone is required. When registering via email, the OTP is dispatched directly to Mailpit (http://localhost:8025). Phone OTPs are prepared for Arkasel gateway. Dynamic completion metrics (completionPercentage, missingSections, isProfileComplete, hasVerifiedKyc, isEligibleForPropertyCreation) track any missing information.")
 rp_register_item["event"] = [{"listen": "test", "script": {"exec": [
     "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res).to.have.property('completion');\n  pm.expect(res.completion).to.have.property('completionPercentage');\n}"
 ], "type": "text/javascript"}}]
 
-rp_update_profile_item = item("Update profile (granular / any field by ID)", "PATCH", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}", body={
+rp_register_minimal_email_item = item("Register - Minimal (Email only, plug-and-play)", "POST", "ratepayer_url", "/v1/ratepayers", body={
+    "email": "{{ratepayer_email}}"
+}, description="Plug-and-play signup: all that is required is either an email address or a phone number. No password or legal name is required at registration. Any omitted fields are dynamically reflected in completion metrics (completion.missingSections includes 'PASSWORD', 'LEGAL_NAME', etc.). Password and profile details can be set later via complete/update profile.")
+rp_register_minimal_email_item["event"] = [{"listen": "test", "script": {"exec": [
+    "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res.completion.missingSections).to.include('PASSWORD');\n  pm.expect(res.completion.missingSections).to.include('LEGAL_NAME');\n}"
+], "type": "text/javascript"}}]
+
+rp_register_minimal_phone_item = item("Register - Minimal (Phone only, plug-and-play)", "POST", "ratepayer_url", "/v1/ratepayers", body={
+    "phone": "{{ratepayer_phone}}"
+}, description="Plug-and-play signup with phone number only. No password required at signup. Missing sections (PASSWORD, EMAIL_ADDRESS, LEGAL_NAME, etc.) are dynamically tracked in completion metrics.")
+rp_register_minimal_phone_item["event"] = [{"listen": "test", "script": {"exec": [
+    "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res.completion.missingSections).to.include('PASSWORD');\n  pm.expect(res.completion.missingSections).to.include('EMAIL_ADDRESS');\n}"
+], "type": "text/javascript"}}]
+
+rp_update_profile_item = item("Complete / Update profile by ID (single unified API)", "PATCH", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}", body={
+    "firstName": "Kwame",
+    "lastName": "Mensah",
     "address": "14 Independence Avenue, Accra",
     "latitude": 5.6037,
     "longitude": -0.1870
-}, description="Update any individual part of the profile independently without having to send or update other fields. For example, updating address and coordinates auto-detects MMDA zone without requiring name or contact fields. Similarly, updating firstName/middleName/lastName re-assembles legalName without touching address. Authenticated via ratepayer Bearer token, staff token, or ratepayer ID.")
+}, description="Single unified endpoint for completing missing profile fields or updating existing details. The only required parameters are the ratepayer ID and authorization token. Anything can be updated (password, name, address, coordinates, etc.). Any omitted or updated fields immediately update the completion metrics.")
 rp_update_profile_item["event"] = [{"listen": "test", "script": {"exec": [
     "if (pm.response.code === 200) {\n  const j = pm.response.json();\n  pm.expect(j).to.have.property('completion');\n}"
 ], "type": "text/javascript"}}]
@@ -84,23 +100,30 @@ rp_verify_item["event"] = [{"listen": "test", "script": {"exec": [
     "if (pm.response.code === 200) { pm.environment.set('ratepayer_access_token', pm.response.json().accessToken); }"
 ], "type": "text/javascript"}}]
 
-rp_register_phone_item = item("Register with phone number (public)", "POST", "ratepayer_url", "/v1/ratepayers", body={
-    "number": "{{ratepayer_phone}}",
+rp_register_phone_item = item("Register with phone number and password", "POST", "ratepayer_url", "/v1/ratepayers", body={
+    "phone": "{{ratepayer_phone}}",
     "password": "{{ratepayer_password}}",
     "confirmPassword": "{{ratepayer_password}}"
-}, description="Register with phone number alone. Verification OTP is routed to Arkasel stub. Missing info (email, address, pinpoint coordinates) can be added after.")
+}, description="Register with phone number and password. Verification OTP is routed to Arkasel stub. Missing info (email, address, pinpoint coordinates) can be added after.")
 rp_register_phone_item["event"] = [{"listen": "test", "script": {"exec": [
     "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res.completion.missingSections).to.include('EMAIL_ADDRESS');\n}"
 ], "type": "text/javascript"}}]
 
 ratepayer_folder = folder("1. Ratepayer", [
     folder("Auth & Profile", [
+        rp_register_minimal_email_item,
+        rp_register_minimal_phone_item,
         rp_register_item,
         rp_register_phone_item,
         rp_login_item,
         rp_verify_item,
         item("Get my own profile", "GET", "ratepayer_url", "/v1/ratepayers/me", auth="ratepayer"),
-        item("Update my own profile (using Bearer token)", "PATCH", "ratepayer_url", "/v1/ratepayers/me", auth="ratepayer", body={"phone": "{{ratepayer_phone}}"}, description="Update any individual field of own profile using the ratepayer Bearer session token. Any field can be updated without having to provide others."),
+        item("Complete / Update own profile (using Bearer token)", "PATCH", "ratepayer_url", "/v1/ratepayers/me", auth="ratepayer", body={
+            "password": "{{ratepayer_password}}",
+            "confirmPassword": "{{ratepayer_password}}",
+            "firstName": "{{ratepayer_first_name}}",
+            "lastName": "{{ratepayer_last_name}}"
+        }, description="Complete missing profile sections (such as setting password or legal name) or update any individual field using the ratepayer Bearer session token. Any field can be updated without having to provide others."),
         item("Verify KYC for own profile (Bearer token)", "POST", "ratepayer_url", "/v1/ratepayers/me/verifications", auth="ratepayer", body={"provider": "GHANA_CARD", "autoVerify": True}, description="Verify KYC on own signed-in account using Bearer token. Supported providers: GHANA_CARD, PASSPORT, DRIVERS_LICENSE. Choosing a new provider archives previous verifications for audit trail."),
         item("Get a ratepayer profile by id (public)", "GET", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}"),
         rp_update_profile_item,
@@ -108,13 +131,20 @@ ratepayer_folder = folder("1. Ratepayer", [
         item("Verify KYC - 2. Passport (archives previous)", "POST", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/verifications", body={"provider": "PASSPORT", "autoVerify": True}, description="Verify ratepayer using Passport. Format: GXXXXXXXX. Archives previous Ghana Card verification for audit trail."),
         item("Verify KYC - 3. Driver's License (archives previous)", "POST", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/verifications", body={"provider": "DRIVERS_LICENSE", "autoVerify": True}, description="Verify ratepayer using Driver's License (DVLA). Format: DL-XXXXXXXX-X. Archives previous Passport verification for audit trail."),
         item("Delete ratepayer profile", "DELETE", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}", description="Delete an individual ratepayer profile. Strictly rejected with 400 Bad Request if the ratepayer has linked properties. To delete a ratepayer, first sever all property links or delete unbilled properties."),
-    ], "ratepayer-service — citizen self-service login and profile completion; accepts either email or phone number for registration and login, with missing info added after."),
+    ], "ratepayer-service — citizen plug-and-play signup and profile completion; requires only phone or email to register, with all other fields completed incrementally."),
     folder("My Properties", [
         item("Register a property (self-service)", "POST", "property_registry_url", "/v1/properties", auth="ratepayer", body={
             "code": "GH0701-SELF-{{$randomInt}}", "propertyName": "My Residence", "propertyUse": "RESIDENTIAL",
             "documents": [{"documentType": "LAND_TITLE_CERTIFICATE", "documentNumber": "LTC-00982", "mediaUrl": "https://storage.croip.gov.gh/claims/ltc-00982.pdf"}],
             "polygonGeoJson": {"type": "Polygon", "coordinates": [[[-0.2355, 5.5545], [-0.2355, 5.5555], [-0.2345, 5.5555], [-0.2345, 5.5545], [-0.2355, 5.5545]]]}
         }, description="Strictly requires ratepayer Bearer session token (HS256). Property creation requires that the ratepayer has completed their profile (including Address & Pinpoint Location) and has an approved KYC verification (isEligibleForPropertyCreation == true). Rejects with 400 Bad Request if KYC is unverified or profile is incomplete. Property is attributed to the logged-in ratepayer (createdByRatepayerId) and automatically linked in ratepayer-service. Ownership documents are mandatory. Spatial restriction: polygons cannot overlap or contain another property parcel if property uses and ownership match."),
+        item("Update my property - metadata only (preserves valuation & status)", "PATCH", "property_registry_url", "/v1/properties/{{sample_property_id}}", auth="ratepayer", body={
+            "propertyName": "Sunset Heights Villa"
+        }, description="Ratepayer updates descriptive metadata (name, description, documents). Since core structural/use fields are unchanged, existing valuation and verification status remain intact."),
+        item("Update my property - structural/usage change (resets to UNASSESSED, decouples valuation)", "PATCH", "property_registry_url", "/v1/properties/{{sample_property_id}}", auth="ratepayer", body={
+            "numberOfFloors": 3,
+            "propertyUse": "COMMERCIAL"
+        }, description="Ratepayer repurposes property or adds floors / changes physical characteristics. The property is automatically marked UNASSESSED, verificationStatus is reset to PENDING, and active valuations are decoupled from the parcel pending reassessment."),
         item("Claim an existing property (public)", "POST", "ratepayer_url", "/v1/ratepayers/claims", body={
             "ratepayerId": "{{sample_ratepayer_id}}", "propertyId": "{{sample_property_id}}",
             "ownershipType": "OWNER", "documents": [{"documentType": "INDENTURE", "mediaUrl": "https://storage.croip.gov.gh/claims/indenture.pdf"}]
@@ -125,7 +155,7 @@ ratepayer_folder = folder("1. Ratepayer", [
         }),
         item("List my linked properties (public)", "GET", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/properties"),
         item("Sever link to a property", "DELETE", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/properties/{{sample_property_id}}", description="Sever the ownership or tenancy link between a ratepayer and an individual property parcel without deleting the property."),
-    ], "property-registry-service + ratepayer-service — a property a ratepayer registers directly, or claims from one a concession already registered."),
+    ], "property-registry-service + ratepayer-service — a property a ratepayer registers directly, updates, or claims from one a concession already registered."),
     folder("My Bills & Disputes", [
         item("My own bills", "GET", "billing_payments_url", "/v1/me/bills", auth="ratepayer"),
         item("Raise a dispute", "POST", "dispute_url", "/v1/disputes", auth="ratepayer", body={
@@ -173,6 +203,12 @@ concession_folder = folder("2. Concession", [
         }, description="Concession batch registration (up to 500 properties). All properties must fall within the concession's assigned MMDA boundary. Core classification fields are required for each property; code is generated if omitted; propertyName and documents are optional."),
         item("Search/list properties in own assembly", "GET", "property_registry_url", "/v1/properties", auth="staff"),
         item("Get property details", "GET", "property_registry_url", "/v1/properties/{{sample_property_id}}", auth="staff"),
+        item("Update property - metadata only (preserves valuation & status)", "PATCH", "property_registry_url", "/v1/properties/{{sample_property_id}}", auth="staff", body={
+            "propertyName": "Accra Central Commercial Complex"
+        }, description="Concession staff updates property metadata. Non-structural updates preserve valuations and verification status."),
+        item("Update property - structural / usage change (resets to UNASSESSED, decouples valuation)", "PATCH", "property_registry_url", "/v1/properties/{{sample_property_id}}", auth="staff", body={
+            "numberOfFloors": 4, "propertyUse": "COMMERCIAL", "structuralType": "MULTI_STOREY"
+        }, description="Concession field staff updates physical structure or property use (e.g. building renovation, repurposing, adding floors). Automatically marks property UNASSESSED, resets verificationStatus to PENDING, and decouples active valuations pending re-assessment."),
         item("Declare sectional sub-unit", "POST", "property_registry_url", "/v1/properties/{{sample_property_id}}/units", auth="staff", body={"unitIdentifier": "SHOP-01", "unitType": "SHOP", "floorLevel": 0}),
         item("Upload ownership docs on-premises", "POST", "property_registry_url", "/v1/properties/{{sample_property_code}}/documents", auth="staff", body={
             "documentType": "BUILDING_PERMIT", "mediaUrl": "https://storage.croip.gov.gh/docs/permit.pdf",
@@ -255,6 +291,7 @@ admin_folder = folder("3. CROIP Admin", [
         item("Delete individual ratepayer profile", "DELETE", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}", auth="staff", description="Delete ratepayer profile. Blocked with 400 Bad Request if linked properties exist."),
     ], "ratepayer-service — administrative oversight, directory search, KYC verification, link severing, and deletion of ratepayers."),
     folder("Property Oversight", [
+        item("Update property parcel (administrative)", "PATCH", "property_registry_url", "/v1/properties/{{sample_property_id}}", auth="staff", body={"numberOfFloors": 2, "propertyUse": "MIXED_USE"}, description="Administrative update of a property parcel. Updating structural/usage fields decouples active valuations and resets property status to UNASSESSED and verification to PENDING."),
         item("Review a field verification", "PATCH", "property_registry_url", "/v1/verifications/{{sample_verification_id}}/review", auth="staff", body={"reviewStatus": "APPROVED", "reviewedByPersonnelId": "{{sample_personnel_id}}"}),
         item("Delete individual property parcel", "DELETE", "property_registry_url", "/v1/properties/{{sample_property_id}}", auth="staff", description="Administrative deletion of an individual property parcel. Blocked if paid bills exist; severs all ratepayer links if unbilled."),
     ], "property-registry-service — the approval step after a concession agent submits a field verification."),
@@ -391,7 +428,7 @@ def var(key, value, secret=False):
     return {"key": key, "value": value, "type": "secret" if secret else "default", "enabled": True}
 
 environment = {
-    "id": str(uuid.uuid4()),
+    "id": "93fc3540-e998-4a99-9d51-b60a9b237a74",
     "name": "CROIP Local Dev",
     "values": [
         var("reporting_gateway_url", "http://localhost:3001"),

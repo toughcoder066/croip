@@ -13,10 +13,10 @@
       "item": [
         {
           "name": "Auth & Profile",
-          "description": "ratepayer-service \u2014 citizen self-service login and profile completion; accepts either email or phone number for registration and login, with missing info added after.",
+          "description": "ratepayer-service \u2014 citizen plug-and-play signup and profile completion; requires only phone or email to register, with all other fields completed incrementally.",
           "item": [
             {
-              "name": "Register (public)",
+              "name": "Register - Minimal (Email only, plug-and-play)",
               "request": {
                 "method": "POST",
                 "header": [
@@ -35,7 +35,95 @@
                     "ratepayers"
                   ]
                 },
-                "description": "Register citizen/corporate ratepayer profile with minimal credentials: just email or phone number with a password and confirm password. Can accept firstName, middleName, lastName (or legalName) which are assembled into legalName. When registering via email, the OTP is dispatched directly to Mailpit (viewable at http://localhost:8025). Phone OTPs are prepared for Arkasel gateway. The rest of the profile is completed incrementally with dynamic completion metrics (completionPercentage, missingSections, isProfileComplete, hasVerifiedKyc, isEligibleForPropertyCreation).",
+                "description": "Plug-and-play signup: all that is required is either an email address or a phone number. No password or legal name is required at registration. Any omitted fields are dynamically reflected in completion metrics (completion.missingSections includes 'PASSWORD', 'LEGAL_NAME', etc.). Password and profile details can be set later via complete/update profile.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{ratepayer_email}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res.completion.missingSections).to.include('PASSWORD');\n  pm.expect(res.completion.missingSections).to.include('LEGAL_NAME');\n}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Register - Minimal (Phone only, plug-and-play)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers"
+                  ]
+                },
+                "description": "Plug-and-play signup with phone number only. No password required at signup. Missing sections (PASSWORD, EMAIL_ADDRESS, LEGAL_NAME, etc.) are dynamically tracked in completion metrics.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"phone\": \"{{ratepayer_phone}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res.completion.missingSections).to.include('PASSWORD');\n  pm.expect(res.completion.missingSections).to.include('EMAIL_ADDRESS');\n}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Register (full/credentials)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers"
+                  ]
+                },
+                "description": "Register citizen/corporate ratepayer profile with full initial fields. Password and legalName are optional; only email or phone is required. When registering via email, the OTP is dispatched directly to Mailpit (http://localhost:8025). Phone OTPs are prepared for Arkasel gateway. Dynamic completion metrics (completionPercentage, missingSections, isProfileComplete, hasVerifiedKyc, isEligibleForPropertyCreation) track any missing information.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"firstName\": \"{{ratepayer_first_name}}\",\n  \"middleName\": \"{{ratepayer_middle_name}}\",\n  \"lastName\": \"{{ratepayer_last_name}}\",\n  \"email\": \"{{ratepayer_email}}\",\n  \"password\": \"{{ratepayer_password}}\",\n  \"confirmPassword\": \"{{ratepayer_password}}\"\n}",
@@ -60,7 +148,7 @@
               ]
             },
             {
-              "name": "Register with phone number (public)",
+              "name": "Register with phone number and password",
               "request": {
                 "method": "POST",
                 "header": [
@@ -79,10 +167,10 @@
                     "ratepayers"
                   ]
                 },
-                "description": "Register with phone number alone. Verification OTP is routed to Arkasel stub. Missing info (email, address, pinpoint coordinates) can be added after.",
+                "description": "Register with phone number and password. Verification OTP is routed to Arkasel stub. Missing info (email, address, pinpoint coordinates) can be added after.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"number\": \"{{ratepayer_phone}}\",\n  \"password\": \"{{ratepayer_password}}\",\n  \"confirmPassword\": \"{{ratepayer_password}}\"\n}",
+                  "raw": "{\n  \"phone\": \"{{ratepayer_phone}}\",\n  \"password\": \"{{ratepayer_password}}\",\n  \"confirmPassword\": \"{{ratepayer_password}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -224,7 +312,7 @@
               "response": []
             },
             {
-              "name": "Update my own profile (using Bearer token)",
+              "name": "Complete / Update own profile (using Bearer token)",
               "request": {
                 "method": "PATCH",
                 "header": [
@@ -244,10 +332,10 @@
                     "me"
                   ]
                 },
-                "description": "Update any individual field of own profile using the ratepayer Bearer session token. Any field can be updated without having to provide others.",
+                "description": "Complete missing profile sections (such as setting password or legal name) or update any individual field using the ratepayer Bearer session token. Any field can be updated without having to provide others.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"phone\": \"{{ratepayer_phone}}\"\n}",
+                  "raw": "{\n  \"password\": \"{{ratepayer_password}}\",\n  \"confirmPassword\": \"{{ratepayer_password}}\",\n  \"firstName\": \"{{ratepayer_first_name}}\",\n  \"lastName\": \"{{ratepayer_last_name}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -333,7 +421,7 @@
               "response": []
             },
             {
-              "name": "Update profile (granular / any field by ID)",
+              "name": "Complete / Update profile by ID (single unified API)",
               "request": {
                 "method": "PATCH",
                 "header": [
@@ -353,10 +441,10 @@
                     "{{sample_ratepayer_id}}"
                   ]
                 },
-                "description": "Update any individual part of the profile independently without having to send or update other fields. For example, updating address and coordinates auto-detects MMDA zone without requiring name or contact fields. Similarly, updating firstName/middleName/lastName re-assembles legalName without touching address. Authenticated via ratepayer Bearer token, staff token, or ratepayer ID.",
+                "description": "Single unified endpoint for completing missing profile fields or updating existing details. The only required parameters are the ratepayer ID and authorization token. Anything can be updated (password, name, address, coordinates, etc.). Any omitted or updated fields immediately update the completion metrics.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"address\": \"14 Independence Avenue, Accra\",\n  \"latitude\": 5.6037,\n  \"longitude\": -0.187\n}",
+                  "raw": "{\n  \"firstName\": \"Kwame\",\n  \"lastName\": \"Mensah\",\n  \"address\": \"14 Independence Avenue, Accra\",\n  \"latitude\": 5.6037,\n  \"longitude\": -0.187\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -506,7 +594,7 @@
         },
         {
           "name": "My Properties",
-          "description": "property-registry-service + ratepayer-service \u2014 a property a ratepayer registers directly, or claims from one a concession already registered.",
+          "description": "property-registry-service + ratepayer-service \u2014 a property a ratepayer registers directly, updates, or claims from one a concession already registered.",
           "item": [
             {
               "name": "Register a property (self-service)",
@@ -532,6 +620,94 @@
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"code\": \"GH0701-SELF-{{$randomInt}}\",\n  \"propertyName\": \"My Residence\",\n  \"propertyUse\": \"RESIDENTIAL\",\n  \"documents\": [\n    {\n      \"documentType\": \"LAND_TITLE_CERTIFICATE\",\n      \"documentNumber\": \"LTC-00982\",\n      \"mediaUrl\": \"https://storage.croip.gov.gh/claims/ltc-00982.pdf\"\n    }\n  ],\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -0.2355,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5545\n        ]\n      ]\n    ]\n  }\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update my property - metadata only (preserves valuation & status)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{sample_property_id}}"
+                  ]
+                },
+                "description": "Ratepayer updates descriptive metadata (name, description, documents). Since core structural/use fields are unchanged, existing valuation and verification status remain intact.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"propertyName\": \"Sunset Heights Villa\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update my property - structural/usage change (resets to UNASSESSED, decouples valuation)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{sample_property_id}}"
+                  ]
+                },
+                "description": "Ratepayer repurposes property or adds floors / changes physical characteristics. The property is automatically marked UNASSESSED, verificationStatus is reset to PENDING, and active valuations are decoupled from the parcel pending reassessment.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"numberOfFloors\": 3,\n  \"propertyUse\": \"COMMERCIAL\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1034,6 +1210,94 @@
                   ]
                 },
                 "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update property - metadata only (preserves valuation & status)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{sample_property_id}}"
+                  ]
+                },
+                "description": "Concession staff updates property metadata. Non-structural updates preserve valuations and verification status.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"propertyName\": \"Accra Central Commercial Complex\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Update property - structural / usage change (resets to UNASSESSED, decouples valuation)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{sample_property_id}}"
+                  ]
+                },
+                "description": "Concession field staff updates physical structure or property use (e.g. building renovation, repurposing, adding floors). Automatically marks property UNASSESSED, resets verificationStatus to PENDING, and decouples active valuations pending re-assessment.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"numberOfFloors\": 4,\n  \"propertyUse\": \"COMMERCIAL\",\n  \"structuralType\": \"MULTI_STOREY\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
                 "auth": {
                   "type": "bearer",
                   "bearer": [
@@ -2716,6 +2980,50 @@
           "name": "Property Oversight",
           "description": "property-registry-service \u2014 the approval step after a concession agent submits a field verification.",
           "item": [
+            {
+              "name": "Update property parcel (administrative)",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{sample_property_id}}"
+                  ]
+                },
+                "description": "Administrative update of a property parcel. Updating structural/usage fields decouples active valuations and resets property status to UNASSESSED and verification to PENDING.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"numberOfFloors\": 2,\n  \"propertyUse\": \"MIXED_USE\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
             {
               "name": "Review a field verification",
               "request": {
