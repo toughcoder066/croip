@@ -13,7 +13,7 @@
       "item": [
         {
           "name": "Auth & Profile",
-          "description": "ratepayer-service \u2014 citizen plug-and-play signup and profile completion; accepts all ratepayer information at registration with only email/phone and password required, tracking omitted fields in completion metrics.",
+          "description": "ratepayer-service \u2014 citizen plug-and-play signup and profile completion; only registration and login/verify-otp are public; all other endpoints require Bearer authentication.",
           "item": [
             {
               "name": "Register (public)",
@@ -180,7 +180,37 @@
               "response": []
             },
             {
-              "name": "Complete / Update own profile (using Bearer token)",
+              "name": "Get ratepayer profile by id (authenticated)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{sample_ratepayer_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Complete / Update profile (the single update API, authenticated)",
               "request": {
                 "method": "PATCH",
                 "header": [
@@ -190,20 +220,20 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/me",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "me"
+                    "{{sample_ratepayer_id}}"
                   ]
                 },
-                "description": "Complete missing profile sections (such as setting password or legal name) or update any individual field using the ratepayer Bearer session token. Any field can be updated without having to provide others.",
+                "description": "The single unified update and completion API for ratepayers. Authenticated with ratepayer Bearer token. Used to complete missing profile sections (such as names, physical address, coordinates point) or update any field. Requires authorization token; omitted/updated fields immediately update completion metrics.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"password\": \"{{ratepayer_password}}\",\n  \"confirmPassword\": \"{{ratepayer_password}}\",\n  \"firstName\": \"{{ratepayer_first_name}}\",\n  \"lastName\": \"{{ratepayer_last_name}}\"\n}",
+                  "raw": "{\n  \"firstName\": \"{{ratepayer_first_name}}\",\n  \"lastName\": \"{{ratepayer_last_name}}\",\n  \"address\": \"14 Independence Avenue, Accra\",\n  \"latitude\": 5.6037,\n  \"longitude\": -0.187\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -221,7 +251,18 @@
                   ]
                 }
               },
-              "response": []
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {\n  const j = pm.response.json();\n  pm.expect(j).to.have.property('completion');\n}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
             },
             {
               "name": "Verify KYC for own profile (Bearer token)",
@@ -269,71 +310,6 @@
               "response": []
             },
             {
-              "name": "Get a ratepayer profile by id (public)",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
-                  "host": [
-                    "{{ratepayer_url}}"
-                  ],
-                  "path": [
-                    "v1",
-                    "ratepayers",
-                    "{{sample_ratepayer_id}}"
-                  ]
-                },
-                "description": ""
-              },
-              "response": []
-            },
-            {
-              "name": "Complete / Update profile by ID (single unified API)",
-              "request": {
-                "method": "PATCH",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
-                  "host": [
-                    "{{ratepayer_url}}"
-                  ],
-                  "path": [
-                    "v1",
-                    "ratepayers",
-                    "{{sample_ratepayer_id}}"
-                  ]
-                },
-                "description": "Single unified endpoint for completing missing profile fields or updating existing details. The only required parameters are the ratepayer ID and authorization token. Anything can be updated (password, name, address, coordinates, etc.). Any omitted or updated fields immediately update the completion metrics.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"firstName\": \"Kwame\",\n  \"lastName\": \"Mensah\",\n  \"address\": \"14 Independence Avenue, Accra\",\n  \"latitude\": 5.6037,\n  \"longitude\": -0.187\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                }
-              },
-              "response": [],
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "if (pm.response.code === 200) {\n  const j = pm.response.json();\n  pm.expect(j).to.have.property('completion');\n}"
-                    ],
-                    "type": "text/javascript"
-                  }
-                }
-              ]
-            },
-            {
               "name": "Verify KYC - 1. Ghana Card",
               "request": {
                 "method": "POST",
@@ -364,6 +340,16 @@
                       "language": "json"
                     }
                   }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
                 }
               },
               "response": []
@@ -399,6 +385,16 @@
                       "language": "json"
                     }
                   }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
                 }
               },
               "response": []
@@ -434,6 +430,16 @@
                       "language": "json"
                     }
                   }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
                 }
               },
               "response": []
@@ -454,7 +460,17 @@
                     "{{sample_ratepayer_id}}"
                   ]
                 },
-                "description": "Delete an individual ratepayer profile. Strictly rejected with 400 Bad Request if the ratepayer has linked properties. To delete a ratepayer, first sever all property links or delete unbilled properties."
+                "description": "Delete an individual ratepayer profile. Strictly rejected with 400 Bad Request if the ratepayer has linked properties. To delete a ratepayer, first sever all property links or delete unbilled properties.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
               },
               "response": []
             }
@@ -596,7 +612,7 @@
               "response": []
             },
             {
-              "name": "Claim an existing property (public)",
+              "name": "Claim an existing property (authenticated)",
               "request": {
                 "method": "POST",
                 "header": [
@@ -625,12 +641,22 @@
                       "language": "json"
                     }
                   }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
                 }
               },
               "response": []
             },
             {
-              "name": "Claim a property by code (public)",
+              "name": "Claim a property by code (authenticated)",
               "request": {
                 "method": "POST",
                 "header": [
@@ -660,12 +686,22 @@
                       "language": "json"
                     }
                   }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
                 }
               },
               "response": []
             },
             {
-              "name": "List my linked properties (public)",
+              "name": "List my linked properties (authenticated)",
               "request": {
                 "method": "GET",
                 "header": [],
@@ -681,7 +717,17 @@
                     "properties"
                   ]
                 },
-                "description": ""
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
               },
               "response": []
             },
@@ -703,7 +749,17 @@
                     "{{sample_property_id}}"
                   ]
                 },
-                "description": "Sever the ownership or tenancy link between a ratepayer and an individual property parcel without deleting the property."
+                "description": "Sever the ownership or tenancy link between a ratepayer and an individual property parcel without deleting the property.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
               },
               "response": []
             }

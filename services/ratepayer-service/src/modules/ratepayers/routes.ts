@@ -1,4 +1,4 @@
-import type { FastifyPluginAsync } from 'fastify';
+import type { FastifyPluginAsync, FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { verifyRatepayerToken } from '../../lib/ratepayer-jwt.js';
 import {
   ratepayerService,
@@ -27,13 +27,54 @@ import {
   createVerificationBodySchema
 } from './schemas.js';
 
+async function authenticateRatepayerOrStaff(
+  app: FastifyInstance,
+  request: FastifyRequest<{ Params?: { id?: string; code?: string } }>,
+  reply: FastifyReply
+): Promise<string> {
+  if (app.config.AUTH_MODE === 'disabled') {
+    return request.params?.id || 'anonymous';
+  }
+
+  const authorization = request.headers.authorization;
+  if (!authorization?.startsWith('Bearer ')) {
+    throw app.httpErrors.unauthorized('Authorization bearer token is required');
+  }
+
+  const token = authorization.slice(7);
+  let isRatepayerAuth = false;
+  try {
+    const claims = await verifyRatepayerToken(token, app.config.RATEPAYER_JWT_SECRET);
+    isRatepayerAuth = true;
+    const targetId = request.params?.id;
+    if (targetId && targetId !== 'me' && claims.sub !== targetId && claims.code !== targetId) {
+      const rp = await app.prisma.ratepayer.findFirst({
+        where: { OR: [{ id: targetId }, { code: targetId }] },
+        select: { id: true, code: true }
+      });
+      if (!rp || (rp.id !== claims.sub && rp.code !== claims.code)) {
+        throw app.httpErrors.forbidden('You are not authorized to access another ratepayer\'s profile or resources');
+      }
+    }
+    return targetId === 'me' || !targetId ? claims.sub : targetId;
+  } catch (err: any) {
+    if (err.statusCode === 403) throw err;
+    if (!isRatepayerAuth) {
+      await app.authenticate(request as any, reply);
+      return request.params?.id || (request as any).user?.id || 'staff';
+    } else {
+      throw app.httpErrors.unauthorized('Invalid or expired authorization token');
+    }
+  }
+}
+
 export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
   const service = ratepayerService(app);
 
   app.post<{ Body: Omit<RegisterRatepayerInput, 'actorId'> }>('/ratepayers', {
     schema: {
       tags: ['Ratepayer Self-Service'],
-      summary: 'Register citizen/corporate ratepayer profile for Web Portal or Mobile App',
+      summary: 'Register citizen/corporate ratepayer profile for Web Portal or Mobile App (single public registration API)',
       body: registerRatepayerBodySchema,
       response: { 201: ratepayerResponseSchema, 400: problemSchema }
     }
@@ -67,18 +108,6 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
     return service.verifyOtp(request.body);
   });
 
-  app.patch<{ Body: UpdateProfileInput }>('/ratepayers/me', {
-    preHandler: app.authenticateRatepayer,
-    schema: {
-      tags: ['Ratepayer Self-Service'],
-      summary: 'Complete or update the signed-in ratepayer\'s own profile',
-      body: updateProfileBodySchema,
-      response: { 200: ratepayerResponseSchema, 401: problemSchema }
-    }
-  }, async (request) => {
-    return service.updateProfile(request.ratepayerAuth.sub, request.body);
-  });
-
   app.post<{ Body: LinkOwnPropertyInput }>('/ratepayers/me/properties/link', {
     preHandler: app.authenticateRatepayer,
     schema: {
@@ -96,7 +125,7 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
     preHandler: app.authenticateRatepayer,
     schema: {
       tags: ['Ratepayer Self-Service'],
-      summary: 'Get the signed-in ratepayer\'s own profile',
+      summary: 'Get the signed-in ratepayer\'s own profile (authenticated)',
       response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema }
     }
   }, async (request) => {
@@ -109,7 +138,7 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
       preHandler: app.authenticateRatepayer,
       schema: {
         tags: ['Ratepayer Self-Service'],
-        summary: 'Submit or dummy-verify KYC for own authenticated ratepayer profile (GHANA_CARD, PASSPORT, DRIVERS_LICENSE; archives previous)',
+        summary: 'Submit or dummy-verify KYC for own authenticated ratepayer profile (authenticated)',
         body: createVerificationBodySchema,
         response: { 201: verificationResponseSchema, 400: problemSchema, 401: problemSchema }
       }
@@ -123,82 +152,58 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { id: string } }>('/ratepayers/:id', {
     schema: {
       tags: ['Ratepayer Self-Service'],
-      summary: 'Get ratepayer KYC profile, verification status, and linked properties',
+      summary: 'Get ratepayer KYC profile, verification status, and linked properties (authenticated)',
       params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
-      // additionalProperties:true is required here: a bare { type: 'object' } with no declared
-      // properties tells fast-json-stringify there is nothing to serialize, and it emits {}
-      // regardless of what the handler actually returns.
-      response: { 200: { type: 'object', additionalProperties: true }, 404: problemSchema }
+      response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema, 404: problemSchema }
     }
-  }, async (request) => {
-    return service.getRatepayer(request.params.id);
+  }, async (request, reply) => {
+    const ratepayerId = await authenticateRatepayerOrStaff(app, request, reply);
+    return service.getRatepayer(ratepayerId);
   });
 
+  // The single unified PATCH API for ratepayers: used to complete missing fields or update profile
   app.patch<{ Params: { id: string }; Body: UpdateProfileInput }>('/ratepayers/:id', {
     schema: {
       tags: ['Ratepayer Self-Service'],
-      summary: 'Complete or update ratepayer profile (unified API for profile completion and profile updates)',
+      summary: 'Complete or update ratepayer profile (single unified PATCH API, authenticated)',
       params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
       body: updateProfileBodySchema,
       response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema, 404: problemSchema }
     }
   }, async (request, reply) => {
-    const authorization = request.headers.authorization;
-    if (app.config.AUTH_MODE !== 'disabled') {
-      if (!authorization?.startsWith('Bearer ')) {
-        throw app.httpErrors.unauthorized('Authorization bearer token is required');
-      }
-      const token = authorization.slice(7);
-      let isRatepayerAuth = false;
-      try {
-        const claims = await verifyRatepayerToken(token, app.config.RATEPAYER_JWT_SECRET);
-        isRatepayerAuth = true;
-        // Verify that this token belongs to the ratepayer being updated
-        if (claims.sub !== request.params.id && claims.code !== request.params.id) {
-          const rp = await app.prisma.ratepayer.findFirst({
-            where: { OR: [{ id: request.params.id }, { code: request.params.id }] },
-            select: { id: true, code: true }
-          });
-          if (!rp || (rp.id !== claims.sub && rp.code !== claims.code)) {
-            throw app.httpErrors.forbidden('You are not authorized to update another ratepayer\'s profile');
-          }
-        }
-      } catch (err: any) {
-        if (err.statusCode === 403) throw err;
-        if (!isRatepayerAuth) {
-          // Attempt staff authentication
-          await app.authenticate(request, reply);
-        } else {
-          throw app.httpErrors.unauthorized('Invalid or expired ratepayer authorization token');
-        }
-      }
-    }
-    return service.updateProfile(request.params.id, request.body);
+    const ratepayerId = await authenticateRatepayerOrStaff(app, request, reply);
+    return service.updateProfile(ratepayerId, request.body);
   });
 
   app.post<{ Body: ClaimPropertyInput }>('/ratepayers/claims', {
     schema: {
       tags: ['Ratepayer Self-Service'],
-      summary: 'Claim ownership or tenancy of a property unit in the Unified Ratepayer Portal',
+      summary: 'Claim ownership or tenancy of a property unit in the Unified Ratepayer Portal (authenticated)',
       body: claimPropertyBodySchema,
-      response: { 201: { type: 'object', additionalProperties: true } }
+      response: { 201: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema }
     }
   }, async (request, reply) => {
-    const claim = await service.claimProperty(request.body);
+    const ratepayerId = await authenticateRatepayerOrStaff(app, request as any, reply);
+    const claim = await service.claimProperty({
+      ...request.body,
+      ratepayerId: request.body.ratepayerId || ratepayerId
+    });
     return reply.code(201).send(claim);
   });
 
   app.post<{ Params: { code: string }; Body: ClaimPropertyInput }>('/properties/:code/claims', {
     schema: {
       tags: ['Ratepayer Self-Service'],
-      summary: 'Ratepayer claims ownership of a concession-registered property by attaching ownership proof',
+      summary: 'Ratepayer claims ownership of a concession-registered property by attaching ownership proof (authenticated)',
       params: { type: 'object', required: ['code'], properties: { code: { type: 'string' } } },
       body: claimPropertyBodySchema,
-      response: { 201: { type: 'object', additionalProperties: true } }
+      response: { 201: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema }
     }
   }, async (request, reply) => {
+    const ratepayerId = await authenticateRatepayerOrStaff(app, request as any, reply);
     const claim = await service.claimProperty({
       ...request.body,
+      ratepayerId: request.body.ratepayerId || ratepayerId,
       propertyId: request.body?.propertyId || request.params.code
     });
     return reply.code(201).send(claim);
@@ -207,12 +212,13 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
   app.get<{ Params: { id: string } }>('/ratepayers/:id/properties', {
     schema: {
       tags: ['Ratepayer Self-Service'],
-      summary: 'List all properties linked to this ratepayer across any MMDA in Ghana',
-      params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
-      response: { 200: { type: 'array', items: { type: 'object', additionalProperties: true } } }
+      summary: 'List all properties linked to this ratepayer across any MMDA in Ghana (authenticated)',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+      response: { 200: { type: 'array', items: { type: 'object', additionalProperties: true } }, 401: problemSchema, 403: problemSchema }
     }
-  }, async (request) => {
-    return service.getMyProperties(request.params.id);
+  }, async (request, reply) => {
+    const ratepayerId = await authenticateRatepayerOrStaff(app, request, reply);
+    return service.getMyProperties(ratepayerId);
   });
 
   app.get('/ratepayers', {
@@ -281,18 +287,19 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
     {
       schema: {
         tags: ['Ratepayer Self-Service', 'Ratepayer Admin'],
-        summary: 'Submit or dummy-verify KYC for a ratepayer',
+        summary: 'Submit or dummy-verify KYC for a ratepayer (authenticated)',
         params: {
           type: 'object',
           required: ['id'],
-          properties: { id: { type: 'string', format: 'uuid' } }
+          properties: { id: { type: 'string' } }
         },
         body: createVerificationBodySchema,
         response: { 201: verificationResponseSchema, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
       }
     },
     async (request, reply) => {
-      const verification = await service.verifyKyc(request.params.id, request.body ?? {});
+      const ratepayerId = await authenticateRatepayerOrStaff(app, request, reply);
+      const verification = await service.verifyKyc(ratepayerId, request.body ?? {});
       return reply.code(201).send(verification);
     }
   );
@@ -302,17 +309,18 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
     {
       schema: {
         tags: ['Ratepayer Admin'],
-        summary: 'Delete individual ratepayer profile (rejected if linked properties exist)',
+        summary: 'Delete individual ratepayer profile (rejected if linked properties exist, authenticated)',
         params: {
           type: 'object',
           required: ['id'],
-          properties: { id: { type: 'string', format: 'uuid' } }
+          properties: { id: { type: 'string' } }
         },
         response: { 200: { type: 'object', additionalProperties: true }, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
       }
     },
-    async (request) => {
-      return service.deleteRatepayer(request.params.id);
+    async (request, reply) => {
+      const ratepayerId = await authenticateRatepayerOrStaff(app, request, reply);
+      return service.deleteRatepayer(ratepayerId);
     }
   );
 
@@ -321,17 +329,21 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
     {
       schema: {
         tags: ['Ratepayer Admin'],
-        summary: 'Sever link between a ratepayer and an individual property',
+        summary: 'Sever link between a ratepayer and an individual property (authenticated)',
         params: {
           type: 'object',
           required: ['id', 'propertyId'],
-          properties: { id: { type: 'string', format: 'uuid' }, propertyId: { type: 'string', format: 'uuid' } }
+          properties: {
+            id: { type: 'string' },
+            propertyId: { type: 'string', format: 'uuid' }
+          }
         },
         response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema, 404: problemSchema }
       }
     },
-    async (request) => {
-      return service.severPropertyLink(request.params.id, request.params.propertyId);
+    async (request, reply) => {
+      const ratepayerId = await authenticateRatepayerOrStaff(app, request, reply);
+      return service.severPropertyLink(ratepayerId, request.params.propertyId);
     }
   );
 

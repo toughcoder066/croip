@@ -65,13 +65,13 @@ rp_register_item["event"] = [{"listen": "test", "script": {"exec": [
     "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res).to.have.property('completion');\n  pm.expect(res.completion).to.have.property('completionPercentage');\n  pm.expect(res.completion).to.have.property('missingSections');\n}"
 ], "type": "text/javascript"}}]
 
-rp_update_profile_item = item("Complete / Update profile by ID (single unified API)", "PATCH", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}", body={
-    "firstName": "Kwame",
-    "lastName": "Mensah",
+rp_update_profile_item = item("Complete / Update profile (the single update API, authenticated)", "PATCH", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}", auth="ratepayer", body={
+    "firstName": "{{ratepayer_first_name}}",
+    "lastName": "{{ratepayer_last_name}}",
     "address": "14 Independence Avenue, Accra",
     "latitude": 5.6037,
     "longitude": -0.1870
-}, description="Single unified endpoint for completing missing profile fields or updating existing details. The only required parameters are the ratepayer ID and authorization token. Anything can be updated (password, name, address, coordinates, etc.). Any omitted or updated fields immediately update the completion metrics.")
+}, description="The single unified update and completion API for ratepayers. Authenticated with ratepayer Bearer token. Used to complete missing profile sections (such as names, physical address, coordinates point) or update any field. Requires authorization token; omitted/updated fields immediately update completion metrics.")
 rp_update_profile_item["event"] = [{"listen": "test", "script": {"exec": [
     "if (pm.response.code === 200) {\n  const j = pm.response.json();\n  pm.expect(j).to.have.property('completion');\n}"
 ], "type": "text/javascript"}}]
@@ -96,20 +96,14 @@ ratepayer_folder = folder("1. Ratepayer", [
         rp_login_item,
         rp_verify_item,
         item("Get my own profile", "GET", "ratepayer_url", "/v1/ratepayers/me", auth="ratepayer"),
-        item("Complete / Update own profile (using Bearer token)", "PATCH", "ratepayer_url", "/v1/ratepayers/me", auth="ratepayer", body={
-            "password": "{{ratepayer_password}}",
-            "confirmPassword": "{{ratepayer_password}}",
-            "firstName": "{{ratepayer_first_name}}",
-            "lastName": "{{ratepayer_last_name}}"
-        }, description="Complete missing profile sections (such as setting password or legal name) or update any individual field using the ratepayer Bearer session token. Any field can be updated without having to provide others."),
-        item("Verify KYC for own profile (Bearer token)", "POST", "ratepayer_url", "/v1/ratepayers/me/verifications", auth="ratepayer", body={"provider": "GHANA_CARD", "autoVerify": True}, description="Verify KYC on own signed-in account using Bearer token. Supported providers: GHANA_CARD, PASSPORT, DRIVERS_LICENSE. Choosing a new provider archives previous verifications for audit trail."),
-        item("Get a ratepayer profile by id (public)", "GET", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}"),
+        item("Get ratepayer profile by id (authenticated)", "GET", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}", auth="ratepayer"),
         rp_update_profile_item,
-        item("Verify KYC - 1. Ghana Card", "POST", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/verifications", body={"provider": "GHANA_CARD", "autoVerify": True}, description="Verify ratepayer using Ghana Card (NIA). Format: GHA-XXXXXXXXX-X. Choosing a new provider archives any previous active verification."),
-        item("Verify KYC - 2. Passport (archives previous)", "POST", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/verifications", body={"provider": "PASSPORT", "autoVerify": True}, description="Verify ratepayer using Passport. Format: GXXXXXXXX. Archives previous Ghana Card verification for audit trail."),
-        item("Verify KYC - 3. Driver's License (archives previous)", "POST", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/verifications", body={"provider": "DRIVERS_LICENSE", "autoVerify": True}, description="Verify ratepayer using Driver's License (DVLA). Format: DL-XXXXXXXX-X. Archives previous Passport verification for audit trail."),
-        item("Delete ratepayer profile", "DELETE", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}", description="Delete an individual ratepayer profile. Strictly rejected with 400 Bad Request if the ratepayer has linked properties. To delete a ratepayer, first sever all property links or delete unbilled properties."),
-    ], "ratepayer-service — citizen plug-and-play signup and profile completion; accepts all ratepayer information at registration with only email/phone and password required, tracking omitted fields in completion metrics."),
+        item("Verify KYC for own profile (Bearer token)", "POST", "ratepayer_url", "/v1/ratepayers/me/verifications", auth="ratepayer", body={"provider": "GHANA_CARD", "autoVerify": True}, description="Verify KYC on own signed-in account using Bearer token. Supported providers: GHANA_CARD, PASSPORT, DRIVERS_LICENSE. Choosing a new provider archives previous verifications for audit trail."),
+        item("Verify KYC - 1. Ghana Card", "POST", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/verifications", auth="ratepayer", body={"provider": "GHANA_CARD", "autoVerify": True}, description="Verify ratepayer using Ghana Card (NIA). Format: GHA-XXXXXXXXX-X. Choosing a new provider archives any previous active verification."),
+        item("Verify KYC - 2. Passport (archives previous)", "POST", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/verifications", auth="ratepayer", body={"provider": "PASSPORT", "autoVerify": True}, description="Verify ratepayer using Passport. Format: GXXXXXXXX. Archives previous Ghana Card verification for audit trail."),
+        item("Verify KYC - 3. Driver's License (archives previous)", "POST", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/verifications", auth="ratepayer", body={"provider": "DRIVERS_LICENSE", "autoVerify": True}, description="Verify ratepayer using Driver's License (DVLA). Format: DL-XXXXXXXX-X. Archives previous Passport verification for audit trail."),
+        item("Delete ratepayer profile", "DELETE", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}", auth="ratepayer", description="Delete an individual ratepayer profile. Strictly rejected with 400 Bad Request if the ratepayer has linked properties. To delete a ratepayer, first sever all property links or delete unbilled properties."),
+    ], "ratepayer-service — citizen plug-and-play signup and profile completion; only registration and login/verify-otp are public; all other endpoints require Bearer authentication."),
     folder("My Properties", [
         item("Register a property (self-service)", "POST", "property_registry_url", "/v1/properties", auth="ratepayer", body={
             "code": "GH0701-SELF-{{$randomInt}}", "propertyName": "My Residence", "propertyUse": "RESIDENTIAL",
@@ -123,16 +117,16 @@ ratepayer_folder = folder("1. Ratepayer", [
             "numberOfFloors": 3,
             "propertyUse": "COMMERCIAL"
         }, description="Ratepayer repurposes property or adds floors / changes physical characteristics. The property is automatically marked UNASSESSED, verificationStatus is reset to PENDING, and active valuations are decoupled from the parcel pending reassessment."),
-        item("Claim an existing property (public)", "POST", "ratepayer_url", "/v1/ratepayers/claims", body={
+        item("Claim an existing property (authenticated)", "POST", "ratepayer_url", "/v1/ratepayers/claims", auth="ratepayer", body={
             "ratepayerId": "{{sample_ratepayer_id}}", "propertyId": "{{sample_property_id}}",
             "ownershipType": "OWNER", "documents": [{"documentType": "INDENTURE", "mediaUrl": "https://storage.croip.gov.gh/claims/indenture.pdf"}]
         }),
-        item("Claim a property by code (public)", "POST", "ratepayer_url", "/v1/properties/{{sample_property_code}}/claims", body={
+        item("Claim a property by code (authenticated)", "POST", "ratepayer_url", "/v1/properties/{{sample_property_code}}/claims", auth="ratepayer", body={
             "propertyId": "{{sample_property_id}}",
             "documents": [{"documentType": "INDENTURE", "mediaUrl": "https://storage.croip.gov.gh/claims/indenture.pdf"}]
         }),
-        item("List my linked properties (public)", "GET", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/properties"),
-        item("Sever link to a property", "DELETE", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/properties/{{sample_property_id}}", description="Sever the ownership or tenancy link between a ratepayer and an individual property parcel without deleting the property."),
+        item("List my linked properties (authenticated)", "GET", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/properties", auth="ratepayer"),
+        item("Sever link to a property", "DELETE", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/properties/{{sample_property_id}}", auth="ratepayer", description="Sever the ownership or tenancy link between a ratepayer and an individual property parcel without deleting the property."),
     ], "property-registry-service + ratepayer-service — a property a ratepayer registers directly, updates, or claims from one a concession already registered."),
     folder("My Bills & Disputes", [
         item("My own bills", "GET", "billing_payments_url", "/v1/me/bills", auth="ratepayer"),
