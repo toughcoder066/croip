@@ -357,7 +357,11 @@ export function ratepayerService(app: FastifyInstance) {
         throw new BadRequestError('Either an email address or phone number is required to register as a ratepayer.');
       }
 
-      if (input.password && input.confirmPassword && input.password !== input.confirmPassword) {
+      if (!input.password) {
+        throw new BadRequestError('Password is required to register as a ratepayer.');
+      }
+
+      if (input.confirmPassword && input.password !== input.confirmPassword) {
         throw new BadRequestError('Passwords do not match. Please verify and try again.');
       }
 

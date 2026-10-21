@@ -49,30 +49,20 @@ collection = {
 # ======================================================================
 # 1. RATEPAYER
 # ======================================================================
-rp_register_item = item("Register (full/credentials)", "POST", "ratepayer_url", "/v1/ratepayers", body={
+rp_register_item = item("Register (public)", "POST", "ratepayer_url", "/v1/ratepayers", body={
+    "email": "{{ratepayer_email}}",
+    "phone": "{{ratepayer_phone}}",
+    "password": "{{ratepayer_password}}",
+    "confirmPassword": "{{ratepayer_password}}",
     "firstName": "{{ratepayer_first_name}}",
     "middleName": "{{ratepayer_middle_name}}",
     "lastName": "{{ratepayer_last_name}}",
-    "email": "{{ratepayer_email}}",
-    "password": "{{ratepayer_password}}",
-    "confirmPassword": "{{ratepayer_password}}"
-}, description="Register citizen/corporate ratepayer profile with full initial fields. Password and legalName are optional; only email or phone is required. When registering via email, the OTP is dispatched directly to Mailpit (http://localhost:8025). Phone OTPs are prepared for Arkasel gateway. Dynamic completion metrics (completionPercentage, missingSections, isProfileComplete, hasVerifiedKyc, isEligibleForPropertyCreation) track any missing information.")
+    "address": "14 Independence Avenue, Accra",
+    "latitude": 5.6037,
+    "longitude": -0.1870
+}, description="Single public registration endpoint that accepts all ratepayer profile fields. Only email (or phone number) and password (with confirmPassword) are strictly required. Either email or phone must be present. Any information not inserted at registration will be dynamically added to the completion metrics (missingSections). Profile details can be completed or updated at any time using the unified complete/update profile API.")
 rp_register_item["event"] = [{"listen": "test", "script": {"exec": [
     "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res).to.have.property('completion');\n  pm.expect(res.completion).to.have.property('completionPercentage');\n}"
-], "type": "text/javascript"}}]
-
-rp_register_minimal_email_item = item("Register - Minimal (Email only, plug-and-play)", "POST", "ratepayer_url", "/v1/ratepayers", body={
-    "email": "{{ratepayer_email}}"
-}, description="Plug-and-play signup: all that is required is either an email address or a phone number. No password or legal name is required at registration. Any omitted fields are dynamically reflected in completion metrics (completion.missingSections includes 'PASSWORD', 'LEGAL_NAME', etc.). Password and profile details can be set later via complete/update profile.")
-rp_register_minimal_email_item["event"] = [{"listen": "test", "script": {"exec": [
-    "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res.completion.missingSections).to.include('PASSWORD');\n  pm.expect(res.completion.missingSections).to.include('LEGAL_NAME');\n}"
-], "type": "text/javascript"}}]
-
-rp_register_minimal_phone_item = item("Register - Minimal (Phone only, plug-and-play)", "POST", "ratepayer_url", "/v1/ratepayers", body={
-    "phone": "{{ratepayer_phone}}"
-}, description="Plug-and-play signup with phone number only. No password required at signup. Missing sections (PASSWORD, EMAIL_ADDRESS, LEGAL_NAME, etc.) are dynamically tracked in completion metrics.")
-rp_register_minimal_phone_item["event"] = [{"listen": "test", "script": {"exec": [
-    "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res.completion.missingSections).to.include('PASSWORD');\n  pm.expect(res.completion.missingSections).to.include('EMAIL_ADDRESS');\n}"
 ], "type": "text/javascript"}}]
 
 rp_update_profile_item = item("Complete / Update profile by ID (single unified API)", "PATCH", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}", body={
@@ -100,21 +90,9 @@ rp_verify_item["event"] = [{"listen": "test", "script": {"exec": [
     "if (pm.response.code === 200) { pm.environment.set('ratepayer_access_token', pm.response.json().accessToken); }"
 ], "type": "text/javascript"}}]
 
-rp_register_phone_item = item("Register with phone number and password", "POST", "ratepayer_url", "/v1/ratepayers", body={
-    "phone": "{{ratepayer_phone}}",
-    "password": "{{ratepayer_password}}",
-    "confirmPassword": "{{ratepayer_password}}"
-}, description="Register with phone number and password. Verification OTP is routed to Arkasel stub. Missing info (email, address, pinpoint coordinates) can be added after.")
-rp_register_phone_item["event"] = [{"listen": "test", "script": {"exec": [
-    "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res.completion.missingSections).to.include('EMAIL_ADDRESS');\n}"
-], "type": "text/javascript"}}]
-
 ratepayer_folder = folder("1. Ratepayer", [
     folder("Auth & Profile", [
-        rp_register_minimal_email_item,
-        rp_register_minimal_phone_item,
         rp_register_item,
-        rp_register_phone_item,
         rp_login_item,
         rp_verify_item,
         item("Get my own profile", "GET", "ratepayer_url", "/v1/ratepayers/me", auth="ratepayer"),
@@ -131,7 +109,7 @@ ratepayer_folder = folder("1. Ratepayer", [
         item("Verify KYC - 2. Passport (archives previous)", "POST", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/verifications", body={"provider": "PASSPORT", "autoVerify": True}, description="Verify ratepayer using Passport. Format: GXXXXXXXX. Archives previous Ghana Card verification for audit trail."),
         item("Verify KYC - 3. Driver's License (archives previous)", "POST", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}/verifications", body={"provider": "DRIVERS_LICENSE", "autoVerify": True}, description="Verify ratepayer using Driver's License (DVLA). Format: DL-XXXXXXXX-X. Archives previous Passport verification for audit trail."),
         item("Delete ratepayer profile", "DELETE", "ratepayer_url", "/v1/ratepayers/{{sample_ratepayer_id}}", description="Delete an individual ratepayer profile. Strictly rejected with 400 Bad Request if the ratepayer has linked properties. To delete a ratepayer, first sever all property links or delete unbilled properties."),
-    ], "ratepayer-service — citizen plug-and-play signup and profile completion; requires only phone or email to register, with all other fields completed incrementally."),
+    ], "ratepayer-service — citizen plug-and-play signup and profile completion; accepts all ratepayer information at registration with only email/phone and password required, tracking omitted fields in completion metrics."),
     folder("My Properties", [
         item("Register a property (self-service)", "POST", "property_registry_url", "/v1/properties", auth="ratepayer", body={
             "code": "GH0701-SELF-{{$randomInt}}", "propertyName": "My Residence", "propertyUse": "RESIDENTIAL",

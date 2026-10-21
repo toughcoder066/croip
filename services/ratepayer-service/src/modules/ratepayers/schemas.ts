@@ -57,6 +57,7 @@ export const ratepayerResponseSchema = {
 
 export const registerRatepayerBodySchema = {
   type: 'object',
+  required: ['password'],
   properties: {
     ratepayerType: { type: 'string', enum: ['INDIVIDUAL', 'ORGANIZATION'], default: 'INDIVIDUAL' },
     firstName: { type: 'string', maxLength: 100 },
@@ -67,7 +68,7 @@ export const registerRatepayerBodySchema = {
     number: { type: 'string', minLength: 7, maxLength: 30, description: 'Alias for phone number' },
     identifier: { type: 'string', description: 'Email address or phone number' },
     email: { type: 'string', format: 'email' },
-    password: { type: 'string', minLength: 6, maxLength: 100, description: 'Optional login password for self-service login' },
+    password: { type: 'string', minLength: 6, maxLength: 100, description: 'Required login password for self-service login' },
     confirmPassword: { type: 'string', minLength: 6, maxLength: 100 },
     address: { type: 'string', maxLength: 255 },
     regionId: { type: 'string', format: 'uuid' },
