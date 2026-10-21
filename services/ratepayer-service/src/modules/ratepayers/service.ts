@@ -395,25 +395,17 @@ export function ratepayerService(app: FastifyInstance) {
       const otpCode = generateOtpCode();
 
       const created = await app.prisma.$transaction(async (tx) => {
-        const latest = await tx.ratepayer.findFirst({
-          orderBy: { createdAt: 'desc' },
-          select: { code: true }
-        });
-        let nextSeq = 1;
-        if (latest?.code) {
-          const match = latest.code.match(/RP-\d+-(\d+)/);
-          if (match && match[1]) {
-            nextSeq = parseInt(match[1], 10) + 1;
-          }
-        }
-        let code = `RP-2026-${String(nextSeq).padStart(5, '0')}`;
+        const year = new Date().getFullYear();
+        let id = crypto.randomUUID();
+        let code = `RP-${year}-${id.slice(0, 4).toUpperCase()}`;
         while (await tx.ratepayer.findUnique({ where: { code } })) {
-          nextSeq++;
-          code = `RP-2026-${String(nextSeq).padStart(5, '0')}`;
+          id = crypto.randomUUID();
+          code = `RP-${year}-${id.slice(0, 4).toUpperCase()}`;
         }
 
         const ratepayer = await tx.ratepayer.create({
           data: {
+            id,
             code,
             ratepayerType: input.ratepayerType ?? 'INDIVIDUAL',
             firstName: names.firstName ?? null,

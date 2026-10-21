@@ -292,62 +292,36 @@ async function assertNoConflictingOverlap(
 }
 
 /**
- * Generates the next sequential property code for an MMDA:
- * - Ratepayer: ${assemblyCode}-SELF-XXXX (e.g. GH0701-SELF-0004)
- * - Concession: ${assemblyCode}-XXXX (e.g. GH0701-0003)
+/**
+ * Auto-generates property ID (UUID) and canonical property code in the format:
+ * PROP-[year of addition]-[the first four characters of the ID which is UUID]
+ * e.g. PROP-2026-B3D4
  */
-async function generatePropertyCode(
+async function generatePropertyIdAndCode(
   tx: any,
-  assemblyCode: string,
-  isRatepayer: boolean,
   reservedCodes?: Set<string>
-): Promise<string> {
-  const prefix = isRatepayer ? `${assemblyCode}-SELF-` : `${assemblyCode}-`;
-
-  const existingProperties = await tx.property.findMany({
-    where: {
-      code: {
-        startsWith: prefix
-      }
-    },
-    select: {
-      code: true
-    }
-  });
-
-  let maxSeq = 0;
-  for (const p of existingProperties) {
-    if (!isRatepayer && p.code.startsWith(`${assemblyCode}-SELF-`)) {
-      continue;
-    }
-    const suffix = p.code.slice(prefix.length);
-    if (/^\d{4}$/.test(suffix)) {
-      const num = parseInt(suffix, 10);
-      if (num > maxSeq) {
-        maxSeq = num;
-      }
-    }
-  }
-
-  let candidateSeq = maxSeq + 1;
+): Promise<{ id: string; code: string }> {
+  const year = new Date().getFullYear();
   while (true) {
-    const candidateCode = `${prefix}${String(candidateSeq).padStart(4, '0')}`;
-    if (reservedCodes && reservedCodes.has(candidateCode)) {
-      candidateSeq++;
+    const id = crypto.randomUUID();
+    const shortCode = id.slice(0, 4).toUpperCase();
+    const code = `PROP-${year}-${shortCode}`;
+
+    if (reservedCodes && reservedCodes.has(code)) {
       continue;
     }
 
     const existing = await tx.property.findUnique({
-      where: { code: candidateCode },
+      where: { code },
       select: { id: true }
     });
+
     if (!existing) {
       if (reservedCodes) {
-        reservedCodes.add(candidateCode);
+        reservedCodes.add(code);
       }
-      return candidateCode;
+      return { id, code };
     }
-    candidateSeq++;
   }
 }
 
@@ -425,11 +399,14 @@ export function propertyService(app: FastifyInstance) {
             propertyCode: input.code
           });
 
-          const code = input.code?.trim() || (await generatePropertyCode(tx, matchedAssembly.code, isRatepayerCreation));
+          const { id, code } = input.code?.trim()
+            ? { id: crypto.randomUUID(), code: input.code.trim() }
+            : await generatePropertyIdAndCode(tx);
           const effectivePropertyStatus = isRatepayerCreation ? 'UNASSESSED' : (input.propertyStatus || 'UNASSESSED');
 
           const property = await tx.property.create({
             data: {
+              id,
               code,
               accountNumber: input.accountNumber ?? null,
               propertyName: input.propertyName ?? null,
@@ -593,10 +570,13 @@ export function propertyService(app: FastifyInstance) {
               }
             }
 
-            const code = item.code?.trim() || (await generatePropertyCode(tx, assembly.code, false, reservedCodes));
+            const { id, code } = item.code?.trim()
+              ? { id: crypto.randomUUID(), code: item.code.trim() }
+              : await generatePropertyIdAndCode(tx, reservedCodes);
 
             const property = await tx.property.create({
               data: {
+                id,
                 code,
                 accountNumber: item.accountNumber ?? null,
                 propertyName: item.propertyName ?? null,

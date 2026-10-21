@@ -61,6 +61,9 @@ test('issuing and reading back a bill works end-to-end against the real database
     const bill = issueResponse.json();
     assert.equal(bill.paymentStatus, 'UNPAID');
     assert.equal(bill.ratepayerId, ratepayerId);
+    const billYear = new Date().getFullYear().toString();
+    const expectedBillNumber = `BILL-${billYear}-${bill.id.slice(0, 4).toUpperCase()}`;
+    assert.equal(bill.billNumber, expectedBillNumber);
 
     const getResponse = await app.inject({
       method: 'GET',

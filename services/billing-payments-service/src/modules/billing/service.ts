@@ -53,8 +53,11 @@ export interface CreatePaymentLinkInput {
   gatewayLinkRef: string;
 }
 
-function generateBillNumber(): string {
-  return `BILL-${randomUUID().split('-')[0]!.toUpperCase()}`;
+function generateBillIdAndNumber(): { id: string; billNumber: string } {
+  const id = randomUUID();
+  const year = new Date().getFullYear();
+  const shortCode = id.slice(0, 4).toUpperCase();
+  return { id, billNumber: `BILL-${year}-${shortCode}` };
 }
 
 export function billingService(app: FastifyInstance) {
@@ -66,9 +69,11 @@ export function billingService(app: FastifyInstance) {
         // billNumber is generated, not caller-supplied; retry on the extremely unlikely collision.
         for (;;) {
           try {
+            const { id, billNumber } = generateBillIdAndNumber();
             bill = await tx.propertyBill.create({
               data: {
-                billNumber: generateBillNumber(),
+                id,
+                billNumber,
                 propertyId: input.propertyId,
                 ratepayerId: input.ratepayerId,
                 concessionId: input.concessionId,
