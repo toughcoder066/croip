@@ -12,13 +12,17 @@ import {
   ExternalLinkIcon
 } from 'lucide-react'
 
+import { toast } from 'sonner'
+
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { Spinner } from '@/components/ui/spinner'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { BatchActionBar } from '@/components/data-table/batch-action-bar'
 
 export interface ValuationRollRecord {
   id: string
@@ -36,6 +40,7 @@ export interface ValuationRollRecord {
 interface ValuationRollsTableProps {
   data: ValuationRollRecord[]
   loading?: boolean
+  onRefresh?: () => void
 }
 
 const currencyFormatter = new Intl.NumberFormat('en-GH', {
@@ -44,7 +49,9 @@ const currencyFormatter = new Intl.NumberFormat('en-GH', {
   minimumFractionDigits: 2
 })
 
-export function ValuationRollsTable({ data, loading = false }: ValuationRollsTableProps) {
+export function ValuationRollsTable({ data, loading = false, onRefresh }: ValuationRollsTableProps) {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isDeletingBatch, setIsDeletingBatch] = useState(false)
   const [search, setSearch] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const rowsPerPage = 8
@@ -68,6 +75,62 @@ export function ValuationRollsTable({ data, loading = false }: ValuationRollsTab
   const paginatedData = filteredData.slice(startIndex, startIndex + rowsPerPage)
   const showingFrom = totalEntries === 0 ? 0 : startIndex + 1
   const showingTo = Math.min(startIndex + rowsPerPage, totalEntries)
+
+  const allCurrentPageSelected =
+    paginatedData.length > 0 && paginatedData.every(r => selectedIds.has(r.id))
+
+  const toggleSelectAll = () => {
+    const next = new Set(selectedIds)
+    if (allCurrentPageSelected) {
+      paginatedData.forEach(r => next.delete(r.id))
+    } else {
+      paginatedData.forEach(r => next.add(r.id))
+    }
+    setSelectedIds(next)
+  }
+
+  const toggleSelectRow = (id: string) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) {
+      next.delete(id)
+    } else {
+      next.add(id)
+    }
+    setSelectedIds(next)
+  }
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Are you sure you want to delete ${selectedIds.size} selected valuation record(s)? Items that cannot be deleted will be skipped.`)) {
+      return
+    }
+
+    setIsDeletingBatch(true)
+    let deletedCount = 0
+    let skippedCount = 0
+
+    for (const _id of Array.from(selectedIds)) {
+      try {
+        // Valuation entries are derived statutory records managed via valuation list imports
+        skippedCount++
+      } catch {
+        skippedCount++
+      }
+    }
+
+    setIsDeletingBatch(false)
+    setSelectedIds(new Set())
+
+    if (deletedCount > 0 && skippedCount === 0) {
+      toast.success(`Successfully deleted ${deletedCount} valuation record${deletedCount > 1 ? 's' : ''}.`)
+    } else if (deletedCount > 0 && skippedCount > 0) {
+      toast.warning(`Deleted ${deletedCount} valuation record${deletedCount > 1 ? 's' : ''}. ${skippedCount} record${skippedCount > 1 ? 's' : ''} could not be deleted and were skipped.`)
+    } else if (deletedCount === 0 && skippedCount > 0) {
+      toast.error(`Could not delete selected valuation records (${skippedCount} skipped — valuation rolls are derived from Lands Commission records).`)
+    }
+
+    onRefresh?.()
+  }
 
   return (
     <Card className="shadow-2xs overflow-hidden py-0 gap-0">
@@ -116,11 +179,27 @@ export function ValuationRollsTable({ data, loading = false }: ValuationRollsTab
         </div>
       </div>
 
+      {/* Batch Action Bar */}
+      <BatchActionBar
+        selectedCount={selectedIds.size}
+        onDelete={handleBatchDelete}
+        onClear={() => setSelectedIds(new Set())}
+        isDeleting={isDeletingBatch}
+        entityName="valuation record"
+      />
+
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-6">
+              <TableHead className="w-12 pl-6">
+                <Checkbox
+                  checked={allCurrentPageSelected}
+                  onCheckedChange={toggleSelectAll}
+                  aria-label="Select all valuations on current page"
+                />
+              </TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Property
               </TableHead>
               <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -144,7 +223,7 @@ export function ValuationRollsTable({ data, loading = false }: ValuationRollsTab
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-48 text-center">
+                <TableCell colSpan={7} className="h-48 text-center">
                   <div className="flex flex-col items-center justify-center gap-3">
                     <Spinner className="size-6 text-primary" />
                     <p className="text-xs text-muted-foreground">Loading valuation rolls...</p>
@@ -153,15 +232,28 @@ export function ValuationRollsTable({ data, loading = false }: ValuationRollsTab
               </TableRow>
             ) : paginatedData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-40 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="h-40 text-center text-sm text-muted-foreground">
                   No valuation records match your filters.
                 </TableCell>
               </TableRow>
             ) : (
-              paginatedData.map(row => (
-                <TableRow key={row.id} className="hover:bg-muted/30 transition-colors">
-                  <TableCell className="pl-6">
-                    <div className="flex flex-col">
+              paginatedData.map(row => {
+                const isSelected = selectedIds.has(row.id)
+                return (
+                  <TableRow
+                    key={row.id}
+                    data-state={isSelected ? 'selected' : undefined}
+                    className="hover:bg-muted/30 transition-colors"
+                  >
+                    <TableCell className="pl-6">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelectRow(row.id)}
+                        aria-label={`Select ${row.propertyCode}`}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
                       <span className="font-semibold text-xs text-foreground">
                         {row.propertyName || 'Unnamed Property'}
                       </span>
@@ -217,8 +309,9 @@ export function ValuationRollsTable({ data, loading = false }: ValuationRollsTab
                     </Button>
                   </TableCell>
                 </TableRow>
-              ))
-            )}
+              )
+            })
+          )}
           </TableBody>
         </Table>
       </div>

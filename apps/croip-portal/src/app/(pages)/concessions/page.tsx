@@ -64,7 +64,7 @@ export default function ConcessionsRegistryPage() {
       </div>
 
 
-      <ConcessionsDataTable data={concessions} loading={loading} />
+      <ConcessionsDataTable data={concessions} loading={loading} onRefresh={fetchConcessions} />
 
       <CreateConcessionWizard
         open={wizardOpen}

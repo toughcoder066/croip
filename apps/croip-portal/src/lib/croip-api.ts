@@ -666,6 +666,10 @@ export const croipApi = {
         method: 'PATCH',
         body: JSON.stringify({ polygonGeoJson }),
       }),
+    deleteRegion: (id: string) =>
+      fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, `/v1/regions/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      }),
     listAssemblies: (regionId?: string) =>
       fetchCroipService<
         Array<{
@@ -723,6 +727,10 @@ export const croipApi = {
       fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, `/v1/assemblies/${encodeURIComponent(id)}/boundary`, {
         method: 'PATCH',
         body: JSON.stringify({ polygonGeoJson }),
+      }),
+    deleteAssembly: (id: string) =>
+      fetchCroipService<any>(CROIP_SERVICES.SHARED_SERVICES, `/v1/assemblies/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
       }),
     detectZone: (latitude: number, longitude: number) =>
       fetchCroipService<{

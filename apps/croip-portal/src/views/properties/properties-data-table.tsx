@@ -16,12 +16,16 @@ import {
   LandmarkIcon
 } from 'lucide-react'
 
+import { toast } from 'sonner'
+
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { InputGroup, InputGroupAddon, InputGroupInput } from '@/components/ui/input-group'
 import { Spinner } from '@/components/ui/spinner'
+import { BatchActionBar } from '@/components/data-table/batch-action-bar'
 import {
   Select,
   SelectContent,
@@ -66,6 +70,7 @@ interface PropertiesDataTableProps {
   data: PropertyRecord[]
   assemblies?: AssemblyLookup[]
   loading?: boolean
+  onRefresh?: () => void
 }
 
 const humanize = (value?: string | null) =>
@@ -134,7 +139,16 @@ function RegistrationSourceBadge({ source }: { source?: string }) {
   )
 }
 
-export function PropertiesDataTable({ data, assemblies = [], loading = false }: PropertiesDataTableProps) {
+export function PropertiesDataTable({
+  data,
+  assemblies = [],
+  loading = false,
+  onRefresh
+}: PropertiesDataTableProps) {
+  // Row selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isDeletingBatch, setIsDeletingBatch] = useState(false)
+
   // Filters
   const [filterClass, setFilterClass] = useState<string>('all')
   const [filterVerification, setFilterVerification] = useState<string>('all')
@@ -187,6 +201,67 @@ export function PropertiesDataTable({ data, assemblies = [], loading = false }: 
   const paginatedData = filteredData.slice(startIndex, startIndex + rowsPerPage)
   const showingFrom = totalEntries === 0 ? 0 : startIndex + 1
   const showingTo = Math.min(startIndex + rowsPerPage, totalEntries)
+
+  const allCurrentPageSelected =
+    paginatedData.length > 0 && paginatedData.every(r => selectedIds.has(r.id))
+
+  const toggleSelectAll = () => {
+    const next = new Set(selectedIds)
+    if (allCurrentPageSelected) {
+      paginatedData.forEach(r => next.delete(r.id))
+    } else {
+      paginatedData.forEach(r => next.add(r.id))
+    }
+    setSelectedIds(next)
+  }
+
+  const toggleSelectRow = (id: string) => {
+    const next = new Set(selectedIds)
+    if (next.has(id)) {
+      next.delete(id)
+    } else {
+      next.add(id)
+    }
+    setSelectedIds(next)
+  }
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Are you sure you want to delete ${selectedIds.size} selected property/properties? Any property that cannot be deleted (e.g. has paid bills or active liens) will be skipped.`)) {
+      return
+    }
+
+    setIsDeletingBatch(true)
+    let deletedCount = 0
+    let skippedCount = 0
+
+    for (const id of Array.from(selectedIds)) {
+      try {
+        const res = await fetch(`/api/properties/${id}`, { method: 'DELETE' })
+        const json = await res.json().catch(() => ({}))
+        if (res.ok && json.success) {
+          deletedCount++
+        } else {
+          skippedCount++
+        }
+      } catch {
+        skippedCount++
+      }
+    }
+
+    setIsDeletingBatch(false)
+    setSelectedIds(new Set())
+
+    if (deletedCount > 0 && skippedCount === 0) {
+      toast.success(`Successfully deleted ${deletedCount} property record${deletedCount > 1 ? 's' : ''}.`)
+    } else if (deletedCount > 0 && skippedCount > 0) {
+      toast.warning(`Deleted ${deletedCount} property record${deletedCount > 1 ? 's' : ''}. ${skippedCount} record${skippedCount > 1 ? 's' : ''} could not be deleted and were skipped.`)
+    } else if (deletedCount === 0 && skippedCount > 0) {
+      toast.error(`Could not delete selected properties (${skippedCount} skipped due to paid bills or constraints).`)
+    }
+
+    onRefresh?.()
+  }
 
   return (
     <Card className="shadow-2xs overflow-hidden py-0 gap-0">
@@ -281,12 +356,28 @@ export function PropertiesDataTable({ data, assemblies = [], loading = false }: 
         </div>
       </div>
 
+      {/* Batch Action Bar */}
+      <BatchActionBar
+        selectedCount={selectedIds.size}
+        onDelete={handleBatchDelete}
+        onClear={() => setSelectedIds(new Set())}
+        isDeleting={isDeletingBatch}
+        entityName="property"
+      />
+
       {/* The Table */}
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-6">
+              <TableHead className="w-12 pl-6">
+                <Checkbox
+                  checked={allCurrentPageSelected}
+                  onCheckedChange={toggleSelectAll}
+                  aria-label="Select all properties on current page"
+                />
+              </TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Property
               </TableHead>
               <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -313,7 +404,7 @@ export function PropertiesDataTable({ data, assemblies = [], loading = false }: 
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-48 text-center">
+                <TableCell colSpan={8} className="h-48 text-center">
                   <div className="flex flex-col items-center justify-center gap-3">
                     <Spinner className="size-6 text-primary" />
                     <p className="text-xs text-muted-foreground">Loading properties...</p>
@@ -322,16 +413,28 @@ export function PropertiesDataTable({ data, assemblies = [], loading = false }: 
               </TableRow>
             ) : paginatedData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-40 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={8} className="h-40 text-center text-sm text-muted-foreground">
                   No properties match your filters.
                 </TableCell>
               </TableRow>
             ) : (
               paginatedData.map(row => {
+                const isSelected = selectedIds.has(row.id)
                 const assembly = assemblyMap.get(row.assemblyId)
                 return (
-                  <TableRow key={row.id} className="hover:bg-muted/30 transition-colors">
+                  <TableRow
+                    key={row.id}
+                    data-state={isSelected ? 'selected' : undefined}
+                    className="hover:bg-muted/30 transition-colors"
+                  >
                     <TableCell className="pl-6">
+                      <Checkbox
+                        checked={isSelected}
+                        onCheckedChange={() => toggleSelectRow(row.id)}
+                        aria-label={`Select ${row.propertyName || row.code}`}
+                      />
+                    </TableCell>
+                    <TableCell>
                       <div className="flex flex-col">
                         <span className="font-semibold text-xs text-foreground">
                           {row.propertyName || 'Unnamed Property'}

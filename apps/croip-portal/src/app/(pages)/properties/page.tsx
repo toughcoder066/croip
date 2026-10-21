@@ -66,7 +66,12 @@ export default function PropertiesRegistryPage() {
         </div>
       </div>
 
-      <PropertiesDataTable data={properties} assemblies={assemblies} loading={loading} />
+      <PropertiesDataTable
+        data={properties}
+        assemblies={assemblies}
+        loading={loading}
+        onRefresh={fetchProperties}
+      />
     </div>
   )
 }

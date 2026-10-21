@@ -14,6 +14,7 @@ import {
   CheckCircle2Icon
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { BatchActionBar } from '@/components/data-table/batch-action-bar'
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -82,6 +83,7 @@ export function SystemDataTable({
 }: SystemDataTableProps) {
   // Row selection
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isDeletingBatch, setIsDeletingBatch] = useState(false)
 
   // Filters
   const [filterGroup, setFilterGroup] = useState<string>('all')
@@ -214,9 +216,64 @@ export function SystemDataTable({
       if (onDelete) {
         await onDelete(item.id, item.name)
       } else {
-        toast.info(`Deleted ${item.name}`)
+        try {
+          const res = await fetch(`/api/configuration?id=${item.id}`, { method: 'DELETE' })
+          const json = await res.json().catch(() => ({}))
+          if (res.ok && json.success) {
+            toast.success(`Deleted ${item.name}`)
+            onRefresh?.()
+          } else {
+            toast.error(json.error || `Could not delete ${item.name}`)
+          }
+        } catch {
+          toast.error(`Failed to delete ${item.name}`)
+        }
       }
     }
+  }
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Are you sure you want to delete ${selectedIds.size} selected parameter(s)? Any parameter that cannot be deleted will be skipped.`)) {
+      return
+    }
+
+    setIsDeletingBatch(true)
+    let deletedCount = 0
+    let skippedCount = 0
+
+    for (const id of Array.from(selectedIds)) {
+      try {
+        if (onDelete) {
+          const item = data.find(p => p.id === id)
+          await onDelete(id, item?.name || id)
+          deletedCount++
+        } else {
+          const res = await fetch(`/api/configuration?id=${id}`, { method: 'DELETE' })
+          const json = await res.json().catch(() => ({}))
+          if (res.ok && json.success) {
+            deletedCount++
+          } else {
+            skippedCount++
+          }
+        }
+      } catch {
+        skippedCount++
+      }
+    }
+
+    setIsDeletingBatch(false)
+    setSelectedIds(new Set())
+
+    if (deletedCount > 0 && skippedCount === 0) {
+      toast.success(`Successfully deleted ${deletedCount} parameter${deletedCount > 1 ? 's' : ''}.`)
+    } else if (deletedCount > 0 && skippedCount > 0) {
+      toast.warning(`Deleted ${deletedCount} parameter${deletedCount > 1 ? 's' : ''}. ${skippedCount} parameter${skippedCount > 1 ? 's' : ''} could not be deleted and were skipped.`)
+    } else if (deletedCount === 0 && skippedCount > 0) {
+      toast.error(`Could not delete selected parameters (${skippedCount} skipped).`)
+    }
+
+    onRefresh?.()
   }
 
   const copyToClipboard = (text: string, label: string) => {
@@ -334,6 +391,15 @@ export function SystemDataTable({
             </div>
           </div>
         </div>
+
+        {/* Batch Action Bar */}
+        <BatchActionBar
+          selectedCount={selectedIds.size}
+          onDelete={handleBatchDelete}
+          onClear={() => setSelectedIds(new Set())}
+          isDeleting={isDeletingBatch}
+          entityName="parameter"
+        />
 
         {/* The Table */}
         <div className="overflow-x-auto">

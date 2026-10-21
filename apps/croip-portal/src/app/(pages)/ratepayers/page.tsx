@@ -93,6 +93,7 @@ export default function RatepayersDirectoryPage() {
         total={total}
         totalPages={totalPages}
         onPageChange={setPage}
+        onRefresh={fetchDirectory}
       />
     </div>
   )

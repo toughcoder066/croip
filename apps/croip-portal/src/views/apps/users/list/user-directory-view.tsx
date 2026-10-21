@@ -25,6 +25,7 @@ import {
   EyeIcon
 } from 'lucide-react'
 import { toast } from 'sonner'
+import { BatchActionBar } from '@/components/data-table/batch-action-bar'
 
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -109,6 +110,7 @@ export function UserDirectoryView() {
 
   // Selection & Pagination
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [isDeletingBatch, setIsDeletingBatch] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const rowsPerPage = 5
 
@@ -326,6 +328,43 @@ export function UserDirectoryView() {
       next.add(id)
     }
     setSelectedIds(next)
+  }
+
+  const handleBatchDelete = async () => {
+    if (selectedIds.size === 0) return
+    if (!confirm(`Are you sure you want to delete ${selectedIds.size} selected officer(s)? Any officer that cannot be deleted will be skipped.`)) {
+      return
+    }
+
+    setIsDeletingBatch(true)
+    let deletedCount = 0
+    let skippedCount = 0
+
+    for (const id of Array.from(selectedIds)) {
+      try {
+        const res = await fetch(`/api/users?id=${id}`, { method: 'DELETE' })
+        const json = await res.json().catch(() => ({}))
+        if (res.ok && json.success) {
+          deletedCount++
+          setUsers(prev => prev.filter(u => u.id !== id))
+        } else {
+          skippedCount++
+        }
+      } catch {
+        skippedCount++
+      }
+    }
+
+    setIsDeletingBatch(false)
+    setSelectedIds(new Set())
+
+    if (deletedCount > 0 && skippedCount === 0) {
+      toast.success(`Successfully removed ${deletedCount} officer${deletedCount > 1 ? 's' : ''}.`)
+    } else if (deletedCount > 0 && skippedCount > 0) {
+      toast.warning(`Removed ${deletedCount} officer${deletedCount > 1 ? 's' : ''}. ${skippedCount} officer${skippedCount > 1 ? 's' : ''} could not be removed and were skipped.`)
+    } else if (deletedCount === 0 && skippedCount > 0) {
+      toast.error(`Could not delete selected officers (${skippedCount} skipped).`)
+    }
   }
 
   const copyToClipboard = (text: string, label: string) => {
@@ -617,6 +656,15 @@ export function UserDirectoryView() {
             </div>
           </div>
         </div>
+
+        {/* Batch Action Bar */}
+        <BatchActionBar
+          selectedCount={selectedIds.size}
+          onDelete={handleBatchDelete}
+          onClear={() => setSelectedIds(new Set())}
+          isDeleting={isDeletingBatch}
+          entityName="officer"
+        />
 
         {/* The Table */}
         <div className="overflow-x-auto">

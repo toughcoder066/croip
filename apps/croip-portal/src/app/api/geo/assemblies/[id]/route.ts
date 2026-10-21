@@ -52,3 +52,22 @@ export async function PATCH(request: Request, { params }: RouteProps) {
     )
   }
 }
+
+export async function DELETE(_request: Request, { params }: RouteProps) {
+  try {
+    const { id } = await params
+    const result = await croipApi.geo.deleteAssembly(id)
+
+    return NextResponse.json({ success: true, data: result })
+  } catch (error: any) {
+    console.error('Failed to delete assembly from Shared Services:', error)
+
+    const notFound = /404|not found/i.test(error.message || '')
+    const badRequest = /cannot delete|referenced|foreign key/i.test(error.message || '')
+
+    return NextResponse.json(
+      { success: false, error: error.message || 'Failed to delete assembly' },
+      { status: notFound ? 404 : badRequest ? 400 : 500 }
+    )
+  }
+}
