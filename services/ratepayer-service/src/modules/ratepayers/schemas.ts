@@ -57,7 +57,6 @@ export const ratepayerResponseSchema = {
 
 export const registerRatepayerBodySchema = {
   type: 'object',
-  required: ['password'],
   properties: {
     ratepayerType: { type: 'string', enum: ['INDIVIDUAL', 'ORGANIZATION'], default: 'INDIVIDUAL' },
     firstName: { type: 'string', maxLength: 100 },
@@ -68,8 +67,8 @@ export const registerRatepayerBodySchema = {
     number: { type: 'string', minLength: 7, maxLength: 30, description: 'Alias for phone number' },
     identifier: { type: 'string', description: 'Email address or phone number' },
     email: { type: 'string', format: 'email' },
-    password: { type: 'string', minLength: 8, maxLength: 100, description: 'Sets the login password for phone/email + password + OTP self-service login' },
-    confirmPassword: { type: 'string', minLength: 8, maxLength: 100 },
+    password: { type: 'string', minLength: 6, maxLength: 100, description: 'Optional login password for self-service login' },
+    confirmPassword: { type: 'string', minLength: 6, maxLength: 100 },
     address: { type: 'string', maxLength: 255 },
     regionId: { type: 'string', format: 'uuid' },
     assemblyId: { type: 'string', format: 'uuid' },
@@ -135,6 +134,8 @@ export const updateProfileBodySchema = {
     email: { type: 'string', format: 'email' },
     phone: { type: 'string', minLength: 7, maxLength: 30 },
     number: { type: 'string', minLength: 7, maxLength: 30, description: 'Phone number alias' },
+    password: { type: 'string', minLength: 6, maxLength: 100, description: 'Optional password update' },
+    confirmPassword: { type: 'string', minLength: 6, maxLength: 100 },
     address: { type: 'string', maxLength: 255 },
     regionId: { type: 'string', format: 'uuid' },
     assemblyId: { type: 'string', format: 'uuid' },

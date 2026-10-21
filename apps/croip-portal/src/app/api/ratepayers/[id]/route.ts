@@ -29,8 +29,10 @@ export async function PATCH(request: Request, { params }: RouteProps) {
   const { id } = await params
 
   try {
+    const authHeader = request.headers.get('authorization')
+    const accessToken = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : undefined
     const body = await request.json()
-    const updated = await croipApi.ratepayers.updateProfile(id, body)
+    const updated = await croipApi.ratepayers.updateProfile(id, body, accessToken)
     return NextResponse.json({ success: true, data: updated })
   } catch (error) {
     console.error(`Failed to update ratepayer ${id} in Ratepayer Core service:`, error)

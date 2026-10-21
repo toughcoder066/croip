@@ -53,7 +53,7 @@ export interface RegisterRatepayerInput {
   number?: string;
   identifier?: string;
   email?: string;
-  password: string;
+  password?: string;
   confirmPassword?: string;
   address?: string;
   regionId?: string;
@@ -88,6 +88,8 @@ export interface UpdateProfileInput {
   email?: string;
   phone?: string;
   number?: string;
+  password?: string;
+  confirmPassword?: string;
   address?: string;
   regionId?: string;
   assemblyId?: string;
@@ -156,19 +158,19 @@ export function computeProfileCompletion(ratepayer: {
   regionId?: string | null;
   assemblyId?: string | null;
   locationGeo?: unknown;
-  verifications?: Array<{ verificationStatus: string }>;
+  verifications?: Array<{ verificationStatus: string; provider?: string; providerReference?: string }>;
 }) {
   let score = 0;
   const missingSections: string[] = [];
 
-  // 1. Account Contact (Phone or Email) - 25%
+  // 1. Account Contact (Phone or Email)
   if (ratepayer.phone || ratepayer.email) {
     score += 25;
   } else {
     missingSections.push('ACCOUNT_CONTACT');
   }
 
-  // Explicitly note missing contact information so citizen/admin knows what can still be added
+  // Explicitly track missing contact fields so whatever was not inserted is added to metrics
   if (!ratepayer.phone) {
     missingSections.push('PHONE_NUMBER');
   }
@@ -176,19 +178,26 @@ export function computeProfileCompletion(ratepayer: {
     missingSections.push('EMAIL_ADDRESS');
   }
 
-  // 2. Personal / Legal Identity (Legal Name / First & Last Name) - 25%
+  // 2. Personal / Legal Identity (Legal Name / First & Last Name)
   const nameCandidate = ratepayer.legalName || [ratepayer.firstName, ratepayer.lastName].filter(Boolean).join(' ');
   const hasValidName =
     Boolean(nameCandidate) &&
     nameCandidate.trim().length >= 2 &&
-    !nameCandidate.toLowerCase().includes('pending');
+    !nameCandidate.toLowerCase().includes('pending') &&
+    !nameCandidate.toLowerCase().startsWith('ratepayer ');
   if (hasValidName) {
     score += 25;
   } else {
     missingSections.push('LEGAL_NAME');
   }
+  if (!ratepayer.firstName) {
+    missingSections.push('FIRST_NAME');
+  }
+  if (!ratepayer.lastName) {
+    missingSections.push('LAST_NAME');
+  }
 
-  // 3. Address & Pinpoint Location (Address, Region, Assembly, or Coordinates) - 25%
+  // 3. Address & Pinpoint Location (Address, Region, Assembly, or Coordinates)
   const hasAddress = Boolean(ratepayer.address && ratepayer.address.trim().length > 0);
   const hasLocationGeo = Boolean(ratepayer.locationGeo);
   const hasRegionOrAssembly = Boolean(ratepayer.regionId || ratepayer.assemblyId);
@@ -198,8 +207,17 @@ export function computeProfileCompletion(ratepayer: {
   } else {
     missingSections.push('ADDRESS_AND_LOCATION');
   }
+  if (!hasAddress) {
+    missingSections.push('PHYSICAL_ADDRESS');
+  }
+  if (!hasLocationGeo) {
+    missingSections.push('PINPOINT_LOCATION');
+  }
+  if (!hasRegionOrAssembly) {
+    missingSections.push('MMDA_JURISDICTION');
+  }
 
-  const activeVerification = ratepayer.verifications?.find(v => v.verificationStatus === 'VERIFIED') as any;
+  const activeVerification = ratepayer.verifications?.find(v => v.verificationStatus === 'VERIFIED');
   const hasVerifiedKyc = Boolean(activeVerification);
   if (hasVerifiedKyc) {
     score += 25;
@@ -339,7 +357,7 @@ export function ratepayerService(app: FastifyInstance) {
         throw new BadRequestError('Either an email address or phone number is required to register as a ratepayer.');
       }
 
-      if (input.confirmPassword && input.password !== input.confirmPassword) {
+      if (input.password && input.confirmPassword && input.password !== input.confirmPassword) {
         throw new BadRequestError('Passwords do not match. Please verify and try again.');
       }
 
@@ -355,7 +373,7 @@ export function ratepayerService(app: FastifyInstance) {
       }
 
       const detected = await detectMmdaZone(app, input.latitude, input.longitude, input.locationGeo);
-      const passwordHash = await hashPassword(input.password);
+      const passwordHash = input.password ? await hashPassword(input.password) : null;
       const defaultName = cleanEmail ? cleanEmail.split('@')[0] : cleanPhone ? `Ratepayer ${cleanPhone}` : 'Pending Profile';
       const names = parseNameParts(input.legalName, input.firstName, input.middleName, input.lastName);
       const legalName = names.legalName || defaultName;
@@ -660,10 +678,19 @@ export function ratepayerService(app: FastifyInstance) {
         };
       }
 
+      let passwordHashUpdate: { passwordHash?: string } = {};
+      if (input.password) {
+        if (input.confirmPassword && input.password !== input.confirmPassword) {
+          throw new BadRequestError('Passwords do not match. Please verify and try again.');
+        }
+        passwordHashUpdate = { passwordHash: await hashPassword(input.password) };
+      }
+
       const updated = await app.prisma.ratepayer.update({
         where: { id: ratepayer.id },
         data: {
           ...namesUpdate,
+          ...passwordHashUpdate,
           ...(newEmail !== undefined ? { email: newEmail } : {}),
           ...(newPhone !== undefined ? { phone: newPhone } : {}),
           ...(input.address !== undefined ? { address: input.address } : {}),

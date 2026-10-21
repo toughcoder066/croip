@@ -1,4 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
+import { verifyRatepayerToken } from '../../lib/ratepayer-jwt.js';
 import {
   ratepayerService,
   type RegisterRatepayerInput,
@@ -136,12 +137,42 @@ export const ratepayerRoutes: FastifyPluginAsync = async (app) => {
   app.patch<{ Params: { id: string }; Body: UpdateProfileInput }>('/ratepayers/:id', {
     schema: {
       tags: ['Ratepayer Self-Service'],
-      summary: 'Update ratepayer profile, address, and pinpoint location by ID or Code',
+      summary: 'Complete or update ratepayer profile (unified API for profile completion and profile updates)',
       params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
       body: updateProfileBodySchema,
-      response: { 200: { type: 'object', additionalProperties: true }, 404: problemSchema }
+      response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema, 404: problemSchema }
     }
-  }, async (request) => {
+  }, async (request, reply) => {
+    const authorization = request.headers.authorization;
+    if (app.config.AUTH_MODE !== 'disabled') {
+      if (!authorization?.startsWith('Bearer ')) {
+        throw app.httpErrors.unauthorized('Authorization bearer token is required');
+      }
+      const token = authorization.slice(7);
+      let isRatepayerAuth = false;
+      try {
+        const claims = await verifyRatepayerToken(token, app.config.RATEPAYER_JWT_SECRET);
+        isRatepayerAuth = true;
+        // Verify that this token belongs to the ratepayer being updated
+        if (claims.sub !== request.params.id && claims.code !== request.params.id) {
+          const rp = await app.prisma.ratepayer.findFirst({
+            where: { OR: [{ id: request.params.id }, { code: request.params.id }] },
+            select: { id: true, code: true }
+          });
+          if (!rp || (rp.id !== claims.sub && rp.code !== claims.code)) {
+            throw app.httpErrors.forbidden('You are not authorized to update another ratepayer\'s profile');
+          }
+        }
+      } catch (err: any) {
+        if (err.statusCode === 403) throw err;
+        if (!isRatepayerAuth) {
+          // Attempt staff authentication
+          await app.authenticate(request, reply);
+        } else {
+          throw app.httpErrors.unauthorized('Invalid or expired ratepayer authorization token');
+        }
+      }
+    }
     return service.updateProfile(request.params.id, request.body);
   });
 

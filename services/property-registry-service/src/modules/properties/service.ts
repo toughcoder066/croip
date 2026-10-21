@@ -91,6 +91,22 @@ export interface UploadPremisesDocumentInput {
   actorId: string;
 }
 
+export interface UpdatePropertyInput {
+  propertyName?: string;
+  accountNumber?: string;
+  propertyUse?: string;
+  structureType?: string;
+  buildingStatus?: string;
+  propertyClass?: string;
+  tenureType?: string;
+  numberOfFloors?: number;
+  landAreaSqm?: number;
+  leaseDurationYears?: number;
+  polygonGeoJson?: Record<string, unknown>;
+  claimedByRatepayerId?: string;
+  createdByRatepayerId?: string;
+}
+
 const assignedAssembliesCache = new Map<string, { assemblies: string[]; expiresAt: number }>();
 
 /**
@@ -723,6 +739,176 @@ export function propertyService(app: FastifyInstance) {
       });
       if (!prop) throw new NotFoundError('Property not found');
       return prop;
+    },
+
+    async updateProperty(
+      idOrCode: string,
+      input: UpdatePropertyInput,
+      actor: { subject: string; actorType: string; concessionId?: string; assemblyId?: string }
+    ) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrCode);
+      const existing = await app.prisma.property.findFirst({
+        where: isUuid ? { OR: [{ id: idOrCode }, { code: idOrCode }] } : { code: idOrCode },
+        include: { valuations: true }
+      });
+      if (!existing) throw new NotFoundError(`Property '${idOrCode}' not found`);
+
+      // Authorization verification
+      if (actor.actorType === 'RATEPAYER') {
+        const isOwner =
+          existing.createdByRatepayerId === actor.subject ||
+          existing.claimedByRatepayerId === actor.subject;
+        if (!isOwner) {
+          throw new ForbiddenError('You are only authorized to update properties that belong to your ratepayer profile.');
+        }
+      } else if (actor.actorType === 'CONCESSION') {
+        if (actor.assemblyId && actor.assemblyId !== '*' && existing.assemblyId !== actor.assemblyId) {
+          throw new ForbiddenError(
+            `Concessionaire cannot update property outside its assigned assembly scope (${existing.assemblyId} vs ${actor.assemblyId})`
+          );
+        }
+      }
+
+      // Check which fields are modified
+      const structuralFields = [
+        'propertyUse',
+        'structureType',
+        'buildingStatus',
+        'propertyClass',
+        'tenureType',
+        'numberOfFloors',
+        'landAreaSqm',
+        'leaseDurationYears',
+        'polygonGeoJson',
+        'claimedByRatepayerId',
+        'createdByRatepayerId'
+      ] as const;
+
+      const changedStructuralFields: string[] = [];
+      for (const field of structuralFields) {
+        if (input[field] !== undefined) {
+          if (field === 'polygonGeoJson') {
+            if (JSON.stringify(input[field]) !== JSON.stringify(existing.polygonGeoJson)) {
+              changedStructuralFields.push(field);
+            }
+          } else if ((input as any)[field] !== (existing as any)[field]) {
+            changedStructuralFields.push(field);
+          }
+        }
+      }
+
+      const isStructuralChange = changedStructuralFields.length > 0;
+
+      // If polygon changed, validate boundaries
+      if (input.polygonGeoJson && changedStructuralFields.includes('polygonGeoJson')) {
+        await assertNoConflictingOverlap(app.prisma, input.polygonGeoJson, {
+          propertyUse: input.propertyUse || existing.propertyUse,
+          assemblyId: existing.assemblyId,
+          propertyCode: existing.code,
+          excludePropertyId: existing.id
+        });
+      }
+
+      return app.prisma.$transaction(async (tx) => {
+        const updateData: any = {
+          ...(input.propertyName !== undefined ? { propertyName: input.propertyName } : {}),
+          ...(input.accountNumber !== undefined ? { accountNumber: input.accountNumber } : {}),
+          ...(input.propertyUse !== undefined ? { propertyUse: input.propertyUse } : {}),
+          ...(input.structureType !== undefined ? { structureType: input.structureType } : {}),
+          ...(input.buildingStatus !== undefined ? { buildingStatus: input.buildingStatus } : {}),
+          ...(input.propertyClass !== undefined ? { propertyClass: input.propertyClass } : {}),
+          ...(input.tenureType !== undefined ? { tenureType: input.tenureType } : {}),
+          ...(input.numberOfFloors !== undefined ? { numberOfFloors: input.numberOfFloors } : {}),
+          ...(input.landAreaSqm !== undefined ? { landAreaSqm: input.landAreaSqm } : {}),
+          ...(input.leaseDurationYears !== undefined ? { leaseDurationYears: input.leaseDurationYears } : {}),
+          ...(input.polygonGeoJson !== undefined ? { polygonGeoJson: input.polygonGeoJson } : {}),
+          ...(input.claimedByRatepayerId !== undefined ? { claimedByRatepayerId: input.claimedByRatepayerId } : {}),
+          ...(input.createdByRatepayerId !== undefined ? { createdByRatepayerId: input.createdByRatepayerId } : {})
+        };
+
+        let decoupledValuationsCount = 0;
+
+        if (isStructuralChange) {
+          // Requirement: When a ratepayer's property is updated (actual property characteristics,
+          // not trivial metadata like name or documents), the property should be assigned UNASSESSED
+          // and PENDING verification, and all active valuations must be decoupled.
+          updateData.propertyStatus = 'UNASSESSED';
+          updateData.verificationStatus = 'PENDING';
+
+          const valResult = await tx.propertyValuation.updateMany({
+            where: { propertyId: existing.id, isCurrent: true },
+            data: { isCurrent: false }
+          });
+          decoupledValuationsCount = valResult.count;
+        }
+
+        const updated = await tx.property.update({
+          where: { id: existing.id },
+          data: updateData,
+          include: {
+            units: true,
+            documents: true,
+            valuations: { where: { isCurrent: true } }
+          }
+        });
+
+        // Audit Record
+        await tx.auditRecord.create({
+          data: {
+            actorId: actor.subject,
+            actorType: actor.actorType,
+            concessionId: existing.registeredByConcessionId ?? (actor.concessionId && actor.concessionId !== '00000000-0000-0000-0000-000000000000' ? actor.concessionId : null),
+            assemblyId: existing.assemblyId,
+            action: isStructuralChange ? 'PROPERTY_STRUCTURAL_UPDATE_VALUATION_DECOUPLED' : 'PROPERTY_METADATA_UPDATE',
+            resourceType: 'Property',
+            resourceId: existing.id,
+            requestId: crypto.randomUUID(),
+            outcome: 'SUCCESS',
+            metadata: {
+              propertyCode: existing.code,
+              changedStructuralFields,
+              isStructuralChange,
+              decoupledValuationsCount,
+              newPropertyStatus: updated.propertyStatus,
+              newVerificationStatus: updated.verificationStatus
+            }
+          }
+        });
+
+        // Outbox Domain Event
+        const evt = domainEvent({
+          eventType: isStructuralChange ? 'PropertyUpdatedAndValuationDecoupled' : 'PropertyMetadataUpdated',
+          eventVersion: 1,
+          producer: app.serviceInfo.name,
+          aggregateType: 'Property',
+          aggregateId: existing.id,
+          aggregateVersion: 2,
+          concessionId: existing.registeredByConcessionId || actor.concessionId || '00000000-0000-0000-0000-000000000000',
+          assemblyId: existing.assemblyId,
+          correlationId: crypto.randomUUID(),
+          data: {
+            propertyId: existing.id,
+            code: existing.code,
+            changedFields: isStructuralChange ? changedStructuralFields : Object.keys(input),
+            isStructuralChange,
+            previousPropertyStatus: existing.propertyStatus,
+            newPropertyStatus: updated.propertyStatus,
+            previousVerificationStatus: existing.verificationStatus,
+            newVerificationStatus: updated.verificationStatus,
+            decoupledValuationsCount,
+            updatedByActorId: actor.subject,
+            updatedByActorType: actor.actorType
+          }
+        });
+
+        await appendOutboxEvent(
+          tx,
+          isStructuralChange ? 'revenue.property.valuation_decoupled.v1' : 'revenue.property.updated.v1',
+          evt
+        );
+
+        return updated;
+      });
     },
 
     async addUnit(propertyId: string, unitIdentifier: string, unitType: string, floorLevel: number, assemblyId: string) {

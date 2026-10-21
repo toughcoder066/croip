@@ -245,5 +245,19 @@ test('POST /v1/properties accepts valid HS256 Bearer token and identifies Ratepa
   await app.close();
 });
 
+test('PATCH /v1/properties/:id requires authentication (401 when no token is provided)', async () => {
+  const app = await buildApp({ config, skipInfrastructure: true });
+  const response = await app.inject({
+    method: 'PATCH',
+    url: '/v1/properties/00000000-0000-0000-0000-000000000101',
+    payload: {
+      propertyName: 'Renamed Villa'
+    }
+  });
+  assert.equal(response.statusCode, 401);
+  assert.equal(response.json().code, 'UNAUTHORIZED');
+  await app.close();
+});
+
 
 

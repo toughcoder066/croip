@@ -210,3 +210,22 @@ export const verificationResponseSchema = {
     capturedAt: { type: 'string', format: 'date-time' }
   }
 };
+
+export const updatePropertyBodySchema = {
+  type: 'object',
+  properties: {
+    propertyName: { type: 'string', maxLength: 150 },
+    accountNumber: { type: 'string', maxLength: 50 },
+    propertyUse: { type: 'string' },
+    structureType: { type: 'string' },
+    buildingStatus: { type: 'string' },
+    propertyClass: { type: 'string' },
+    tenureType: { type: 'string' },
+    numberOfFloors: { type: 'integer', minimum: 1 },
+    landAreaSqm: { type: 'number', minimum: 0 },
+    leaseDurationYears: { type: 'integer', minimum: 0 },
+    polygonGeoJson: { type: 'object' },
+    claimedByRatepayerId: { type: 'string', format: 'uuid' },
+    createdByRatepayerId: { type: 'string', format: 'uuid' }
+  }
+};

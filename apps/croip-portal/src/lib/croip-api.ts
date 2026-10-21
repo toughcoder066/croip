@@ -273,6 +273,12 @@ export const croipApi = {
     // /api/dashboard/metrics already does for its rateable-value aggregates.
     getValuations: (propertyId: string) =>
       fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${propertyId}`).then((property: any) => (Array.isArray(property?.valuations) ? property.valuations : [])),
+    updateProperty: (id: string, data: any, options?: RequestOptions) =>
+      fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+        ...options
+      }),
     deleteProperty: (id: string, options?: RequestOptions) =>
       fetchCroipService<{ success: boolean; message: string }>(
         CROIP_SERVICES.PROPERTY_REGISTRY,
@@ -304,9 +310,10 @@ export const croipApi = {
         method: 'POST',
         body: JSON.stringify(data)
       }),
-    updateProfile: (id: string, data: any) =>
+    updateProfile: (id: string, data: any, accessToken?: string) =>
       fetchCroipService<any>(CROIP_SERVICES.RATEPAYER_CORE, `/v1/ratepayers/${encodeURIComponent(id)}`, {
         method: 'PATCH',
+        accessToken,
         body: JSON.stringify(data)
       }),
 

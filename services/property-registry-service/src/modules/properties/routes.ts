@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { propertyService, type CreatePropertyInput, type UploadPremisesDocumentInput, type SubmitVerificationInput, type ReviewVerificationInput } from './service.js';
+import { propertyService, type CreatePropertyInput, type UploadPremisesDocumentInput, type SubmitVerificationInput, type ReviewVerificationInput, type UpdatePropertyInput } from './service.js';
 import {
   problemSchema,
   propertyResponseSchema,
@@ -10,7 +10,8 @@ import {
   uploadPremisesDocumentBodySchema,
   submitVerificationBodySchema,
   reviewVerificationBodySchema,
-  verificationResponseSchema
+  verificationResponseSchema,
+  updatePropertyBodySchema
 } from './schemas.js';
 
 export const propertyRoutes: FastifyPluginAsync = async (app) => {
@@ -120,7 +121,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get<{ Params: { id: string } }>('/properties/:id', {
-    preHandler: app.requirePermissions(['properties:read']),
+    preHandler: app.authenticateStaffOrRatepayer(['properties:read']),
     schema: {
       tags: ['Property Registry'],
       summary: 'Retrieve property parcel details, units, and valuation roll status',
@@ -129,6 +130,30 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
     }
   }, async (request) => {
     return service.getProperty(request.params.id);
+  });
+
+  app.patch<{ Params: { id: string }; Body: UpdatePropertyInput }>('/properties/:id', {
+    preHandler: app.authenticateStaffOrRatepayer(['properties:manage']),
+    schema: {
+      tags: ['Property Registry'],
+      summary: 'Update property details. If actual property characteristics (use, floors, boundaries, area, structure) are changed, marks property UNASSESSED, unverified, and decouples active valuations.',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+      body: updatePropertyBodySchema,
+      response: {
+        200: { type: 'object', additionalProperties: true },
+        400: problemSchema,
+        401: problemSchema,
+        403: problemSchema,
+        404: problemSchema
+      }
+    }
+  }, async (request) => {
+    return service.updateProperty(request.params.id, request.body, {
+      subject: request.auth.subject,
+      actorType: request.auth.actorType,
+      concessionId: request.auth.concessionId,
+      assemblyId: request.auth.assemblyId
+    });
   });
 
   app.post<{ Params: { id: string }; Body: { unitIdentifier: string; unitType?: string; floorLevel?: number } }>('/properties/:id/units', {
