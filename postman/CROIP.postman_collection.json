@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "07427078-6693-4b1f-9c5d-414bf49ec021",
     "name": "CROIP Central Platform API",
-    "description": "Central Revenue Oversight & Integration Platform \u2014 all 11 microservice APIs, organized by WHO calls them rather than which service owns them:\n\n- **1. Ratepayer** \u2014 citizen self-service: register, log in (password + OTP), complete profile, self-service property registration, own bills/disputes, receipt verification.\n- **2. Concession** \u2014 revenue-collection partner field staff: property registration/verification in the field, billing and payment collection, event reporting, reference-data lookups.\n- **3. CROIP Admin** \u2014 central platform/oversight staff: user & RBAC management, concession onboarding, reconciliation, audit, boundary/reference-data management, review/approval steps.\n- **Platform Health Checks** \u2014 infra liveness/readiness, not tied to any persona.\n\nSome endpoints are genuinely cross-cutting (e.g. a property verification is *submitted* by Concession staff but *reviewed* by CROIP Admin) \u2014 each lives under the persona who actually calls that specific endpoint, with a note where the split matters.\n\n**Auth model**\n- Ratepayer: no auth for register/claims/receipt-verification; phone/email + password + OTP issues `{{ratepayer_access_token}}` (HS256, ratepayer-service). Running 'Verify OTP' auto-saves it.\n- Concession & CROIP Admin: both use the same real Zitadel-issued `{{staff_access_token}}` (RBAC permissions decide what each officer can actually do) \u2014 there's no API-only login by design; sign into the portal (http://localhost:3050) as a real officer and copy the access token (see README).",
+    "description": "Central Revenue Oversight & Integration Platform \u2014 all 11 microservice APIs, organized by WHO calls them rather than which service owns them:\n\n- **1. Ratepayer** \u2014 citizen self-service: self-register a profile directly through a concession's own app (identified by that concession's public, non-secret code \u2014 never its real API credential), log in (password + OTP), read/update own profile, claim an existing unclaimed property, own bills/disputes, receipt verification. A concession's staff can also register/update a ratepayer on their behalf, walk-in style \u2014 that path is concession-scoped (see below). Once a profile exists (either way), login, profile read/update, and claims all work unscoped, across any concession \u2014 a ratepayer with property in two different MMDAs only ever needs one account.\n- **2. Concession** \u2014 revenue-collection partner field staff: walk-in ratepayer registration/update/delete, property registration/verification in the field, billing and payment collection, event reporting, reference-data lookups.\n- **3. CROIP Admin** \u2014 central platform/oversight staff: user & RBAC management, concession onboarding, reconciliation, audit, boundary/reference-data management, review/approval steps.\n- **Platform Health Checks** \u2014 infra liveness/readiness, not tied to any persona.\n\nSome endpoints are genuinely cross-cutting (e.g. a property verification is *submitted* by Concession staff but *reviewed* by CROIP Admin) \u2014 each lives under the persona who actually calls that specific endpoint, with a note where the split matters.\n\n**Auth model**\n- Ratepayer: no auth for self-register/login/claims/receipt-verification; phone/email + password + OTP issues `{{ratepayer_access_token}}` (HS256, ratepayer-service) for login, own-profile read/update, and claims \u2014 it is not accepted for a walk-in staff registration/update, or any property-registry-service endpoint.\n- Concession & CROIP Admin: both use the same real Zitadel-issued `{{staff_access_token}}` (RBAC permissions, plus a concession-ownership check on walk-in ratepayer update/delete, decide what each officer can actually do) \u2014 there's no API-only login by design; sign into the portal (http://localhost:3050) as a real officer and copy the access token (see README).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [],
@@ -13,10 +13,31 @@
       "item": [
         {
           "name": "Auth & Profile",
-          "description": "ratepayer-service \u2014 citizen plug-and-play signup and profile completion; only registration and login/verify-otp are public; all other endpoints require Bearer authentication.",
+          "description": "ratepayer-service \u2014 citizen login, self-registration, and own-profile read/update/delete, all unscoped across any concession once the profile exists. A concession's staff can also register or update a ratepayer on their behalf, walk-in style (see 2. Concession > Ratepayers) \u2014 that path stays concession-scoped.",
           "item": [
             {
-              "name": "Register (public)",
+              "name": "Look up a concession by its public code",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/by-code/{{concession_code}}",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "by-code",
+                    "{{concession_code}}"
+                  ]
+                },
+                "description": "No auth \u2014 a concession's own public ratepayer-facing app calls this with its plain, non-secret code (never its real API client credential) to find the concessionId to pass to self-registration. Returns only {id, code, name, status}."
+              },
+              "response": []
+            },
+            {
+              "name": "Self-register my own profile",
               "request": {
                 "method": "POST",
                 "header": [
@@ -26,19 +47,20 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/self-register",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
-                    "ratepayers"
+                    "ratepayers",
+                    "self-register"
                   ]
                 },
-                "description": "Single public registration endpoint that accepts all ratepayer profile fields. Only email (or phone number) and password (with confirmPassword) are strictly required. Either email or phone must be present. First name, last name, physical address, and coordinates point are explicit components of the profile completion metric (along with contact and KYC verification). Any information omitted or not inserted at registration will be dynamically tracked in completion metrics (missingSections). Profile details can be completed or updated at any time using the unified complete/update profile API.",
+                "description": "No auth \u2014 a ratepayer creates their own profile directly through a concession's public app, instead of needing to walk into an MMDA office. concessionCode identifies which concession this profile belongs to (resolved via the by-code lookup above). Once created, login works across every concession's app, same as a staff-registered profile. Registering with an email sends a real OTP to Mailpit (http://localhost:8025) \u2014 check there and paste the code into ratepayer_otp_code; it's no longer echoed in the response. Use a phone number instead of email (no email field) to get devOtpCode back automatically, since SMS has no real provider wired up yet. The email is white-labeled as the concession (its name as the sender/subject/header) \u2014 a ratepayer never sees any CROIP branding; falls back to a neutral 'Ratepayer Services' label only if no concession is on file. Also accepts an optional idempotencyKey \u2014 see '2. Concession > Register a ratepayer (walk-in)' for what it's for.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"email\": \"{{ratepayer_email}}\",\n  \"phone\": \"{{ratepayer_phone}}\",\n  \"password\": \"{{ratepayer_password}}\",\n  \"confirmPassword\": \"{{ratepayer_password}}\",\n  \"firstName\": \"{{ratepayer_first_name}}\",\n  \"middleName\": \"{{ratepayer_middle_name}}\",\n  \"lastName\": \"{{ratepayer_last_name}}\",\n  \"address\": \"14 Independence Avenue, Accra\",\n  \"latitude\": 5.6037,\n  \"longitude\": -0.187\n}",
+                  "raw": "{\n  \"firstName\": \"{{ratepayer_first_name}}\",\n  \"lastName\": \"{{ratepayer_last_name}}\",\n  \"email\": \"{{ratepayer_email}}\",\n  \"password\": \"{{ratepayer_password}}\",\n  \"confirmPassword\": \"{{ratepayer_password}}\",\n  \"concessionCode\": \"{{concession_code}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -52,7 +74,7 @@
                   "listen": "test",
                   "script": {
                     "exec": [
-                      "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('sample_ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res).to.have.property('completion');\n  pm.expect(res.completion).to.have.property('completionPercentage');\n  pm.expect(res.completion).to.have.property('missingSections');\n}"
+                      "if (pm.response.code === 201) { const j = pm.response.json(); pm.environment.set('ratepayer_id', j.id); if (j.otp && j.otp.devOtpCode) pm.environment.set('ratepayer_otp_code', j.otp.devOtpCode); }"
                     ],
                     "type": "text/javascript"
                   }
@@ -80,7 +102,7 @@
                     "login"
                   ]
                 },
-                "description": "Email OTPs are dispatched to Mailpit (http://localhost:8025). Phone OTPs are routed to Arkasel stub. devOtpCode is also included in dev response.",
+                "description": "Email OTPs are dispatched to a real inbox in Mailpit (http://localhost:8025) and are deliberately NOT echoed back in the response \u2014 copy the code from there into ratepayer_otp_code. Phone OTPs still come back as devOtpCode (auto-saved by this request's test script) since there's no real SMS provider wired up yet. White-labeled as the ratepayer's own concession, never CROIP.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"identifier\": \"{{ratepayer_email}}\",\n  \"password\": \"{{ratepayer_password}}\"\n}",
@@ -150,6 +172,137 @@
               ]
             },
             {
+              "name": "Log out",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/auth/logout",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "auth",
+                    "logout"
+                  ]
+                },
+                "description": "Revokes just this session token server-side (not every session this ratepayer has elsewhere) \u2014 every subsequent request with {{ratepayer_access_token}} now gets 401 Invalid or expired access token, same as a naturally-expired one. Run Login step 1+2 again to get a fresh token.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) { pm.environment.set('ratepayer_access_token', ''); }"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Forgot password step 1: send reset OTP",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/auth/forgot-password",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "auth",
+                    "forgot-password"
+                  ]
+                },
+                "description": "No auth, no password required \u2014 this is the \"I forgot it\" flow. Always returns the same OTP_REQUIRED shape whether or not the identifier is registered; only a real account actually gets an OTP generated and dispatched. Email OTPs go to Mailpit (http://localhost:8025) and are not echoed back \u2014 check there; phone OTPs still come back as devOtpCode since there's no real SMS provider yet.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"identifier\": \"{{ratepayer_email}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) { const j = pm.response.json(); if (j.devOtpCode) pm.environment.set('ratepayer_otp_code', j.devOtpCode); }"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Forgot password step 2: verify OTP \u2192 set new password",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/auth/reset-password",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "auth",
+                    "reset-password"
+                  ]
+                },
+                "description": "Confirms the PASSWORD_RESET OTP (a distinct purpose from login/registration OTPs \u2014 one can never be replayed as the other), sets the new password, and immediately issues a session token \u2014 same as a normal login, since this proves account ownership just as well.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"identifier\": \"{{ratepayer_email}}\",\n  \"otpCode\": \"{{ratepayer_otp_code}}\",\n  \"newPassword\": \"{{ratepayer_password}}\",\n  \"confirmNewPassword\": \"{{ratepayer_password}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) { pm.environment.set('ratepayer_access_token', pm.response.json().accessToken); }"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
               "name": "Get my own profile",
               "request": {
                 "method": "GET",
@@ -180,37 +333,7 @@
               "response": []
             },
             {
-              "name": "Get ratepayer profile by id (authenticated)",
-              "request": {
-                "method": "GET",
-                "header": [],
-                "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
-                  "host": [
-                    "{{ratepayer_url}}"
-                  ],
-                  "path": [
-                    "v1",
-                    "ratepayers",
-                    "{{sample_ratepayer_id}}"
-                  ]
-                },
-                "description": "",
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{ratepayer_access_token}}",
-                      "type": "string"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Complete / Update profile (the single update API, authenticated)",
+              "name": "Update my own profile (self-service)",
               "request": {
                 "method": "PATCH",
                 "header": [
@@ -220,20 +343,20 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/me",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}"
+                    "me"
                   ]
                 },
-                "description": "The single unified update and completion API for ratepayers. Authenticated with ratepayer Bearer token. Used to complete missing profile sections (such as names, physical address, coordinates point) or update any field. Requires authorization token; omitted/updated fields immediately update completion metrics.",
+                "description": "Uses the ratepayer's own {{ratepayer_access_token}}, not a concession credential \u2014 unlike '2. Concession > Update a ratepayer profile', this is never rejected for cross-concession ownership. Extensive: every self-owned field can be changed (name, ratepayerType, phone, address, coordinates/MMDA, password) except email, the concession registered with, and other immutable fields (code, id, status) \u2014 sending any of those is rejected with 400, not silently ignored.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"firstName\": \"{{ratepayer_first_name}}\",\n  \"lastName\": \"{{ratepayer_last_name}}\",\n  \"address\": \"14 Independence Avenue, Accra\",\n  \"latitude\": 5.6037,\n  \"longitude\": -0.187\n}",
+                  "raw": "{\n  \"ratepayerType\": \"INDIVIDUAL\",\n  \"firstName\": \"{{ratepayer_first_name}}\",\n  \"middleName\": \"{{ratepayer_middle_name}}\",\n  \"lastName\": \"{{ratepayer_last_name}}\",\n  \"phone\": \"{{ratepayer_phone}}\",\n  \"address\": \"45 Oxford Street, Osu\",\n  \"latitude\": 5.6037,\n  \"longitude\": -0.187\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -251,18 +374,68 @@
                   ]
                 }
               },
-              "response": [],
-              "event": [
-                {
-                  "listen": "test",
-                  "script": {
-                    "exec": [
-                      "if (pm.response.code === 200) {\n  const j = pm.response.json();\n  pm.expect(j).to.have.property('completion');\n}"
-                    ],
-                    "type": "text/javascript"
-                  }
+              "response": []
+            },
+            {
+              "name": "Get ratepayer profile by id (authenticated)",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{ratepayer_id}}"
+                  ]
+                },
+                "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
                 }
-              ]
+              },
+              "response": []
+            },
+            {
+              "name": "My own account activity",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/me/activity",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "me",
+                    "activity"
+                  ]
+                },
+                "description": "Every real action taken on my own account (registered, logged in, profile updated, KYC submitted, password reset, etc.), most recent first \u2014 the same chronological log CROIP staff see on my profile's Account Activity card, scoped to just me.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
             },
             {
               "name": "Verify KYC for own profile (Bearer token)",
@@ -320,14 +493,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/verifications",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}/verifications",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}",
+                    "{{ratepayer_id}}",
                     "verifications"
                   ]
                 },
@@ -365,14 +538,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/verifications",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}/verifications",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}",
+                    "{{ratepayer_id}}",
                     "verifications"
                   ]
                 },
@@ -410,14 +583,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/verifications",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}/verifications",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}",
+                    "{{ratepayer_id}}",
                     "verifications"
                   ]
                 },
@@ -445,22 +618,22 @@
               "response": []
             },
             {
-              "name": "Delete ratepayer profile",
+              "name": "Delete my own account",
               "request": {
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/me",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}"
+                    "me"
                   ]
                 },
-                "description": "Delete an individual ratepayer profile. Strictly rejected with 400 Bad Request if the ratepayer has linked properties. To delete a ratepayer, first sever all property links or delete unbilled properties.",
+                "description": "Self-service account deletion \u2014 same business rule as the concession-mediated delete in '2. Concession > Ratepayers' (rejected with 400 if any properties are still linked; sever those first), just scoped to my own account via {{ratepayer_access_token}} instead of a concessionId.",
                 "auth": {
                   "type": "bearer",
                   "bearer": [
@@ -478,139 +651,8 @@
         },
         {
           "name": "My Properties",
-          "description": "property-registry-service + ratepayer-service \u2014 a property a ratepayer registers directly, updates, or claims from one a concession already registered.",
+          "description": "ratepayer-service \u2014 ratepayers cannot register or update properties (concession-only); they can claim one a concession already registered that has no ratepayer linked.",
           "item": [
-            {
-              "name": "Register a property (self-service)",
-              "request": {
-                "method": "POST",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": {
-                  "raw": "{{property_registry_url}}/v1/properties",
-                  "host": [
-                    "{{property_registry_url}}"
-                  ],
-                  "path": [
-                    "v1",
-                    "properties"
-                  ]
-                },
-                "description": "Strictly requires ratepayer Bearer session token (HS256). Single unified API to register a property from an authenticated ratepayer. Accepts all property fields, but the required ones are: propertyName, polygonGeoJson, propertyUse (e.g. RESIDENTIAL, COMMERCIAL, MIXED_USE), and ownershipType (either FULL or PART). All other fields (numberOfFloors, propertyClass, structureType, documents, etc.) are optional. Property is attributed to the logged-in ratepayer (createdByRatepayerId) and automatically linked in ratepayer-service with the specified ownership type and percentage.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"propertyName\": \"My Residence\",\n  \"propertyUse\": \"RESIDENTIAL\",\n  \"ownershipType\": \"FULL\",\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -0.2355,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5545\n        ]\n      ]\n    ]\n  }\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{ratepayer_access_token}}",
-                      "type": "string"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Update my property - metadata only (preserves valuation & status)",
-              "request": {
-                "method": "PATCH",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": {
-                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
-                  "host": [
-                    "{{property_registry_url}}"
-                  ],
-                  "path": [
-                    "v1",
-                    "properties",
-                    "{{sample_property_id}}"
-                  ]
-                },
-                "description": "Ratepayer updates descriptive metadata (name, description, documents). Since core structural/use fields are unchanged, existing valuation and verification status remain intact.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"propertyName\": \"Sunset Heights Villa\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{ratepayer_access_token}}",
-                      "type": "string"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
-            {
-              "name": "Update my property - structural/usage change (resets to UNASSESSED, decouples valuation)",
-              "request": {
-                "method": "PATCH",
-                "header": [
-                  {
-                    "key": "Content-Type",
-                    "value": "application/json"
-                  }
-                ],
-                "url": {
-                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
-                  "host": [
-                    "{{property_registry_url}}"
-                  ],
-                  "path": [
-                    "v1",
-                    "properties",
-                    "{{sample_property_id}}"
-                  ]
-                },
-                "description": "Ratepayer repurposes property or adds floors / changes physical characteristics. The property is automatically marked UNASSESSED, verificationStatus is reset to PENDING, and active valuations are decoupled from the parcel pending reassessment.",
-                "body": {
-                  "mode": "raw",
-                  "raw": "{\n  \"numberOfFloors\": 3,\n  \"propertyUse\": \"COMMERCIAL\"\n}",
-                  "options": {
-                    "raw": {
-                      "language": "json"
-                    }
-                  }
-                },
-                "auth": {
-                  "type": "bearer",
-                  "bearer": [
-                    {
-                      "key": "token",
-                      "value": "{{ratepayer_access_token}}",
-                      "type": "string"
-                    }
-                  ]
-                }
-              },
-              "response": []
-            },
             {
               "name": "Claim an existing property (authenticated)",
               "request": {
@@ -635,7 +677,7 @@
                 "description": "",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"ratepayerId\": \"{{sample_ratepayer_id}}\",\n  \"propertyId\": \"{{sample_property_id}}\",\n  \"ownershipType\": \"OWNER\",\n  \"documents\": [\n    {\n      \"documentType\": \"INDENTURE\",\n      \"mediaUrl\": \"https://storage.croip.gov.gh/claims/indenture.pdf\"\n    }\n  ]\n}",
+                  "raw": "{\n  \"ratepayerId\": \"{{ratepayer_id}}\",\n  \"propertyId\": \"{{property_id}}\",\n  \"ownershipType\": \"OWNER\",\n  \"documents\": [\n    {\n      \"documentType\": \"INDENTURE\",\n      \"mediaUrl\": \"https://storage.croip.gov.gh/claims/indenture.pdf\"\n    }\n  ]\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -666,21 +708,21 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/properties/{{sample_property_code}}/claims",
+                  "raw": "{{ratepayer_url}}/v1/properties/{{property_code}}/claims",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "properties",
-                    "{{sample_property_code}}",
+                    "{{property_code}}",
                     "claims"
                   ]
                 },
                 "description": "",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"propertyId\": \"{{sample_property_id}}\",\n  \"documents\": [\n    {\n      \"documentType\": \"INDENTURE\",\n      \"mediaUrl\": \"https://storage.croip.gov.gh/claims/indenture.pdf\"\n    }\n  ]\n}",
+                  "raw": "{\n  \"propertyId\": \"{{property_id}}\",\n  \"documents\": [\n    {\n      \"documentType\": \"INDENTURE\",\n      \"mediaUrl\": \"https://storage.croip.gov.gh/claims/indenture.pdf\"\n    }\n  ]\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -706,14 +748,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/properties",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}/properties",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}",
+                    "{{ratepayer_id}}",
                     "properties"
                   ]
                 },
@@ -737,16 +779,16 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/properties/{{sample_property_id}}",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}/properties/{{property_id}}",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}",
+                    "{{ratepayer_id}}",
                     "properties",
-                    "{{sample_property_id}}"
+                    "{{property_id}}"
                   ]
                 },
                 "description": "Sever the ownership or tenancy link between a ratepayer and an individual property parcel without deleting the property.",
@@ -822,7 +864,7 @@
                 "description": "",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"disputeType\": \"BILLING\",\n  \"billId\": \"{{sample_bill_id}}\",\n  \"description\": \"Billed amount does not match the posted rate for my property class.\"\n}",
+                  "raw": "{\n  \"disputeType\": \"BILLING\",\n  \"billId\": \"{{bill_id}}\",\n  \"description\": \"Billed amount does not match the posted rate for my property class.\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -883,14 +925,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{dispute_url}}/v1/disputes/{{sample_dispute_code}}/evidence",
+                  "raw": "{{dispute_url}}/v1/disputes/{{dispute_code}}/evidence",
                   "host": [
                     "{{dispute_url}}"
                   ],
                   "path": [
                     "v1",
                     "disputes",
-                    "{{sample_dispute_code}}",
+                    "{{dispute_code}}",
                     "evidence"
                   ]
                 },
@@ -928,14 +970,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{dispute_url}}/v1/disputes/{{sample_dispute_code}}/comments",
+                  "raw": "{{dispute_url}}/v1/disputes/{{dispute_code}}/comments",
                   "host": [
                     "{{dispute_url}}"
                   ],
                   "path": [
                     "v1",
                     "disputes",
-                    "{{sample_dispute_code}}",
+                    "{{dispute_code}}",
                     "comments"
                   ]
                 },
@@ -974,14 +1016,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{shared_services_url}}/v1/receipts/{{sample_receipt_id}}/verification",
+                  "raw": "{{shared_services_url}}/v1/receipts/{{receipt_id}}/verification",
                   "host": [
                     "{{shared_services_url}}"
                   ],
                   "path": [
                     "v1",
                     "receipts",
-                    "{{sample_receipt_id}}",
+                    "{{receipt_id}}",
                     "verification"
                   ]
                 },
@@ -999,7 +1041,7 @@
       "item": [
         {
           "name": "Properties",
-          "description": "property-registry-service \u2014 a concession's field agents registering and verifying properties in their assigned MMDAs.",
+          "description": "property-registry-service \u2014 a concession's field agents registering and verifying properties in their assigned MMDAs. Uses {{concession_access_token}} throughout (mint it first under 'API Clients (self-service)'), except field verification itself which genuinely needs {{staff_access_token}}.",
           "item": [
             {
               "name": "Register a property",
@@ -1021,7 +1063,7 @@
                     "properties"
                   ]
                 },
-                "description": "Requires staff/concessionaire Bearer token. Concessions can only register properties whose polygon falls strictly within their assigned MMDA territory (enforced via Shared Services and Platform Governance). Spatial non-overlap restriction: polygons cannot overlap or contain another property parcel when property uses and ownership percentage match. Core classification fields are required; propertyName and documents are optional.",
+                "description": "Use {{concession_access_token}} \u2014 this is the token minted from your client_id/client_secret (see 'Mint access token' above). The concession is identified from that token, not the request body. Concessions can only register properties whose polygon falls strictly within their assigned MMDA territory (enforced via Shared Services and Platform Governance). Spatial non-overlap restriction: polygons cannot overlap or contain another property parcel when property uses and ownership percentage match. Core classification fields are required; propertyName and documents are optional.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"code\": \"GH0701-{{$randomInt}}\",\n  \"propertyName\": \"Sample Commercial Block\",\n  \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n  \"buildingStatus\": \"COMPLETED\",\n  \"propertyStatus\": \"ASSESSED\",\n  \"propertyUse\": \"COMMERCIAL\",\n  \"tenureType\": \"FREEHOLD\",\n  \"structureType\": \"CONCRETE\",\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -0.2355,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5545\n        ]\n      ]\n    ]\n  }\n}",
@@ -1036,7 +1078,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{staff_access_token}}",
+                      "value": "{{concession_access_token}}",
                       "type": "string"
                     }
                   ]
@@ -1065,7 +1107,7 @@
                     "batch"
                   ]
                 },
-                "description": "Concession batch registration (up to 500 properties). All properties must fall within the concession's assigned MMDA boundary. Core classification fields are required for each property; code is generated if omitted; propertyName and documents are optional.",
+                "description": "Use {{concession_access_token}}. Batch registration (up to 500 properties). All properties must fall within the concession's assigned MMDA boundary. Core classification fields are required for each property; code is generated if omitted; propertyName and documents are optional.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"properties\": [\n    {\n      \"code\": \"GH0701-B1-{{$randomInt}}\",\n      \"propertyName\": \"Sample Commercial Block A\",\n      \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n      \"buildingStatus\": \"COMPLETED\",\n      \"propertyStatus\": \"ASSESSED\",\n      \"propertyUse\": \"COMMERCIAL\",\n      \"tenureType\": \"FREEHOLD\",\n      \"structureType\": \"CONCRETE\",\n      \"polygonGeoJson\": {\n        \"type\": \"Polygon\",\n        \"coordinates\": [\n          [\n            [\n              -0.2355,\n              5.5545\n            ],\n            [\n              -0.2355,\n              5.5555\n            ],\n            [\n              -0.2345,\n              5.5555\n            ],\n            [\n              -0.2345,\n              5.5545\n            ],\n            [\n              -0.2355,\n              5.5545\n            ]\n          ]\n        ]\n      }\n    },\n    {\n      \"code\": \"GH0701-B2-{{$randomInt}}\",\n      \"propertyName\": \"Sample Commercial Block B\",\n      \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n      \"buildingStatus\": \"COMPLETED\",\n      \"propertyStatus\": \"ASSESSED\",\n      \"propertyUse\": \"COMMERCIAL\",\n      \"tenureType\": \"FREEHOLD\",\n      \"structureType\": \"CONCRETE\",\n      \"polygonGeoJson\": {\n        \"type\": \"Polygon\",\n        \"coordinates\": [\n          [\n            [\n              -0.2345,\n              5.5545\n            ],\n            [\n              -0.2345,\n              5.5555\n            ],\n            [\n              -0.2335,\n              5.5555\n            ],\n            [\n              -0.2335,\n              5.5545\n            ],\n            [\n              -0.2345,\n              5.5545\n            ]\n          ]\n        ]\n      }\n    }\n  ]\n}",
@@ -1080,7 +1122,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{staff_access_token}}",
+                      "value": "{{concession_access_token}}",
                       "type": "string"
                     }
                   ]
@@ -1109,7 +1151,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{staff_access_token}}",
+                      "value": "{{concession_access_token}}",
                       "type": "string"
                     }
                   ]
@@ -1123,14 +1165,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
+                  "raw": "{{property_registry_url}}/v1/properties/{{property_id}}",
                   "host": [
                     "{{property_registry_url}}"
                   ],
                   "path": [
                     "v1",
                     "properties",
-                    "{{sample_property_id}}"
+                    "{{property_id}}"
                   ]
                 },
                 "description": "",
@@ -1139,7 +1181,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{staff_access_token}}",
+                      "value": "{{concession_access_token}}",
                       "type": "string"
                     }
                   ]
@@ -1158,17 +1200,17 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
+                  "raw": "{{property_registry_url}}/v1/properties/{{property_id}}",
                   "host": [
                     "{{property_registry_url}}"
                   ],
                   "path": [
                     "v1",
                     "properties",
-                    "{{sample_property_id}}"
+                    "{{property_id}}"
                   ]
                 },
-                "description": "Concession staff updates property metadata. Non-structural updates preserve valuations and verification status.",
+                "description": "Use {{concession_access_token}}. Non-structural updates preserve valuations and verification status.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"propertyName\": \"Accra Central Commercial Complex\"\n}",
@@ -1183,7 +1225,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{staff_access_token}}",
+                      "value": "{{concession_access_token}}",
                       "type": "string"
                     }
                   ]
@@ -1202,17 +1244,17 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
+                  "raw": "{{property_registry_url}}/v1/properties/{{property_id}}",
                   "host": [
                     "{{property_registry_url}}"
                   ],
                   "path": [
                     "v1",
                     "properties",
-                    "{{sample_property_id}}"
+                    "{{property_id}}"
                   ]
                 },
-                "description": "Concession field staff updates physical structure or property use (e.g. building renovation, repurposing, adding floors). Automatically marks property UNASSESSED, resets verificationStatus to PENDING, and decouples active valuations pending re-assessment.",
+                "description": "Use {{concession_access_token}}. Updates physical structure or property use (e.g. building renovation, repurposing, adding floors). Automatically marks property UNASSESSED, resets verificationStatus to PENDING, and decouples active valuations pending re-assessment.",
                 "body": {
                   "mode": "raw",
                   "raw": "{\n  \"numberOfFloors\": 4,\n  \"propertyUse\": \"COMMERCIAL\",\n  \"structuralType\": \"MULTI_STOREY\"\n}",
@@ -1227,7 +1269,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{staff_access_token}}",
+                      "value": "{{concession_access_token}}",
                       "type": "string"
                     }
                   ]
@@ -1246,14 +1288,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}/units",
+                  "raw": "{{property_registry_url}}/v1/properties/{{property_id}}/units",
                   "host": [
                     "{{property_registry_url}}"
                   ],
                   "path": [
                     "v1",
                     "properties",
-                    "{{sample_property_id}}",
+                    "{{property_id}}",
                     "units"
                   ]
                 },
@@ -1272,7 +1314,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{staff_access_token}}",
+                      "value": "{{concession_access_token}}",
                       "type": "string"
                     }
                   ]
@@ -1291,14 +1333,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_code}}/documents",
+                  "raw": "{{property_registry_url}}/v1/properties/{{property_code}}/documents",
                   "host": [
                     "{{property_registry_url}}"
                   ],
                   "path": [
                     "v1",
                     "properties",
-                    "{{sample_property_code}}",
+                    "{{property_code}}",
                     "documents"
                   ]
                 },
@@ -1317,7 +1359,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{staff_access_token}}",
+                      "value": "{{concession_access_token}}",
                       "type": "string"
                     }
                   ]
@@ -1331,14 +1373,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_code}}/documents",
+                  "raw": "{{property_registry_url}}/v1/properties/{{property_code}}/documents",
                   "host": [
                     "{{property_registry_url}}"
                   ],
                   "path": [
                     "v1",
                     "properties",
-                    "{{sample_property_code}}",
+                    "{{property_code}}",
                     "documents"
                   ]
                 },
@@ -1348,7 +1390,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{staff_access_token}}",
+                      "value": "{{concession_access_token}}",
                       "type": "string"
                     }
                   ]
@@ -1367,21 +1409,21 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}/verifications",
+                  "raw": "{{property_registry_url}}/v1/properties/{{property_id}}/verifications",
                   "host": [
                     "{{property_registry_url}}"
                   ],
                   "path": [
                     "v1",
                     "properties",
-                    "{{sample_property_id}}",
+                    "{{property_id}}",
                     "verifications"
                   ]
                 },
-                "description": "Reviewed/approved afterwards by CROIP Admin (see that folder's Property Oversight section).",
+                "description": "Needs 'properties:verify', which is NOT among a concession API client's granted permissions (by design \u2014 a concession can't self-verify its own registrations) \u2014 this one genuinely requires {{staff_access_token}}, unlike the rest of this folder. Reviewed/approved afterwards by CROIP Admin (see that folder's Property Oversight section).",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"verifiedByPersonnelId\": \"{{sample_personnel_id}}\",\n  \"verifierCoordinates\": {\n    \"latitude\": 5.5551,\n    \"longitude\": -0.2351\n  },\n  \"isWithinPolygon\": true,\n  \"verifiedSnapshot\": {},\n  \"capturedAt\": \"2026-10-19T12:00:00Z\",\n  \"outcome\": \"VERIFIED\"\n}",
+                  "raw": "{\n  \"verifiedByPersonnelId\": \"{{personnel_id}}\",\n  \"verifierCoordinates\": {\n    \"latitude\": 5.5551,\n    \"longitude\": -0.2351\n  },\n  \"isWithinPolygon\": true,\n  \"verifiedSnapshot\": {},\n  \"capturedAt\": \"2026-10-19T12:00:00Z\",\n  \"outcome\": \"VERIFIED\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1407,14 +1449,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}/verifications",
+                  "raw": "{{property_registry_url}}/v1/properties/{{property_id}}/verifications",
                   "host": [
                     "{{property_registry_url}}"
                   ],
                   "path": [
                     "v1",
                     "properties",
-                    "{{sample_property_id}}",
+                    "{{property_id}}",
                     "verifications"
                   ]
                 },
@@ -1424,7 +1466,7 @@
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{staff_access_token}}",
+                      "value": "{{concession_access_token}}",
                       "type": "string"
                     }
                   ]
@@ -1438,23 +1480,379 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
+                  "raw": "{{property_registry_url}}/v1/properties/{{property_id}}",
                   "host": [
                     "{{property_registry_url}}"
                   ],
                   "path": [
                     "v1",
                     "properties",
-                    "{{sample_property_id}}"
+                    "{{property_id}}"
                   ]
                 },
-                "description": "Delete an individual property parcel. Strictly rejected with 400 Bad Request if any bills on this property have been paid (in which case only ratepayer links can be severed). If eligible for deletion, automatically severs all ratepayer links in ratepayer-service and cascades units, valuations, documents, and photos.",
+                "description": "Use {{concession_access_token}}. Strictly rejected with 400 Bad Request if any bills on this property have been paid (in which case only ratepayer links can be severed). If eligible for deletion, automatically severs all ratepayer links in ratepayer-service and cascades units, valuations, documents, and photos.",
                 "auth": {
                   "type": "bearer",
                   "bearer": [
                     {
                       "key": "token",
-                      "value": "{{staff_access_token}}",
+                      "value": "{{concession_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "Ratepayers",
+          "description": "ratepayer-service \u2014 ratepayer registration, update, and delete are concession-mediated: use {{concession_access_token}} (minted from the concession's own client_id/client_secret, not {{staff_access_token}}), since which concession a ratepayer belongs to is read from that token, not the request body. Update/delete are rejected with 403 for a ratepayer not registered by this concession. Ratepayer login, own-profile read, and claims stay unscoped (see 1. Ratepayer).",
+          "item": [
+            {
+              "name": "List/search ratepayers",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/directory?page=1&pageSize=20",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "directory"
+                  ],
+                  "query": [
+                    {
+                      "key": "page",
+                      "value": "1"
+                    },
+                    {
+                      "key": "pageSize",
+                      "value": "20"
+                    }
+                  ]
+                },
+                "description": "Use {{concession_access_token}}. Same directory endpoint CROIP staff use, granted to a concession's own API client via ratepayers:read (the same shape of grant properties:read already gives it for GET /properties) \u2014 not automatically scoped to only this concession's own ratepayers, matching how properties:read already works platform-wide rather than per-assembly.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{concession_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Register a ratepayer (walk-in)",
+              "request": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers"
+                  ]
+                },
+                "description": "Use {{concession_access_token}} \u2014 the ratepayer's concessionId is taken from the caller's own token's client_id, never from the request body. A staff token also technically works (CROIP Admin can register on a concession's behalf) but falls back to a shared default concessionId rather than a real one, so it doesn't actually demonstrate which concession owns this ratepayer \u2014 use the concession's own token to test that for real. Accepts all ratepayer profile fields; only email (or phone number) and password (with confirmPassword) are strictly required. Since both email and phone are set here, the OTP goes to email (Mailpit, http://localhost:8025, not echoed in the response) \u2014 clear the email field to test the phone/SMS path with devOtpCode auto-filled instead. Optional idempotencyKey makes this safe to retry \u2014 e.g. a field agent registering a ratepayer with no signal, whose app generates the key once offline and resends the same request (same key, same body) once connectivity returns: a retry replays the original 201 response instead of creating a duplicate; the same key with a different body is rejected with 409.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"email\": \"{{ratepayer_email}}\",\n  \"phone\": \"{{ratepayer_phone}}\",\n  \"password\": \"{{ratepayer_password}}\",\n  \"confirmPassword\": \"{{ratepayer_password}}\",\n  \"firstName\": \"{{ratepayer_first_name}}\",\n  \"middleName\": \"{{ratepayer_middle_name}}\",\n  \"lastName\": \"{{ratepayer_last_name}}\",\n  \"address\": \"14 Independence Avenue, Accra\",\n  \"latitude\": 5.6037,\n  \"longitude\": -0.187\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{concession_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('ratepayer_id', res.id);\n  if (res.otp && res.otp.devOtpCode) {\n    pm.environment.set('ratepayer_otp_code', res.otp.devOtpCode);\n  }\n  pm.expect(res).to.have.property('completion');\n  pm.expect(res.completion).to.have.property('completionPercentage');\n  pm.expect(res.completion).to.have.property('missingSections');\n}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Update a ratepayer profile",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{ratepayer_id}}"
+                  ]
+                },
+                "description": "Use {{concession_access_token}}. Rejected with 403 if this ratepayer was registered by a different concession than the caller's token. Used to complete missing profile sections or update any field; omitted/updated fields immediately update completion metrics.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"firstName\": \"{{ratepayer_first_name}}\",\n  \"lastName\": \"{{ratepayer_last_name}}\",\n  \"address\": \"14 Independence Avenue, Accra\",\n  \"latitude\": 5.6037,\n  \"longitude\": -0.187\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{concession_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) {\n  const j = pm.response.json();\n  pm.expect(j).to.have.property('completion');\n}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Delete a ratepayer profile",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}",
+                  "host": [
+                    "{{ratepayer_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "ratepayers",
+                    "{{ratepayer_id}}"
+                  ]
+                },
+                "description": "Use {{concession_access_token}}. Rejected with 403 if this ratepayer was registered by a different concession than the caller's token, or 400 Bad Request if the ratepayer has linked properties. To delete a ratepayer, first sever all property links or delete unbilled properties.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{concession_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
+        },
+        {
+          "name": "API Clients (self-service)",
+          "description": "platform-governance-service \u2014 a concessionaire managing its OWN API credential with its own current Bearer token (concessionId comes from that token, never a URL param, so you can only ever touch your own credential). CROIP provisions the first one at onboarding (see 3. CROIP Admin > Concession Management); this is what you integrate into your own system afterward.",
+          "item": [
+            {
+              "name": "Mint access token (client_credentials)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{zitadel_issuer}}/oauth/v2/token",
+                  "host": [
+                    "{{zitadel_issuer}}"
+                  ],
+                  "path": [
+                    "oauth",
+                    "v2",
+                    "token"
+                  ]
+                },
+                "description": "Mints a bearer token as this concessionaire's own API client, for the self-service requests below. Grant type: client_credentials.",
+                "body": {
+                  "mode": "urlencoded",
+                  "urlencoded": [
+                    {
+                      "key": "grant_type",
+                      "value": "client_credentials"
+                    },
+                    {
+                      "key": "scope",
+                      "value": "openid urn:zitadel:iam:org:project:id:{{zitadel_project_id}}:roles urn:zitadel:iam:org:project:id:{{zitadel_project_id}}:aud"
+                    }
+                  ]
+                },
+                "auth": {
+                  "type": "basic",
+                  "basic": [
+                    {
+                      "key": "username",
+                      "value": "{{concession_client_id}}",
+                      "type": "string"
+                    },
+                    {
+                      "key": "password",
+                      "value": "{{concession_client_secret}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 200) { pm.environment.set('concession_access_token', pm.response.json().access_token); }"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "List my API clients",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/me/api-clients",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "me",
+                    "api-clients"
+                  ]
+                },
+                "description": "Never includes secrets \u2014 those are shown once, at issuance time.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{concession_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Rotate my API credential",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/me/api-clients/rotate",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "me",
+                    "api-clients",
+                    "rotate"
+                  ]
+                },
+                "description": "Revokes your current credential at Zitadel and issues/emails a new one. You can never have two active credentials at once, so do this as soon as you suspect the current one is compromised.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{concession_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('concession_client_id', res.clientId);\n  pm.environment.set('concession_client_secret', res.clientSecret);\n}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "Revoke my API credential",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/me/api-clients/revoke",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "me",
+                    "api-clients",
+                    "revoke"
+                  ]
+                },
+                "description": "Revokes your current credential without issuing a replacement \u2014 you will need CROIP staff to re-provision one if you have no other way to authenticate afterward.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{concession_access_token}}",
                       "type": "string"
                     }
                   ]
@@ -1491,7 +1889,7 @@
                 "description": "",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"propertyId\": \"{{sample_property_id}}\",\n  \"ratepayerId\": \"{{sample_ratepayer_id}}\",\n  \"billingPeriod\": \"2026-Q4\",\n  \"billType\": \"PROPERTY_RATE\",\n  \"currency\": \"GHS\",\n  \"amountDue\": \"450.00\",\n  \"dueDate\": \"2026-12-31\"\n}",
+                  "raw": "{\n  \"propertyId\": \"{{property_id}}\",\n  \"ratepayerId\": \"{{ratepayer_id}}\",\n  \"billingPeriod\": \"2026-Q4\",\n  \"billType\": \"PROPERTY_RATE\",\n  \"currency\": \"GHS\",\n  \"amountDue\": \"450.00\",\n  \"dueDate\": \"2026-12-31\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1517,14 +1915,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{billing_payments_url}}/v1/bills/{{sample_bill_number}}",
+                  "raw": "{{billing_payments_url}}/v1/bills/{{bill_number}}",
                   "host": [
                     "{{billing_payments_url}}"
                   ],
                   "path": [
                     "v1",
                     "bills",
-                    "{{sample_bill_number}}"
+                    "{{bill_number}}"
                   ]
                 },
                 "description": "",
@@ -1547,7 +1945,7 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{billing_payments_url}}/v1/bills/property-payment-status/{{sample_property_id}}",
+                  "raw": "{{billing_payments_url}}/v1/bills/property-payment-status/{{property_id}}",
                   "host": [
                     "{{billing_payments_url}}"
                   ],
@@ -1555,7 +1953,7 @@
                     "v1",
                     "bills",
                     "property-payment-status",
-                    "{{sample_property_id}}"
+                    "{{property_id}}"
                   ]
                 },
                 "description": "Check whether any bills on this property have recorded payments. Returns hasPaidBills, paidBillsCount, and totalAmountPaid.",
@@ -1583,21 +1981,21 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{billing_payments_url}}/v1/bills/{{sample_bill_number}}/payments",
+                  "raw": "{{billing_payments_url}}/v1/bills/{{bill_number}}/payments",
                   "host": [
                     "{{billing_payments_url}}"
                   ],
                   "path": [
                     "v1",
                     "bills",
-                    "{{sample_bill_number}}",
+                    "{{bill_number}}",
                     "payments"
                   ]
                 },
                 "description": "",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"amount\": \"450.00\",\n  \"paymentType\": \"MOBILE_MONEY\",\n  \"externalPaymentRef\": \"MM-20261019-0001\",\n  \"paidByRatepayerId\": \"{{sample_ratepayer_id}}\"\n}",
+                  "raw": "{\n  \"amount\": \"450.00\",\n  \"paymentType\": \"MOBILE_MONEY\",\n  \"externalPaymentRef\": \"MM-20261019-0001\",\n  \"paidByRatepayerId\": \"{{ratepayer_id}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1640,7 +2038,7 @@
                 "description": "",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"billNumber\": \"{{sample_bill_number}}\",\n  \"amount\": \"450.00\"\n}",
+                  "raw": "{\n  \"billNumber\": \"{{bill_number}}\",\n  \"amount\": \"450.00\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1689,7 +2087,7 @@
                 "description": "",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"eventType\": \"revenue.bill.paid.v1\",\n  \"eventVersion\": 1,\n  \"producer\": \"external-psp\",\n  \"aggregateType\": \"Bill\",\n  \"aggregateId\": \"{{sample_bill_id}}\",\n  \"aggregateVersion\": 1,\n  \"concessionId\": \"{{sample_concession_id}}\",\n  \"assemblyId\": \"{{sample_assembly_id}}\",\n  \"correlationId\": \"{{$guid}}\",\n  \"data\": {\n    \"note\": \"example payload \\u2014 match the real CloudEvent envelope your producer uses\"\n  }\n}",
+                  "raw": "{\n  \"eventType\": \"revenue.bill.paid.v1\",\n  \"eventVersion\": 1,\n  \"producer\": \"external-psp\",\n  \"aggregateType\": \"Bill\",\n  \"aggregateId\": \"{{bill_id}}\",\n  \"aggregateVersion\": 1,\n  \"concessionId\": \"{{concession_id}}\",\n  \"assemblyId\": \"{{assembly_id}}\",\n  \"correlationId\": \"{{$guid}}\",\n  \"data\": {\n    \"note\": \"example payload \\u2014 match the real CloudEvent envelope your producer uses\"\n  }\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1758,14 +2156,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{reporting_gateway_url}}/v1/ingestions/{{sample_ingestion_id}}",
+                  "raw": "{{reporting_gateway_url}}/v1/ingestions/{{ingestion_id}}",
                   "host": [
                     "{{reporting_gateway_url}}"
                   ],
                   "path": [
                     "v1",
                     "ingestions",
-                    "{{sample_ingestion_id}}"
+                    "{{ingestion_id}}"
                   ]
                 },
                 "description": "",
@@ -1823,7 +2221,7 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{shared_services_url}}/v1/assemblies?regionId={{sample_region_id}}",
+                  "raw": "{{shared_services_url}}/v1/assemblies?regionId={{region_id}}",
                   "host": [
                     "{{shared_services_url}}"
                   ],
@@ -1834,7 +2232,7 @@
                   "query": [
                     {
                       "key": "regionId",
-                      "value": "{{sample_region_id}}"
+                      "value": "{{region_id}}"
                     }
                   ]
                 },
@@ -2052,7 +2450,7 @@
                 "method": "PUT",
                 "header": [],
                 "url": {
-                  "raw": "{{platform_governance_url}}/v1/rbac/roles/{{sample_role_id}}/permissions/{{sample_permission_id}}",
+                  "raw": "{{platform_governance_url}}/v1/rbac/roles/{{role_id}}/permissions/{{permission_id}}",
                   "host": [
                     "{{platform_governance_url}}"
                   ],
@@ -2060,9 +2458,9 @@
                     "v1",
                     "rbac",
                     "roles",
-                    "{{sample_role_id}}",
+                    "{{role_id}}",
                     "permissions",
-                    "{{sample_permission_id}}"
+                    "{{permission_id}}"
                   ]
                 },
                 "description": "",
@@ -2085,7 +2483,7 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{platform_governance_url}}/v1/rbac/roles/{{sample_role_id}}/permissions/{{sample_permission_id}}",
+                  "raw": "{{platform_governance_url}}/v1/rbac/roles/{{role_id}}/permissions/{{permission_id}}",
                   "host": [
                     "{{platform_governance_url}}"
                   ],
@@ -2093,9 +2491,9 @@
                     "v1",
                     "rbac",
                     "roles",
-                    "{{sample_role_id}}",
+                    "{{role_id}}",
                     "permissions",
-                    "{{sample_permission_id}}"
+                    "{{permission_id}}"
                   ]
                 },
                 "description": "",
@@ -2220,14 +2618,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{platform_governance_url}}/v1/users/{{sample_user_id}}",
+                  "raw": "{{platform_governance_url}}/v1/users/{{user_id}}",
                   "host": [
                     "{{platform_governance_url}}"
                   ],
                   "path": [
                     "v1",
                     "users",
-                    "{{sample_user_id}}"
+                    "{{user_id}}"
                   ]
                 },
                 "description": "",
@@ -2255,14 +2653,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{platform_governance_url}}/v1/users/{{sample_user_id}}",
+                  "raw": "{{platform_governance_url}}/v1/users/{{user_id}}",
                   "host": [
                     "{{platform_governance_url}}"
                   ],
                   "path": [
                     "v1",
                     "users",
-                    "{{sample_user_id}}"
+                    "{{user_id}}"
                   ]
                 },
                 "description": "",
@@ -2294,14 +2692,14 @@
                 "method": "POST",
                 "header": [],
                 "url": {
-                  "raw": "{{platform_governance_url}}/v1/users/{{sample_user_id}}/resend-invite",
+                  "raw": "{{platform_governance_url}}/v1/users/{{user_id}}/resend-invite",
                   "host": [
                     "{{platform_governance_url}}"
                   ],
                   "path": [
                     "v1",
                     "users",
-                    "{{sample_user_id}}",
+                    "{{user_id}}",
                     "resend-invite"
                   ]
                 },
@@ -2325,14 +2723,14 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{platform_governance_url}}/v1/users/{{sample_user_id}}",
+                  "raw": "{{platform_governance_url}}/v1/users/{{user_id}}",
                   "host": [
                     "{{platform_governance_url}}"
                   ],
                   "path": [
                     "v1",
                     "users",
-                    "{{sample_user_id}}"
+                    "{{user_id}}"
                   ]
                 },
                 "description": "",
@@ -2375,10 +2773,10 @@
                     "concessions"
                   ]
                 },
-                "description": "",
+                "description": "Onboards a concessionaire and, in the same call, provisions and emails its first API client (viewable at http://localhost:8025 in dev). The secret is shown exactly once, here and in that email \u2014 store it now. `code` is optional \u2014 omit it (as here) to have the server auto-generate one (CONC-YYYY-XXXX-XXXX); pass it explicitly only to pin a specific code.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"code\": \"REVTECH\",\n  \"name\": \"RevTech Solutions Ltd\",\n  \"contactEmail\": \"ops@revtech.com\"\n}",
+                  "raw": "{\n  \"name\": \"RevTech Solutions Ltd\",\n  \"businessRegistrationNumber\": \"CS123456789\",\n  \"tin\": \"C0012345678\",\n  \"contactName\": \"Ama Boateng\",\n  \"contactPhone\": \"+233241234567\",\n  \"contactEmail\": \"ops@revtech.com\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2396,7 +2794,18 @@
                   ]
                 }
               },
-              "response": []
+              "response": [],
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "if (pm.response.code === 201) {\n  const res = pm.response.json();\n  pm.environment.set('concession_id', res.id);\n  if (res.apiClient) {\n    pm.environment.set('concession_client_id', res.apiClient.clientId);\n    pm.environment.set('concession_client_secret', res.apiClient.clientSecret);\n  }\n}"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ]
             },
             {
               "name": "List concessionaires",
@@ -2433,14 +2842,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}",
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{concession_id}}",
                   "host": [
                     "{{platform_governance_url}}"
                   ],
                   "path": [
                     "v1",
                     "concessions",
-                    "{{sample_concession_id}}"
+                    "{{concession_id}}"
                   ]
                 },
                 "description": "",
@@ -2463,14 +2872,14 @@
                 "method": "POST",
                 "header": [],
                 "url": {
-                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}/deactivate",
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{concession_id}}/deactivate",
                   "host": [
                     "{{platform_governance_url}}"
                   ],
                   "path": [
                     "v1",
                     "concessions",
-                    "{{sample_concession_id}}",
+                    "{{concession_id}}",
                     "deactivate"
                   ]
                 },
@@ -2494,14 +2903,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}/assemblies",
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{concession_id}}/assemblies",
                   "host": [
                     "{{platform_governance_url}}"
                   ],
                   "path": [
                     "v1",
                     "concessions",
-                    "{{sample_concession_id}}",
+                    "{{concession_id}}",
                     "assemblies"
                   ]
                 },
@@ -2530,21 +2939,21 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}/assemblies",
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{concession_id}}/assemblies",
                   "host": [
                     "{{platform_governance_url}}"
                   ],
                   "path": [
                     "v1",
                     "concessions",
-                    "{{sample_concession_id}}",
+                    "{{concession_id}}",
                     "assemblies"
                   ]
                 },
-                "description": "",
+                "description": "The contract always starts the moment this call is made (stamped server-side) \u2014 there's no contractStart to send.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"assemblyId\": \"{{sample_assembly_id}}\",\n  \"contractStart\": \"2026-01-01\",\n  \"contractEnd\": \"2027-12-31\"\n}",
+                  "raw": "{\n  \"assemblyId\": \"{{assembly_id}}\",\n  \"contractEnd\": \"2027-12-31\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2570,18 +2979,82 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}/api-clients",
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{concession_id}}/api-clients",
                   "host": [
                     "{{platform_governance_url}}"
                   ],
                   "path": [
                     "v1",
                     "concessions",
-                    "{{sample_concession_id}}",
+                    "{{concession_id}}",
                     "api-clients"
                   ]
                 },
-                "description": "",
+                "description": "Never includes secrets \u2014 those are shown once, at issuance time, in the onboard/rotate response.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Rotate a concessionaire's API credential (administrative)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{concession_id}}/api-clients/rotate",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "{{concession_id}}",
+                    "api-clients",
+                    "rotate"
+                  ]
+                },
+                "description": "CROIP-staff override, e.g. the concessionaire lost all access and contacted support. Revokes the current credential at Zitadel and issues/emails a new one. A concessionaire's own self-service equivalent is under '2. Concession > API Clients (self-service)'.",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{staff_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Revoke a concessionaire's API credential (administrative)",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{concession_id}}/api-clients/revoke",
+                  "host": [
+                    "{{platform_governance_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "concessions",
+                    "{{concession_id}}",
+                    "api-clients",
+                    "revoke"
+                  ]
+                },
+                "description": "Revokes the current credential without issuing a replacement.",
                 "auth": {
                   "type": "bearer",
                   "bearer": [
@@ -2606,14 +3079,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}/personnel",
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{concession_id}}/personnel",
                   "host": [
                     "{{platform_governance_url}}"
                   ],
                   "path": [
                     "v1",
                     "concessions",
-                    "{{sample_concession_id}}",
+                    "{{concession_id}}",
                     "personnel"
                   ]
                 },
@@ -2646,14 +3119,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{platform_governance_url}}/v1/concessions/{{sample_concession_id}}/personnel",
+                  "raw": "{{platform_governance_url}}/v1/concessions/{{concession_id}}/personnel",
                   "host": [
                     "{{platform_governance_url}}"
                   ],
                   "path": [
                     "v1",
                     "concessions",
-                    "{{sample_concession_id}}",
+                    "{{concession_id}}",
                     "personnel"
                   ]
                 },
@@ -2723,14 +3196,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}"
+                    "{{ratepayer_id}}"
                   ]
                 },
                 "description": "",
@@ -2758,14 +3231,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}"
+                    "{{ratepayer_id}}"
                   ]
                 },
                 "description": "Administers granular updates to any individual field of a ratepayer profile without touching other fields.",
@@ -2802,14 +3275,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/verifications",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}/verifications",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}",
+                    "{{ratepayer_id}}",
                     "verifications"
                   ]
                 },
@@ -2842,16 +3315,16 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/properties/{{sample_property_id}}",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}/properties/{{property_id}}",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}",
+                    "{{ratepayer_id}}",
                     "properties",
-                    "{{sample_property_id}}"
+                    "{{property_id}}"
                   ]
                 },
                 "description": "Sever link between a ratepayer and an individual property.",
@@ -2874,14 +3347,14 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}"
+                    "{{ratepayer_id}}"
                   ]
                 },
                 "description": "Delete ratepayer profile. Blocked with 400 Bad Request if linked properties exist.",
@@ -2915,14 +3388,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
+                  "raw": "{{property_registry_url}}/v1/properties/{{property_id}}",
                   "host": [
                     "{{property_registry_url}}"
                   ],
                   "path": [
                     "v1",
                     "properties",
-                    "{{sample_property_id}}"
+                    "{{property_id}}"
                   ]
                 },
                 "description": "Administrative update of a property parcel. Updating structural/usage fields decouples active valuations and resets property status to UNASSESSED and verification to PENDING.",
@@ -2959,21 +3432,21 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{property_registry_url}}/v1/verifications/{{sample_verification_id}}/review",
+                  "raw": "{{property_registry_url}}/v1/verifications/{{verification_id}}/review",
                   "host": [
                     "{{property_registry_url}}"
                   ],
                   "path": [
                     "v1",
                     "verifications",
-                    "{{sample_verification_id}}",
+                    "{{verification_id}}",
                     "review"
                   ]
                 },
                 "description": "",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"reviewStatus\": \"APPROVED\",\n  \"reviewedByPersonnelId\": \"{{sample_personnel_id}}\"\n}",
+                  "raw": "{\n  \"reviewStatus\": \"APPROVED\",\n  \"reviewedByPersonnelId\": \"{{personnel_id}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -2999,14 +3472,14 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{property_registry_url}}/v1/properties/{{sample_property_id}}",
+                  "raw": "{{property_registry_url}}/v1/properties/{{property_id}}",
                   "host": [
                     "{{property_registry_url}}"
                   ],
                   "path": [
                     "v1",
                     "properties",
-                    "{{sample_property_id}}"
+                    "{{property_id}}"
                   ]
                 },
                 "description": "Administrative deletion of an individual property parcel. Blocked if paid bills exist; severs all ratepayer links if unbilled.",
@@ -3074,7 +3547,7 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{billing_payments_url}}/v1/bills?ratepayerId={{sample_ratepayer_id}}&page=1&pageSize=20",
+                  "raw": "{{billing_payments_url}}/v1/bills?ratepayerId={{ratepayer_id}}&page=1&pageSize=20",
                   "host": [
                     "{{billing_payments_url}}"
                   ],
@@ -3085,7 +3558,7 @@
                   "query": [
                     {
                       "key": "ratepayerId",
-                      "value": "{{sample_ratepayer_id}}"
+                      "value": "{{ratepayer_id}}"
                     },
                     {
                       "key": "page",
@@ -3117,7 +3590,7 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{billing_payments_url}}/v1/bills/property-payment-status/{{sample_property_id}}",
+                  "raw": "{{billing_payments_url}}/v1/bills/property-payment-status/{{property_id}}",
                   "host": [
                     "{{billing_payments_url}}"
                   ],
@@ -3125,7 +3598,7 @@
                     "v1",
                     "bills",
                     "property-payment-status",
-                    "{{sample_property_id}}"
+                    "{{property_id}}"
                   ]
                 },
                 "description": "Check whether any bills on this property have recorded payments.",
@@ -3187,7 +3660,7 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{billing_payments_url}}/v1/payments?paidByRatepayerId={{sample_ratepayer_id}}&page=1&pageSize=20",
+                  "raw": "{{billing_payments_url}}/v1/payments?paidByRatepayerId={{ratepayer_id}}&page=1&pageSize=20",
                   "host": [
                     "{{billing_payments_url}}"
                   ],
@@ -3198,7 +3671,7 @@
                   "query": [
                     {
                       "key": "paidByRatepayerId",
-                      "value": "{{sample_ratepayer_id}}"
+                      "value": "{{ratepayer_id}}"
                     },
                     {
                       "key": "page",
@@ -3271,7 +3744,7 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{dispute_url}}/v1/disputes?raisedByRatepayerId={{sample_ratepayer_id}}",
+                  "raw": "{{dispute_url}}/v1/disputes?raisedByRatepayerId={{ratepayer_id}}",
                   "host": [
                     "{{dispute_url}}"
                   ],
@@ -3282,7 +3755,7 @@
                   "query": [
                     {
                       "key": "raisedByRatepayerId",
-                      "value": "{{sample_ratepayer_id}}"
+                      "value": "{{ratepayer_id}}"
                     }
                   ]
                 },
@@ -3306,14 +3779,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{dispute_url}}/v1/disputes/{{sample_dispute_code}}",
+                  "raw": "{{dispute_url}}/v1/disputes/{{dispute_code}}",
                   "host": [
                     "{{dispute_url}}"
                   ],
                   "path": [
                     "v1",
                     "disputes",
-                    "{{sample_dispute_code}}"
+                    "{{dispute_code}}"
                   ]
                 },
                 "description": "",
@@ -3341,14 +3814,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{dispute_url}}/v1/disputes/{{sample_dispute_code}}/status",
+                  "raw": "{{dispute_url}}/v1/disputes/{{dispute_code}}/status",
                   "host": [
                     "{{dispute_url}}"
                   ],
                   "path": [
                     "v1",
                     "disputes",
-                    "{{sample_dispute_code}}",
+                    "{{dispute_code}}",
                     "status"
                   ]
                 },
@@ -3405,7 +3878,7 @@
                 "description": "",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"periodStart\": \"2026-10-01T00:00:00Z\",\n  \"periodEnd\": \"2026-10-19T23:59:59Z\",\n  \"assemblyId\": \"{{sample_assembly_id}}\"\n}",
+                  "raw": "{\n  \"periodStart\": \"2026-10-01T00:00:00Z\",\n  \"periodEnd\": \"2026-10-19T23:59:59Z\",\n  \"assemblyId\": \"{{assembly_id}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -3495,14 +3968,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{oversight_reconciliation_url}}/v1/exceptions/{{sample_exception_id}}/action",
+                  "raw": "{{oversight_reconciliation_url}}/v1/exceptions/{{exception_id}}/action",
                   "host": [
                     "{{oversight_reconciliation_url}}"
                   ],
                   "path": [
                     "v1",
                     "exceptions",
-                    "{{sample_exception_id}}",
+                    "{{exception_id}}",
                     "action"
                   ]
                 },
@@ -3571,7 +4044,7 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{audit_assurance_url}}/v1/audit/records?concessionId={{sample_concession_id}}",
+                  "raw": "{{audit_assurance_url}}/v1/audit/records?concessionId={{concession_id}}",
                   "host": [
                     "{{audit_assurance_url}}"
                   ],
@@ -3583,7 +4056,7 @@
                   "query": [
                     {
                       "key": "concessionId",
-                      "value": "{{sample_concession_id}}"
+                      "value": "{{concession_id}}"
                     }
                   ]
                 },
@@ -3625,7 +4098,7 @@
                 "description": "",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"manifestId\": \"{{sample_manifest_id}}\"\n}",
+                  "raw": "{\n  \"manifestId\": \"{{manifest_id}}\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -3651,7 +4124,7 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{audit_assurance_url}}/v1/assurance/trace/{{sample_target_id}}",
+                  "raw": "{{audit_assurance_url}}/v1/assurance/trace/{{target_id}}",
                   "host": [
                     "{{audit_assurance_url}}"
                   ],
@@ -3659,7 +4132,7 @@
                     "v1",
                     "assurance",
                     "trace",
-                    "{{sample_target_id}}"
+                    "{{target_id}}"
                   ]
                 },
                 "description": "",
@@ -3731,14 +4204,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{independent_evidence_url}}/v1/provider-evidence/{{sample_evidence_id}}",
+                  "raw": "{{independent_evidence_url}}/v1/provider-evidence/{{evidence_id}}",
                   "host": [
                     "{{independent_evidence_url}}"
                   ],
                   "path": [
                     "v1",
                     "provider-evidence",
-                    "{{sample_evidence_id}}"
+                    "{{evidence_id}}"
                   ]
                 },
                 "description": "",
@@ -3839,14 +4312,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{event_processing_url}}/v1/quarantine/{{sample_event_id}}",
+                  "raw": "{{event_processing_url}}/v1/quarantine/{{event_id}}",
                   "host": [
                     "{{event_processing_url}}"
                   ],
                   "path": [
                     "v1",
                     "quarantine",
-                    "{{sample_event_id}}"
+                    "{{event_id}}"
                   ]
                 },
                 "description": "",
@@ -3874,14 +4347,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{event_processing_url}}/v1/quarantine/{{sample_event_id}}/resolve",
+                  "raw": "{{event_processing_url}}/v1/quarantine/{{event_id}}/resolve",
                   "host": [
                     "{{event_processing_url}}"
                   ],
                   "path": [
                     "v1",
                     "quarantine",
-                    "{{sample_event_id}}",
+                    "{{event_id}}",
                     "resolve"
                   ]
                 },
@@ -3914,15 +4387,15 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{event_processing_url}}/v1/operational-view/{{sample_aggregate_type}}/{{sample_aggregate_id}}",
+                  "raw": "{{event_processing_url}}/v1/operational-view/{{aggregate_type}}/{{aggregate_id}}",
                   "host": [
                     "{{event_processing_url}}"
                   ],
                   "path": [
                     "v1",
                     "operational-view",
-                    "{{sample_aggregate_type}}",
-                    "{{sample_aggregate_id}}"
+                    "{{aggregate_type}}",
+                    "{{aggregate_id}}"
                   ]
                 },
                 "description": "",
@@ -3999,14 +4472,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{shared_services_url}}/v1/regions/{{sample_region_id}}/boundary",
+                  "raw": "{{shared_services_url}}/v1/regions/{{region_id}}/boundary",
                   "host": [
                     "{{shared_services_url}}"
                   ],
                   "path": [
                     "v1",
                     "regions",
-                    "{{sample_region_id}}",
+                    "{{region_id}}",
                     "boundary"
                   ]
                 },
@@ -4056,7 +4529,7 @@
                 "description": "",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"regionId\": \"{{sample_region_id}}\",\n  \"code\": \"GH0701\",\n  \"name\": \"Ablekuma Central Municipal\",\n  \"category\": \"MUNICIPAL\"\n}",
+                  "raw": "{\n  \"regionId\": \"{{region_id}}\",\n  \"code\": \"GH0701\",\n  \"name\": \"Ablekuma Central Municipal\",\n  \"category\": \"MUNICIPAL\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -4087,14 +4560,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{shared_services_url}}/v1/assemblies/{{sample_assembly_id}}/boundary",
+                  "raw": "{{shared_services_url}}/v1/assemblies/{{assembly_id}}/boundary",
                   "host": [
                     "{{shared_services_url}}"
                   ],
                   "path": [
                     "v1",
                     "assemblies",
-                    "{{sample_assembly_id}}",
+                    "{{assembly_id}}",
                     "boundary"
                   ]
                 },
@@ -4170,14 +4643,14 @@
                 "method": "DELETE",
                 "header": [],
                 "url": {
-                  "raw": "{{shared_services_url}}/v1/reference-data/{{sample_reference_data_id}}",
+                  "raw": "{{shared_services_url}}/v1/reference-data/{{reference_data_id}}",
                   "host": [
                     "{{shared_services_url}}"
                   ],
                   "path": [
                     "v1",
                     "reference-data",
-                    "{{sample_reference_data_id}}"
+                    "{{reference_data_id}}"
                   ]
                 },
                 "description": "",
@@ -4272,14 +4745,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{shared_services_url}}/v1/messages/{{sample_message_id}}",
+                  "raw": "{{shared_services_url}}/v1/messages/{{message_id}}",
                   "host": [
                     "{{shared_services_url}}"
                   ],
                   "path": [
                     "v1",
                     "messages",
-                    "{{sample_message_id}}"
+                    "{{message_id}}"
                   ]
                 },
                 "description": "",
@@ -4367,14 +4840,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}"
+                    "{{ratepayer_id}}"
                   ]
                 },
                 "description": "",
@@ -4397,14 +4870,14 @@
                 "method": "GET",
                 "header": [],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/properties",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}/properties",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}",
+                    "{{ratepayer_id}}",
                     "properties"
                   ]
                 },
@@ -4433,14 +4906,14 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/status",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}/status",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}",
+                    "{{ratepayer_id}}",
                     "status"
                   ]
                 },
@@ -4478,16 +4951,16 @@
                   }
                 ],
                 "url": {
-                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{sample_ratepayer_id}}/verifications/{{sample_verification_id}}",
+                  "raw": "{{ratepayer_url}}/v1/ratepayers/{{ratepayer_id}}/verifications/{{verification_id}}",
                   "host": [
                     "{{ratepayer_url}}"
                   ],
                   "path": [
                     "v1",
                     "ratepayers",
-                    "{{sample_ratepayer_id}}",
+                    "{{ratepayer_id}}",
                     "verifications",
-                    "{{sample_verification_id}}"
+                    "{{verification_id}}"
                   ]
                 },
                 "description": "",
