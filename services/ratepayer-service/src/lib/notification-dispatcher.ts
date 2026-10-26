@@ -4,7 +4,16 @@
  * Dispatches one-time verification codes (OTPs):
  * - Email channel: Dispatched directly to local/dev Mailpit container (viewable at http://localhost:8025)
  * - SMS channel: Stubbed for upcoming Arkasel integration (Akasel SMS/OTP gateway).
+ *
+ * Every message is white-labeled as the ratepayer's own concession, never as CROIP — a
+ * ratepayer only ever deals with the concession's own branding; CROIP is back-office
+ * government infrastructure they're never meant to see or know about. Callers pass
+ * `issuerName` (resolved via lib/concession-lookup.ts) when known; when it isn't (no
+ * concession on file for this ratepayer), messages fall back to a neutral, non-CROIP label
+ * rather than ever naming the platform itself.
  */
+
+const NEUTRAL_FALLBACK_ISSUER = 'Ratepayer Services';
 
 export interface DispatchOtpInput {
   destination: string;
@@ -12,6 +21,7 @@ export interface DispatchOtpInput {
   code: string;
   ratepayerName?: string | undefined;
   purpose?: string | undefined;
+  issuerName?: string | undefined;
   log?: {
     info: (obj: any, msg?: string) => void;
     warn: (obj: any, msg?: string) => void;
@@ -28,14 +38,25 @@ export interface DispatchOtpResult {
   error?: string | undefined;
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+}
+
 /**
  * Dispatches an email OTP to the Mailpit SMTP/REST relay.
+ *
+ * Styling deliberately mirrors the CROIP portal's own design system (app/globals.css) —
+ * near-black header/background, neutral grayscale body text, Geist's sans-serif stack,
+ * ~10px card radius — rather than an arbitrary email template, so a ratepayer's inbox and
+ * the portal they (or their concession's own app) came from feel like one product. The
+ * issuer name is the only "brand" element; it is the concession's, never CROIP's.
  */
 async function sendEmailOtpViaMailpit(
   to: string,
   code: string,
-  ratepayerName?: string | undefined,
+  ratepayerName: string | undefined,
   purpose: string = 'Registration',
+  issuerName: string | undefined,
   log?: DispatchOtpInput['log'] | undefined
 ): Promise<{ success: boolean; messageId?: string | undefined; error?: string | undefined }> {
   const mailpitUrls = [
@@ -44,54 +65,50 @@ async function sendEmailOtpViaMailpit(
     'http://localhost:8025'
   ].filter(Boolean) as string[];
 
-  const subject = `Your CROIP Ratepayer Verification Code: ${code}`;
-  const displayName = ratepayerName || to.split('@')[0];
+  const issuer = issuerName?.trim() || NEUTRAL_FALLBACK_ISSUER;
+  const displayName = ratepayerName || to.split('@')[0] || 'there';
+  const subject = `${issuer}: your verification code is ${code}`;
 
   const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
-  <title>CROIP Ratepayer Verification</title>
+  <title>${escapeHtml(issuer)} verification code</title>
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }
-    .card { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 12px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
-    .header { background: #0f172a; padding: 24px; text-align: center; color: #ffffff; }
-    .logo { font-size: 18px; font-weight: 800; letter-spacing: 1px; color: #38bdf8; }
-    .sub { font-size: 12px; color: #94a3b8; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .content { padding: 32px 28px; }
-    .greeting { font-size: 15px; font-weight: 600; color: #0f172a; margin-bottom: 12px; }
-    .lead { font-size: 13px; color: #475569; line-height: 1.6; margin-bottom: 24px; }
-    .otp-box { text-align: center; background: #f1f5f9; border: 2px dashed #cbd5e1; border-radius: 10px; padding: 20px; margin: 20px 0; }
-    .otp-code { font-family: 'Courier New', Courier, monospace; font-size: 34px; font-weight: 800; letter-spacing: 8px; color: #0f172a; margin: 0; }
-    .otp-expiry { font-size: 11px; color: #64748b; margin-top: 8px; font-weight: 500; }
-    .footer { padding: 18px 28px; background: #f8fafc; border-top: 1px solid #e2e8f0; font-size: 11px; color: #94a3b8; text-align: center; line-height: 1.5; }
-    .highlight { color: #0284c7; font-weight: 600; }
+    body { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f5f5f5; color: #0a0a0a; margin: 0; padding: 24px; }
+    .card { max-width: 520px; margin: 0 auto; background: #ffffff; border-radius: 10px; border: 1px solid #e5e5e5; overflow: hidden; }
+    .header { background: #0a0a0a; padding: 22px 28px; }
+    .issuer { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: #fafafa; }
+    .content { padding: 28px; }
+    .greeting { font-size: 14px; font-weight: 600; color: #0a0a0a; margin-bottom: 10px; }
+    .lead { font-size: 13px; color: #525252; line-height: 1.6; margin-bottom: 22px; }
+    .otp-box { text-align: center; background: #fafafa; border: 1px solid #e5e5e5; border-radius: 10px; padding: 18px; margin: 20px 0; }
+    .otp-code { font-family: ui-monospace, 'SF Mono', 'Geist Mono', Menlo, monospace; font-size: 32px; font-weight: 700; letter-spacing: 7px; color: #0a0a0a; margin: 0; }
+    .otp-expiry { font-size: 11px; color: #737373; margin-top: 8px; }
+    .footer { padding: 16px 28px; background: #fafafa; border-top: 1px solid #e5e5e5; font-size: 11px; color: #a3a3a3; text-align: center; line-height: 1.5; }
   </style>
 </head>
 <body>
   <div class="card">
     <div class="header">
-      <div class="logo">CROIP GHANA</div>
-      <div class="sub">Central Revenue Oversight & Integration Platform</div>
+      <div class="issuer">${escapeHtml(issuer)}</div>
     </div>
     <div class="content">
-      <div class="greeting">Hello, ${displayName}</div>
+      <div class="greeting">Hello, ${escapeHtml(displayName)}</div>
       <div class="lead">
-        Thank you for accessing the <strong>CROIP Citizen & Ratepayer Portal</strong>.
-        Please use the following One-Time Password (OTP) to complete your <strong>${purpose}</strong>:
+        Use the following one-time code to complete your <strong>${escapeHtml(purpose)}</strong>:
       </div>
       <div class="otp-box">
-        <div class="otp-code">${code}</div>
+        <div class="otp-code">${escapeHtml(code)}</div>
         <div class="otp-expiry">Valid for 5 minutes. Do not share this code with anyone.</div>
       </div>
-      <div class="lead" style="font-size: 12px; color: #64748b;">
-        If you did not initiate this request, you can safely ignore this email.
+      <div class="lead" style="font-size: 12px; color: #737373; margin-bottom: 0;">
+        If you did not request this, you can safely ignore this email.
       </div>
     </div>
     <div class="footer">
-      Republic of Ghana &bull; Ministry of Local Government &bull; Central Revenue System<br/>
-      Sent via Local Development Relay (Mailpit)
+      Sent via local development relay (Mailpit) — not a production mail delivery.
     </div>
   </div>
 </body>
@@ -99,16 +116,15 @@ async function sendEmailOtpViaMailpit(
   `.trim();
 
   const text = `
-CROIP GHANA - Ratepayer Verification
-====================================
+${issuer}
+${'='.repeat(issuer.length)}
 Hello ${displayName},
 
-Your One-Time Password (OTP) for ${purpose} is:
+Your one-time code for ${purpose} is:
 
     ${code}
 
 This code is valid for 5 minutes. Do not share this code with anyone.
-Republic of Ghana - Central Revenue Oversight & Integration Platform
   `.trim();
 
   let lastError = 'No Mailpit endpoint reachable';
@@ -120,7 +136,10 @@ Republic of Ghana - Central Revenue Oversight & Integration Platform
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          From: { Email: 'noreply@croip.gov.gh', Name: 'CROIP Ghana Ratepayer Portal' },
+          // The issuer's display name is the only branding a ratepayer sees here — the
+          // underlying send-from address is shared platform infrastructure (deferred to the
+          // real production mail service), not something we multi-tenant per concession yet.
+          From: { Email: 'noreply@notifications.gov.gh', Name: issuer },
           To: [{ Email: to, Name: displayName }],
           Subject: subject,
           Text: text,
@@ -130,7 +149,7 @@ Republic of Ghana - Central Revenue Oversight & Integration Platform
 
       if (res.ok) {
         const body: any = await res.json().catch(() => ({}));
-        log?.info({ to, subject, provider: 'mailpit', messageId: body.ID, url }, `[Mailpit] OTP email dispatched to ${to}`);
+        log?.info({ to, subject, provider: 'mailpit', messageId: body.ID, url, issuer }, `[Mailpit] OTP email dispatched to ${to}`);
         return { success: true, messageId: body.ID };
       }
 
@@ -152,17 +171,19 @@ async function sendSmsOtpViaArkasel(
   phone: string,
   code: string,
   purpose: string = 'Registration',
+  issuerName: string | undefined,
   log?: DispatchOtpInput['log'] | undefined
 ): Promise<{ success: boolean; messageId?: string | undefined }> {
   // Arkasel API Integration Placeholder
   // When Arkasel credentials (API key, sender ID) are provided:
   // POST https://sms.arkasel.com/api/v2/sms/send
   // Headers: { 'api-key': process.env.ARKASEL_API_KEY }
-  // Body: { sender: 'CROIP', recipients: [phone], message: `Your CROIP OTP is ${code}. Valid for 5 mins.` }
+  // Body: { sender: issuer (truncated to Arkasel's sender-id length limit), recipients: [phone], message: `Your ${issuer} code is ${code}. Valid for 5 mins.` }
+  const issuer = issuerName?.trim() || NEUTRAL_FALLBACK_ISSUER;
 
   log?.info(
-    { phone, purpose, code, provider: 'arkasel_stub' },
-    `[Arkasel SMS Stub] OTP ${code} generated for ${phone} (${purpose}) - Arkasel gateway to be wired up.`
+    { phone, purpose, code, issuer, provider: 'arkasel_stub' },
+    `[Arkasel SMS Stub] OTP ${code} generated for ${phone} (${purpose}, issuer: ${issuer}) - Arkasel gateway to be wired up.`
   );
 
   return { success: true, messageId: `arkasel_stub_${Date.now()}` };
@@ -179,6 +200,7 @@ export async function dispatchOtp(input: DispatchOtpInput): Promise<DispatchOtpR
       input.code,
       input.ratepayerName,
       input.purpose,
+      input.issuerName,
       input.log
     );
     return {
@@ -195,6 +217,7 @@ export async function dispatchOtp(input: DispatchOtpInput): Promise<DispatchOtpR
     input.destination,
     input.code,
     input.purpose,
+    input.issuerName,
     input.log
   );
   return {

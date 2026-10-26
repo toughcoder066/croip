@@ -11,6 +11,23 @@ export const problemSchema = {
   }
 };
 
+// A chronological audit trail entry for one ratepayer — every real action taken on that
+// account (registered, logged in, profile updated, KYC submitted/reviewed, status changed,
+// property claimed/unlinked, password reset), never a synthetic/hardcoded narrative.
+export const activityRecordSchema = {
+  type: 'object',
+  required: ['id', 'occurredAt', 'actorId', 'actorType', 'action', 'outcome'],
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    occurredAt: { type: 'string', format: 'date-time' },
+    actorId: { type: 'string' },
+    actorType: { type: 'string' },
+    action: { type: 'string' },
+    outcome: { type: 'string' },
+    metadata: { type: 'object', additionalProperties: true }
+  }
+};
+
 export const completionSchema = {
   type: 'object',
   properties: {
@@ -38,8 +55,13 @@ export const ratepayerResponseSchema = {
     address: { type: ['string', 'null'] },
     regionId: { type: ['string', 'null'], format: 'uuid' },
     assemblyId: { type: ['string', 'null'], format: 'uuid' },
-    locationGeo: { type: ['object', 'null'] },
+    // additionalProperties: true matters here — without it, Fastify's response
+    // serializer only passes through keys explicitly listed under `properties` (none are
+    // here), so every ratepayer response was silently serializing a real GeoJSON Point
+    // (correctly stored in the database) down to an empty `{}`.
+    locationGeo: { type: ['object', 'null'], additionalProperties: true },
     status: { type: 'string' },
+    concessionId: { type: ['string', 'null'], format: 'uuid' },
     createdAt: { type: 'string', format: 'date-time' },
     completion: completionSchema,
     otp: {
@@ -75,7 +97,26 @@ export const registerRatepayerBodySchema = {
     assemblyId: { type: 'string', format: 'uuid' },
     locationGeo: { type: 'object' },
     latitude: { type: 'number' },
-    longitude: { type: 'number' }
+    longitude: { type: 'number' },
+    // Optional — makes this request safe to retry (e.g. a concession field agent syncing a
+    // ratepayer they registered while offline, whose device isn't sure the first sync
+    // attempt's response actually made it back). Generate it once, client-side, at the
+    // moment the registration is first captured — never per sync attempt — and reuse the
+    // same value on every retry of that same registration. See lib/idempotency.ts.
+    idempotencyKey: { type: 'string', minLength: 1, maxLength: 200 }
+  }
+};
+
+// Same fields as registerRatepayerBodySchema, plus the one thing a public self-service
+// app has to supply that a concession's own staff request gets for free from its Bearer
+// token: which concession this profile belongs to. Identified by the concession's public,
+// non-secret `code` — never its real API client credential.
+export const selfRegisterRatepayerBodySchema = {
+  type: 'object',
+  required: ['password', 'concessionCode'],
+  properties: {
+    ...registerRatepayerBodySchema.properties,
+    concessionCode: { type: 'string', minLength: 2, maxLength: 50 }
   }
 };
 
@@ -114,6 +155,32 @@ export const verifyOtpBodySchema = {
   }
 };
 
+// No password field — this is "I forgot it", not "I know my current one". Same identifier
+// shape as login, since both ultimately look up the same account.
+export const forgotPasswordBodySchema = {
+  type: 'object',
+  properties: {
+    identifier: { type: 'string', description: 'Email or phone number used at registration' },
+    email: { type: 'string' },
+    phone: { type: 'string' },
+    number: { type: 'string' }
+  }
+};
+
+export const resetPasswordBodySchema = {
+  type: 'object',
+  required: ['otpCode', 'newPassword'],
+  properties: {
+    identifier: { type: 'string', description: 'Email or phone number used at registration' },
+    email: { type: 'string' },
+    phone: { type: 'string' },
+    number: { type: 'string' },
+    otpCode: { type: 'string', minLength: 6, maxLength: 6 },
+    newPassword: { type: 'string', minLength: 6, maxLength: 100 },
+    confirmNewPassword: { type: 'string', minLength: 6, maxLength: 100 }
+  }
+};
+
 export const authTokenResponseSchema = {
   type: 'object',
   required: ['accessToken', 'tokenType', 'expiresInSeconds', 'ratepayer'],
@@ -146,14 +213,34 @@ export const updateProfileBodySchema = {
   }
 };
 
-export const linkOwnPropertyBodySchema = {
+// Self-service profile update (PATCH /ratepayers/me) is deliberately more permissive than
+// the concession-mediated one above about WHICH fields it covers (every genuinely
+// self-owned attribute, including ratepayerType, which the staff-mediated update doesn't
+// even expose) but strictly narrower about WHO can touch identity/registration data: there
+// is no `email` property here at all. Deliberately no `additionalProperties: false` either
+// — Fastify's AJV defaults to silently stripping disallowed extra properties rather than
+// rejecting the request, which would let someone think an email/concessionId change
+// succeeded when it was quietly dropped. Instead, service.ts's updateOwnProfile explicitly
+// rejects the request with a clear error if email, concessionId, or any other immutable
+// field is present in the raw body.
+export const selfUpdateProfileBodySchema = {
   type: 'object',
-  required: ['propertyId', 'unitId'],
   properties: {
-    propertyId: { type: 'string', format: 'uuid' },
-    unitId: { type: 'string', format: 'uuid' },
-    ownershipType: { type: 'string', default: 'FULL' },
-    ownershipPercentage: { type: 'number' }
+    ratepayerType: { type: 'string', enum: ['INDIVIDUAL', 'ORGANIZATION'] },
+    firstName: { type: 'string', maxLength: 100 },
+    middleName: { type: 'string', maxLength: 100 },
+    lastName: { type: 'string', maxLength: 100 },
+    legalName: { type: 'string', maxLength: 200 },
+    phone: { type: 'string', minLength: 7, maxLength: 30 },
+    number: { type: 'string', minLength: 7, maxLength: 30, description: 'Phone number alias' },
+    password: { type: 'string', minLength: 6, maxLength: 100, description: 'Optional password update' },
+    confirmPassword: { type: 'string', minLength: 6, maxLength: 100 },
+    address: { type: 'string', maxLength: 255 },
+    regionId: { type: 'string', format: 'uuid' },
+    assemblyId: { type: 'string', format: 'uuid' },
+    locationGeo: { type: 'object' },
+    latitude: { type: 'number' },
+    longitude: { type: 'number' }
   }
 };
 

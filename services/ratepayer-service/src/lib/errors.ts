@@ -45,3 +45,9 @@ export class UnprocessableError extends AppError {
     super(422, 'UNPROCESSABLE_ENTITY', message, details);
   }
 }
+
+export class TooManyRequestsError extends AppError {
+  constructor(message = 'Too many requests') {
+    super(429, 'RATE_LIMITED', message);
+  }
+}

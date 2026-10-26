@@ -40,9 +40,14 @@ export async function getServiceAccessToken(config: AppConfig): Promise<string> 
   }
 
   const issuerHost = new URL(config.ZITADEL_ISSUER!).host;
+  const projectId = config.ZITADEL_AUDIENCE!;
+  // ZITADEL_AUDIENCE already *is* the Zitadel project ID by convention on every service —
+  // this used to be a literal, hardcoded ID here, which silently went stale when the
+  // Zitadel instance was rebuilt with a new project. See property-registry-service's
+  // identical helper for the longer explanation of why `:aud` is needed at all.
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
-    scope: 'openid urn:zitadel:iam:org:project:id:395706197476376592:roles urn:zitadel:iam:org:project:id:395706197476376592:aud'
+    scope: `openid urn:zitadel:iam:org:project:id:${projectId}:roles urn:zitadel:iam:org:project:id:${projectId}:aud`
   }).toString();
 
   const { status, body: responseBody } = await postForm(config.ZITADEL_TOKEN_URL, issuerHost, {
