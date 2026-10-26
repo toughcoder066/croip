@@ -67,7 +67,10 @@ export async function POST(request: Request) {
       createdAt: governanceUser?.createdAt,
       loginAt: new Date().toISOString(),
       zitadelSub: claims.sub,
-      tokenSessionId
+      tokenSessionId,
+      // Idle-timeout clock for `proxy.ts` — see the matching field in the OAuth callback
+      // route for why this is separate from the cookie's own (much longer) maxAge.
+      lastActivityAt: Date.now()
     }
 
     const response = NextResponse.json({
