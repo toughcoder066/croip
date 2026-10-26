@@ -68,6 +68,17 @@ function fetchJwks(jwksUri: string, hostHeader: string): Promise<JSONWebKeySet> 
 
 const JWKS_TTL_MS = 10 * 60 * 1000;
 
+// How long a resolved API-client context is trusted before being re-looked-up — bounds how
+// stale a revoked/rotated credential can appear, while sparing platform-governance-service
+// a round trip on every request.
+const SERVICE_CONTEXT_TTL_MS = 60 * 1000;
+
+interface ServiceContext {
+  concessionId: string;
+  assemblyId: string;
+  permissions: string[];
+}
+
 export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
   const { config } = options;
 
@@ -82,6 +93,35 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
       jwksFetchedAt = Date.now();
     }
     return jwks;
+  }
+
+  const serviceContextCache = new Map<string, { context: ServiceContext | null; fetchedAt: number }>();
+
+  // Resolves a concession's own API-client (client_credentials) token by calling back to
+  // platform-governance-service with the verified JWT's own client_id claim, instead of
+  // trusting a urn:idarms:context claim injected into the token itself — this Zitadel
+  // version does not reliably apply a Target's returned claims to client_credentials-issued
+  // tokens (confirmed empirically). A side benefit over the claim approach: this reflects
+  // revocation in real time (a revoked or rotated-away client_id simply isn't found, within
+  // the cache TTL), where a bare JWT signature check never could.
+  //
+  // Every token's client_id is checked here, human logins included — a human login's
+  // client_id is the OIDC app's own id, not a concession's, so this always (and cacheably)
+  // comes back null for them. That client_id never changes across a whole session, so it's
+  // one real lookup per idle officer per TTL window, not one per request.
+  async function resolveServiceContext(clientId: string): Promise<ServiceContext | null> {
+    const cached = serviceContextCache.get(clientId);
+    if (cached && Date.now() - cached.fetchedAt < SERVICE_CONTEXT_TTL_MS) return cached.context;
+
+    try {
+      const response = await fetch(`${config.PLATFORM_GOVERNANCE_URL}/v1/api-clients/${encodeURIComponent(clientId)}/context`);
+      const context = response.ok ? ((await response.json()) as ServiceContext) : null;
+      serviceContextCache.set(clientId, { context, fetchedAt: Date.now() });
+      return context;
+    } catch (error) {
+      app.log.warn({ err: error, clientId }, 'failed to resolve API-client context from platform-governance-service');
+      return null;
+    }
   }
 
   app.decorateRequest('auth');
@@ -105,28 +145,42 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
         issuer: config.ZITADEL_ISSUER!,
         audience: config.ZITADEL_AUDIENCE!
       });
-      const tenant = payload[config.IDARMS_CONTEXT_CLAIM];
-      if (!tenant || typeof tenant !== 'object') throw new Error('Missing iDARMS context claim');
-      const context = tenant as Record<string, unknown>;
-      if (typeof context.concessionId !== 'string' || typeof context.assemblyId !== 'string') {
-        throw new Error('Invalid iDARMS context claim');
+
+      // Every token carries a client_id — a human login's as much as a machine token's
+      // (it's the OIDC app's id for a human login, not distinctive on its own). So this
+      // can't branch on client_id's mere presence; it has to actually try the lookup and
+      // see whether it names one of our own concession API clients. Found: SERVICE actor.
+      // Not found: falls through to the human path below.
+      if (payload.client_id) {
+        const service = await resolveServiceContext(String(payload.client_id));
+        if (service) {
+          request.auth = {
+            subject: payload.sub ?? 'unknown',
+            actorType: 'SERVICE',
+            concessionId: service.concessionId,
+            assemblyId: service.assemblyId,
+            permissions: [...new Set([...stringArray(payload.scope), ...service.permissions])],
+            claims: payload
+          };
+          return;
+        }
       }
+
+      // Human (authorization_code) logins: permissions come from Zitadel's native
+      // project-role assertion. CROIP oversight staff aren't scoped to one concession the
+      // way a concession's own API client is, so a missing or unresolvable
+      // urn:idarms:context claim falls back to the same default pair every dev-header
+      // request already uses, rather than rejecting the login — see
+      // platform-governance-service's auth.ts for the same fix and why.
+      const tenant = payload[config.IDARMS_CONTEXT_CLAIM];
+      const context = tenant && typeof tenant === 'object' ? (tenant as Record<string, unknown>) : {};
       request.auth = {
         subject: payload.sub ?? 'unknown',
-        actorType: payload.client_id ? 'SERVICE' : 'USER',
-        concessionId: context.concessionId,
-        assemblyId: context.assemblyId,
-        // Zitadel's native project-role assertion only populates ZITADEL_ROLES_CLAIM for
-        // human (authorization_code) logins — client_credentials tokens never carry it,
-        // regardless of role grants or assertion settings. `urn:idarms:service-roles` is
-        // a Complement Token Action that reads the machine user's own `roles` metadata
-        // and injects an equivalent claim (see the `injectIdarmsContext` Zitadel Action).
+        actorType: 'USER',
+        concessionId: typeof context.concessionId === 'string' ? context.concessionId : '81fdc8f3-fcad-481a-b7fa-e916d5e97d9e',
+        assemblyId: typeof context.assemblyId === 'string' ? context.assemblyId : '01c23cab-b1b2-4dae-b99b-32ea574632d9',
         permissions: [
-          ...new Set([
-            ...stringArray(payload.scope),
-            ...stringArray(payload[config.ZITADEL_ROLES_CLAIM]),
-            ...stringArray(payload['urn:idarms:service-roles'])
-          ])
+          ...new Set([...stringArray(payload.scope), ...stringArray(payload[config.ZITADEL_ROLES_CLAIM])])
         ],
         claims: payload
       };
@@ -149,7 +203,13 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
     const authorization = request.headers.authorization;
     if (!authorization?.startsWith('Bearer ')) throw app.httpErrors.unauthorized('Bearer token required');
     try {
-      request.ratepayerAuth = await verifyRatepayerToken(authorization.slice(7), config.RATEPAYER_JWT_SECRET);
+      const claims = await verifyRatepayerToken(authorization.slice(7), config.RATEPAYER_JWT_SECRET);
+      // The signature/expiry check above passing isn't enough on its own — a token that's
+      // been explicitly logged out (POST /auth/logout) is still cryptographically valid
+      // until it naturally expires, so a revoked jti has to be rejected here too.
+      const revoked = await app.prisma.ratepayerRevokedToken.findUnique({ where: { jti: claims.jti } });
+      if (revoked) throw new Error('Token has been revoked (logged out)');
+      request.ratepayerAuth = claims;
     } catch (error) {
       request.log.warn({ err: error }, 'ratepayer access token rejected');
       throw app.httpErrors.unauthorized('Invalid or expired access token');

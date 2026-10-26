@@ -24,6 +24,7 @@ export const CROIP_SERVICES = {
 } as const
 
 export interface RequestOptions extends RequestInit {
+
   /**
    * Explicit bearer token to send instead of resolving one from the session cookie —
    * needed only where no `croip_session` cookie exists yet (the Zitadel OIDC callback
@@ -46,11 +47,13 @@ async function resolveSessionAccessToken(): Promise<string | null> {
     if (!sessionCookie?.value) return null
 
     let raw = sessionCookie.value
+
     if (raw.startsWith('%')) {
       try {
         raw = decodeURIComponent(raw)
       } catch {}
     }
+
     const session = JSON.parse(raw)
     const tokens = await touchTokenSession(session.tokenSessionId)
 
@@ -82,6 +85,9 @@ export async function fetchCroipService<T>(
 
   if (token) {
     requestHeaders.set('Authorization', `Bearer ${token}`)
+  } else if (process.env.NODE_ENV === 'development') {
+    requestHeaders.set('x-dev-subject', 'portal-dev-officer')
+    requestHeaders.set('x-dev-permissions', 'reference:read reference:manage iam:users_manage properties:read properties:manage *')
   }
 
   const response = await fetch(url, {
@@ -181,7 +187,7 @@ export const croipApi = {
         method: 'POST',
         body: JSON.stringify(data),
       }),
-    assignAssembly: (concessionId: string, data: { assemblyId: string; contractStart: string; contractEnd: string }) =>
+    assignAssembly: (concessionId: string, data: { assemblyId: string; contractEnd: string }) =>
       fetchCroipService<any>(
         CROIP_SERVICES.PLATFORM_GOVERNANCE,
         `/v1/concessions/${encodeURIComponent(concessionId)}/assemblies`,
@@ -190,10 +196,25 @@ export const croipApi = {
           body: JSON.stringify(data),
         }
       ),
-    provisionApiClient: (concessionId: string) =>
-      fetchCroipService<{ id: string; concessionId: string; clientId: string; clientSecret: string; status: string; expiresAt: string }>(
+
+    // Revokes the concession's current credential at Zitadel first, then issues and emails
+    // a new one — a concession can never have two active credentials at once. The returned
+    // `clientSecret` is shown exactly once and is never stored or retrievable again.
+    rotateApiClient: (concessionId: string) =>
+      fetchCroipService<{ id: string; concessionId: string; clientId: string; clientSecret: string; status: string; issuedVia: string; expiresAt: string; emailDelivered: boolean }>(
         CROIP_SERVICES.PLATFORM_GOVERNANCE,
-        `/v1/concessions/${encodeURIComponent(concessionId)}/api-clients`,
+        `/v1/concessions/${encodeURIComponent(concessionId)}/api-clients/rotate`,
+        {
+          method: 'POST',
+        }
+      ),
+
+    // Revokes without issuing a replacement — the concessionaire will need a fresh rotate
+    // call (or a new onboarding) to get access back.
+    revokeApiClient: (concessionId: string) =>
+      fetchCroipService<{ id: string; concessionId: string; clientId: string; status: string; revokedAt: string | null }>(
+        CROIP_SERVICES.PLATFORM_GOVERNANCE,
+        `/v1/concessions/${encodeURIComponent(concessionId)}/api-clients/revoke`,
         {
           method: 'POST',
         }
@@ -367,6 +388,13 @@ export const croipApi = {
     // Thin pass-through to ratepayer-service (:3030) GET /v1/ratepayers/:id/properties.
     getRatepayerProperties: (id: string) =>
       fetchCroipService<any[]>(CROIP_SERVICES.RATEPAYER_CORE, `/v1/ratepayers/${encodeURIComponent(id)}/properties`),
+
+    // Chronological account activity log — every real action taken on this ratepayer's
+    // account (registered, logged in, profile updated, KYC submitted/reviewed, status
+    // changed, property claimed/unlinked, password reset). Thin pass-through to
+    // ratepayer-service (:3030) GET /v1/ratepayers/:id/activity.
+    getActivity: (id: string) =>
+      fetchCroipService<any[]>(CROIP_SERVICES.RATEPAYER_CORE, `/v1/ratepayers/${encodeURIComponent(id)}/activity`),
 
     // CROIP portal: oversight official approves or rejects a ratepayer's pending KYC verification.
     // Thin pass-through to ratepayer-service (:3030) PATCH /v1/ratepayers/:id/verifications/:verificationId.

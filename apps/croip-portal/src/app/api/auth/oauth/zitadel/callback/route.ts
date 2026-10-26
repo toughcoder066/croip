@@ -151,7 +151,12 @@ export async function GET(request: Request) {
     createdAt: governanceUser?.createdAt,
     loginAt: new Date().toISOString(),
     zitadelSub: claims.sub,
-    tokenSessionId
+    tokenSessionId,
+    // Idle-timeout clock for `proxy.ts` — the cookie itself has a 7-day maxAge (so the
+    // browser doesn't drop it), which is a ceiling, not the real session length. `proxy.ts`
+    // bumps this on every page/API request and redirects to login once it's stale past
+    // IDLE_TIMEOUT_MS, regardless of how long the cookie itself still has left to live.
+    lastActivityAt: Date.now()
   }
 
   const response = NextResponse.redirect(new URL('/dashboard', request.url))

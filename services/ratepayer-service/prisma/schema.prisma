@@ -24,6 +24,10 @@ model Ratepayer {
   assemblyId    String?  @map("assembly_id") @db.Uuid
   locationGeo   Json?    @map("location_geo")
   status        String   @default("ACTIVE") @db.VarChar(20)
+  // Concession that registered this ratepayer. Registration, update, and delete are
+  // concession-mediated; login/read-own-profile stay unscoped so they work across any
+  // concession's app.
+  concessionId  String?  @map("concession_id") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -34,6 +38,7 @@ model Ratepayer {
   @@index([assemblyId, status])
   @@index([phone])
   @@index([lastName, firstName])
+  @@index([concessionId])
   @@map("ratepayers")
 }
 
@@ -51,6 +56,20 @@ model RatepayerOtp {
 
   @@index([ratepayerId, purpose, consumedAt])
   @@map("ratepayer_otps")
+}
+
+// Logged-out ratepayer session tokens, by jti — ratepayer tokens are otherwise stateless
+// (a pure signature/expiry check, see lib/ratepayer-jwt.ts), so this is the one place that
+// check needs. A row only needs to exist until the token would have expired naturally
+// anyway (expiresAt), making it safe to prune past that point.
+model RatepayerRevokedToken {
+  jti         String   @id @db.Uuid
+  ratepayerId String   @map("ratepayer_id") @db.Uuid
+  revokedAt   DateTime @default(now()) @map("revoked_at") @db.Timestamptz
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz
+
+  @@index([expiresAt])
+  @@map("ratepayer_revoked_tokens")
 }
 
 model RatepayerVerification {

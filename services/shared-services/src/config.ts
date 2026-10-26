@@ -16,6 +16,7 @@ const schema = z.object({
   ZITADEL_JWKS_URI: z.string().url().optional(),
   ZITADEL_ROLES_CLAIM: z.string().default('urn:zitadel:iam:org:project:roles'),
   IDARMS_CONTEXT_CLAIM: z.string().default('urn:idarms:context'),
+  PLATFORM_GOVERNANCE_URL: z.string().url().default('http://localhost:3010'),
   RABBITMQ_URL: z.string().min(1),
   RABBITMQ_EXCHANGE: z.string().min(1).default('croip.domain.v1'),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(100).default(500),

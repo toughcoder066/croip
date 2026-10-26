@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 
 import { PageLoader } from '@/components/ui/spinner'
-import { PurgeConfirmDialog } from '@/components/admin/purge-confirm-dialog'
 import { PropertiesDataTable, type PropertyRecord, type AssemblyLookup } from '@/views/properties/properties-data-table'
 
 export default function PropertiesRegistryPage() {
@@ -56,13 +55,6 @@ export default function PropertiesRegistryPage() {
           <p className="text-xs text-muted-foreground mt-0.5">
             National cadastre of landed properties registered across all assemblies via property-registry-service (:3020).
           </p>
-        </div>
-
-        <div className="flex items-center gap-2 self-stretch sm:self-auto">
-          <PurgeConfirmDialog
-            target="properties"
-            onSuccess={fetchProperties}
-          />
         </div>
       </div>
 

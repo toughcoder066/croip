@@ -70,8 +70,8 @@ export async function loginWithZitadelCredentials(
     'scope',
     'openid profile email offline_access ' +
       'urn:zitadel:iam:org:project:id:zitadel:aud ' +
-      'urn:zitadel:iam:org:project:id:395706197476376592:roles ' +
-      'urn:zitadel:iam:org:project:id:395706197476376592:aud'
+      'urn:zitadel:iam:org:project:id:396579532015927301:roles ' +
+      'urn:zitadel:iam:org:project:id:396579532015927301:aud'
   )
   authorizeUrl.searchParams.set('state', state)
   authorizeUrl.searchParams.set('code_challenge', challenge)
@@ -150,7 +150,7 @@ export async function loginWithZitadelCredentials(
   if (passCookies) cookies += `; ${passCookies}`
 
   // Submit password
-  const postPasswordRes = await fetch(`${ZITADEL_ISSUER}/ui/login/password`, {
+  let authFlowRes = await fetch(`${ZITADEL_ISSUER}/ui/login/password`, {
     method: 'POST',
     redirect: 'manual',
     headers: {
@@ -164,18 +164,52 @@ export async function loginWithZitadelCredentials(
       password
     })
   })
+  let authFlowCookies = extractCookies(authFlowRes)
+  if (authFlowCookies) cookies += `; ${authFlowCookies}`
 
-  if (postPasswordRes.status !== 302) {
+  // A correct password doesn't always redirect straight to the callback: a user who
+  // hasn't set up (or last skipped) a second factor within the org's mfaInitSkipLifetime
+  // gets an optional "set up 2FA now?" prompt (200, not 302) first. Every account this
+  // platform provisions is password-only by design, so skip it the same way a human
+  // clicking through the hosted login UI would — Zitadel then issues the real callback
+  // redirect. A genuinely wrong password 200s too, but to the password form again (no
+  // mfa/prompt action), so this only ever fires for the correct-password-but-unprompted
+  // case.
+  if (authFlowRes.status === 200) {
+    const promptHtml = await authFlowRes.text()
+    const promptFormMatch = promptHtml.match(/<form[^>]+action="([^"]+)"/)
+    if (promptFormMatch?.[1]?.includes('/mfa/prompt')) {
+      const promptCsrfMatch = promptHtml.match(/name="gorilla\.csrf\.Token"\s+value="([^"]+)"/)
+      if (!promptCsrfMatch) {
+        throw new Error('Could not retrieve identity provider 2FA prompt token.')
+      }
+      authFlowRes = await fetch(`${ZITADEL_ISSUER}/ui/login/mfa/prompt`, {
+        method: 'POST',
+        redirect: 'manual',
+        headers: {
+          Host: issuerHost,
+          Cookie: cookies,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        body: new URLSearchParams({
+          'gorilla.csrf.Token': promptCsrfMatch[1],
+          authRequestID: authRequestId,
+          skip: 'true'
+        })
+      })
+      authFlowCookies = extractCookies(authFlowRes)
+      if (authFlowCookies) cookies += `; ${authFlowCookies}`
+    }
+  }
+
+  if (authFlowRes.status !== 302) {
     throw new Error('Invalid email or password. Please check your credentials.')
   }
 
-  const callbackUrl = postPasswordRes.headers.get('location')
+  const callbackUrl = authFlowRes.headers.get('location')
   if (!callbackUrl) {
     throw new Error('Identity provider did not return authorization callback.')
   }
-
-  const authCbCookies = extractCookies(postPasswordRes)
-  if (authCbCookies) cookies += `; ${authCbCookies}`
 
   // Follow callback to get authorization code
   const cbRes = await fetch(callbackUrl, {

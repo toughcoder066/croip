@@ -21,15 +21,10 @@ const schema = z.object({
   ZITADEL_TOKEN_URL: z.string().url().optional(),
   ZITADEL_CLIENT_ID: z.string().min(1).optional(),
   ZITADEL_CLIENT_SECRET: z.string().min(1).optional(),
-  // Accepts a ratepayer's own session token (issued by ratepayer-service's phone/email +
-  // password + OTP login) as an alternate auth path for self-service property creation —
-  // see the dual-auth preHandler on POST /properties.
-  RATEPAYER_JWT_SECRET: z.string().min(32).default('a1ad815520d1c65d7f6f262a37b891b4081ac164aa687d9277bfaa4990735893'),
-  // Called right after a ratepayer self-registers a property, to link it to their own
-  // profile on the ratepayer-service side (see assertZoneMembership's sibling call in
-  // service.ts's createProperty).
-  RATEPAYER_SERVICE_URL: z.string().url().default('http://ratepayer-service:3030'),
   BILLING_SERVICE_URL: z.string().url().default('http://billing-payments-service:3007'),
+  // Ratepayer-service owns property-ratepayer links; property deletion calls it to sever
+  // any links on the deleted property (see deleteProperty in modules/properties/service.ts).
+  RATEPAYER_SERVICE_URL: z.string().url().default('http://ratepayer-service:3030'),
   // Platform Governance Service provides concessionaire assignments and MMDA boundary authorizations
   PLATFORM_GOVERNANCE_URL: z.string().url().default('http://platform-governance-service:3010'),
   RABBITMQ_URL: z.string().min(1),

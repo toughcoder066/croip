@@ -6,7 +6,9 @@
   "engines": { "node": ">=24.0.0" },
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "predev": "prisma generate",
     "build": "tsc -p tsconfig.json",
+    "prebuild": "prisma generate",
     "start": "node dist/server.js",
     "worker:outbox": "tsx src/workers/outbox.ts",
     "start:worker:outbox": "node dist/workers/outbox.js",

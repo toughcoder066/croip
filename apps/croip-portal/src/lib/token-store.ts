@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { ZITADEL_CLIENT_ID, ZITADEL_ISSUER } from './zitadel'
+import { IDLE_TIMEOUT_MS } from './session-policy'
 
 /**
  * Real Zitadel access/ID tokens — especially the access token, once it carries the
@@ -11,12 +12,18 @@ import { ZITADEL_CLIENT_ID, ZITADEL_ISSUER } from './zitadel'
  * store lookup). Instead, only a short session ID goes in the cookie; the actual
  * tokens live here, server-side, keyed by that ID.
  *
- * Sessions end on INACTIVITY, not on the access token's own short lifetime: every call
- * to touchTokenSession() (i.e. every real API call made through croip-api.ts) silently
- * renews the access token via the stored refresh token when it's close to expiring, and
- * bumps lastActivityAt. If nothing touches the session for IDLE_TIMEOUT_MS, the next
- * touch evicts it instead of refreshing — an idle officer is logged out even though
- * their browser cookie is technically still present.
+ * Sessions end on INACTIVITY, not on the access token's own short lifetime or the
+ * `croip_session` cookie's own 7-day maxAge. The real enforcement point for that is
+ * `proxy.ts`, which stamps/checks a `lastActivityAt` field it keeps directly in the
+ * cookie on every matched request (it has to — it runs on the Edge runtime and can't
+ * import this file's in-memory Map). This file's own IDLE_TIMEOUT_MS check exists to
+ * keep the access token itself from being silently refreshed forever on a session
+ * `proxy.ts` has already deemed idle: every call to touchTokenSession() (i.e. every real
+ * API call made through croip-api.ts) renews the access token via the stored refresh
+ * token when it's close to expiring and bumps its own lastActivityAt — but if nothing's
+ * touched this entry for IDLE_TIMEOUT_MS, the next touch evicts it instead of refreshing.
+ * Both checks use the same constant (see session-policy.ts) so they can't disagree about
+ * what "idle" means, even though they watch two different clocks.
  *
  * In-memory only — correct for this single-process dev server, but means sessions
  * don't survive a server restart (the cookie's sessionId stops resolving; treated the
@@ -32,7 +39,6 @@ interface StoredTokens {
   lastActivityAt: number
 }
 
-const IDLE_TIMEOUT_MS = 5 * 60 * 1000
 const REFRESH_BUFFER_MS = 60 * 1000
 
 const globalForTokens = globalThis as unknown as {

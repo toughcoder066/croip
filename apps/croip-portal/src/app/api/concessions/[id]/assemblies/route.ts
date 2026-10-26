@@ -28,16 +28,16 @@ export async function POST(request: Request, { params }: RouteProps) {
   try {
     const { id } = await params
     const body = await request.json()
-    const { assemblyId, contractStart, contractEnd } = body
+    const { assemblyId, contractEnd } = body
 
-    if (!assemblyId || !contractStart || !contractEnd) {
+    if (!assemblyId || !contractEnd) {
       return NextResponse.json(
-        { success: false, error: 'Assembly, contract start date, and contract end date are required' },
+        { success: false, error: 'Assembly and contract end date are required' },
         { status: 400 }
       )
     }
 
-    const assignment = await croipApi.governance.assignAssembly(id, { assemblyId, contractStart, contractEnd })
+    const assignment = await croipApi.governance.assignAssembly(id, { assemblyId, contractEnd })
 
     return NextResponse.json({ success: true, data: assignment }, { status: 201 })
   } catch (error: any) {

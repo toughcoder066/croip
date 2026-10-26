@@ -16,6 +16,10 @@ const schema = z.object({
   ZITADEL_JWKS_URI: z.string().url().optional(),
   ZITADEL_ROLES_CLAIM: z.string().default('urn:zitadel:iam:org:project:roles'),
   IDARMS_CONTEXT_CLAIM: z.string().default('urn:idarms:context'),
+  // Internal call: every other service resolves a concession API-client's context by
+  // calling platform-governance-service with the token's own client_id — see
+  // src/plugins/auth.ts's resolveServiceContext. Not used for human (staff) logins.
+  PLATFORM_GOVERNANCE_URL: z.string().url().default(process.env.PLATFORM_GOVERNANCE_API_URL || 'http://platform-governance-service:3010'),
   RABBITMQ_URL: z.string().min(1),
   RABBITMQ_EXCHANGE: z.string().min(1).default('croip.domain.v1'),
   OUTBOX_POLL_INTERVAL_MS: z.coerce.number().int().min(100).default(500),

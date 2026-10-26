@@ -22,6 +22,9 @@ const schema = z.object({
   // self-service property creation.
   RATEPAYER_JWT_SECRET: z.string().min(32).default('a1ad815520d1c65d7f6f262a37b891b4081ac164aa687d9277bfaa4990735893'),
   SHARED_SERVICES_URL: z.string().url().default(process.env.SHARED_SERVICES_API_URL || 'http://shared-services:3004'),
+  // Resolves a concession API client's (client_credentials) context by its own JWT
+  // client_id — see src/plugins/auth.ts.
+  PLATFORM_GOVERNANCE_URL: z.string().url().default(process.env.PLATFORM_GOVERNANCE_API_URL || 'http://platform-governance-service:3010'),
   ZITADEL_TOKEN_URL: z.string().url().default(process.env.ZITADEL_TOKEN_URL || 'http://zitadel:8080/oauth/v2/token'),
   ZITADEL_CLIENT_ID: z.string().default(process.env.ZITADEL_CLIENT_ID || 'property-registry-service'),
   ZITADEL_CLIENT_SECRET: z.string().default(process.env.ZITADEL_CLIENT_SECRET || 'rRhsZrPCjk4jq3PfK0ue2uGG8gNVYbaYcAiQhPvkkjTpHsoocrt5W3khItWyDRpn'),

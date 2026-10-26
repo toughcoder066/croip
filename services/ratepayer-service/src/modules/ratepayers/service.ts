@@ -2,12 +2,44 @@ import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { domainEvent } from '../../events/envelope.js';
 import { appendOutboxEvent } from '../../events/outbox.js';
-import { NotFoundError, ConflictError, BadRequestError, UnauthorizedError, UnprocessableError } from '../../lib/errors.js';
+import { NotFoundError, ConflictError, BadRequestError, UnauthorizedError, UnprocessableError, ForbiddenError } from '../../lib/errors.js';
 import { hashPassword, verifyPassword } from '../../lib/password.js';
 import { generateOtpCode, hashOtpCode } from '../../lib/otp.js';
 import { issueRatepayerToken } from '../../lib/ratepayer-jwt.js';
 import { getServiceAccessToken } from '../../lib/zitadel-client.js';
 import { dispatchOtp } from '../../lib/notification-dispatcher.js';
+import { resolveConcessionName } from '../../lib/concession-lookup.js';
+
+// Writes one entry to this ratepayer's account activity log — every real, user-facing
+// action taken on the account (not reads), so the CROIP portal's "Account Activity" card
+// can show genuine history instead of a hardcoded narrative. `client` is either
+// `app.prisma` or a `$transaction` callback's `tx`, so a write can ride along with the
+// state change it describes. `requestId` falls back to a fresh UUID — most call sites here
+// are plain service functions without the originating Fastify request object in scope.
+async function recordActivity(
+  client: any,
+  input: {
+    actorId: string;
+    actorType: string;
+    action: string;
+    resourceId: string;
+    outcome?: string;
+    metadata?: Record<string, unknown>;
+  }
+): Promise<void> {
+  await client.auditRecord.create({
+    data: {
+      actorId: input.actorId,
+      actorType: input.actorType,
+      action: input.action,
+      resourceType: 'Ratepayer',
+      resourceId: input.resourceId,
+      requestId: crypto.randomUUID(),
+      outcome: input.outcome ?? 'SUCCESS',
+      metadata: input.metadata ?? {}
+    }
+  });
+}
 
 export function parseNameParts(
   legalName?: string | null,
@@ -43,6 +75,14 @@ export function parseNameParts(
   };
 }
 
+// Who performed an action, for the account activity log — RATEPAYER (the ratepayer acting
+// on their own account), SERVICE (a concession's own API client, acting on a ratepayer it
+// manages), or USER (a CROIP staff/oversight officer).
+export interface ActorInfo {
+  id: string;
+  type: 'RATEPAYER' | 'SERVICE' | 'USER';
+}
+
 export interface RegisterRatepayerInput {
   ratepayerType?: string;
   firstName?: string;
@@ -62,6 +102,8 @@ export interface RegisterRatepayerInput {
   latitude?: number;
   longitude?: number;
   actorId?: string;
+  actorType?: ActorInfo['type'];
+  concessionId?: string;
 }
 
 export interface LoginInput {
@@ -80,7 +122,25 @@ export interface VerifyOtpInput {
   otpCode: string;
 }
 
+export interface ForgotPasswordInput {
+  identifier?: string;
+  email?: string;
+  phone?: string;
+  number?: string;
+}
+
+export interface ResetPasswordInput {
+  identifier?: string;
+  email?: string;
+  phone?: string;
+  number?: string;
+  otpCode: string;
+  newPassword: string;
+  confirmNewPassword?: string;
+}
+
 export interface UpdateProfileInput {
+  ratepayerType?: string;
   firstName?: string;
   middleName?: string;
   lastName?: string;
@@ -98,12 +158,9 @@ export interface UpdateProfileInput {
   longitude?: number;
 }
 
-export interface LinkOwnPropertyInput {
-  propertyId: string;
-  unitId: string;
-  ownershipType?: string;
-  ownershipPercentage?: number;
-}
+// Self-service (PATCH /ratepayers/me) is the same shape minus `email` — the account's
+// email is immutable from the self-service side; see selfUpdateProfileBodySchema for why.
+export type SelfUpdateProfileInput = Omit<UpdateProfileInput, 'email'>;
 
 const OTP_TTL_MS = 5 * 60 * 1000;
 const OTP_MAX_ATTEMPTS = 5;
@@ -419,7 +476,8 @@ export function ratepayerService(app: FastifyInstance) {
             regionId: detected.regionId ?? input.regionId ?? null,
             assemblyId: detected.assemblyId ?? input.assemblyId ?? null,
             locationGeo: (detected.locationGeo ?? input.locationGeo ?? null) as any,
-            status: 'ACTIVE'
+            status: 'ACTIVE',
+            concessionId: input.concessionId ?? null
           },
           include: { verifications: true, propertyLinks: true }
         });
@@ -449,12 +507,25 @@ export function ratepayerService(app: FastifyInstance) {
 
         await appendOutboxEvent(tx, 'revenue.ratepayer.registered.v1', evt);
 
+        await recordActivity(tx, {
+          actorId: input.actorId ?? 'self-service',
+          actorType: input.actorType ?? 'RATEPAYER',
+          action: 'ratepayer.registered',
+          resourceId: ratepayer.id,
+          metadata: {
+            via: input.actorType === 'SERVICE' ? 'concession' : input.actorType === 'USER' ? 'staff' : 'self-service',
+            code: ratepayer.code
+          }
+        });
+
         const { passwordHash: _passwordHash, ...safe } = ratepayer;
         const completion = computeProfileCompletion(ratepayer);
         return { ...safe, completion };
       });
 
-      // Dispatch OTP: Email goes to Mailpit; Phone prepared for Arkasel gateway
+      // Dispatch OTP: Email goes to Mailpit; Phone prepared for Arkasel gateway. White-label
+      // as the concession, never CROIP — see lib/notification-dispatcher.ts.
+      const issuerName = (await resolveConcessionName(app, input.concessionId)) ?? undefined;
       if (cleanEmail) {
         await dispatchOtp({
           destination: cleanEmail,
@@ -462,6 +533,7 @@ export function ratepayerService(app: FastifyInstance) {
           code: otpCode,
           ratepayerName: legalName,
           purpose: 'Ratepayer Registration',
+          issuerName,
           log: app.log
         });
       } else if (cleanPhone) {
@@ -471,6 +543,7 @@ export function ratepayerService(app: FastifyInstance) {
           code: otpCode,
           ratepayerName: legalName,
           purpose: 'Ratepayer Registration',
+          issuerName,
           log: app.log
         });
       }
@@ -482,7 +555,12 @@ export function ratepayerService(app: FastifyInstance) {
           channel: cleanEmail ? 'EMAIL' : 'SMS',
           destination: cleanEmail || cleanPhone,
           expiresInSeconds: OTP_TTL_MS / 1000,
-          devOtpCode: otpCode
+          // Email OTPs are delivered through Mailpit (http://localhost:8025) — a real inbox
+          // the caller can check, so there's no need to also echo the code back, and doing
+          // so would mask whether the email path actually works. SMS has no running
+          // provider yet (Arkasel is stubbed), so returning it here is the only way to test
+          // that path until it's wired up for real.
+          ...(cleanEmail ? {} : { devOtpCode: otpCode })
         }
       };
     },
@@ -498,6 +576,34 @@ export function ratepayerService(app: FastifyInstance) {
       const { passwordHash: _passwordHash, ...safe } = rp;
       const completion = computeProfileCompletion(rp);
       return { ...safe, completion };
+    },
+
+    // Every real action taken on this ratepayer's account, most recent first — registered,
+    // logged in, profile updated (self/concession/staff), KYC submitted/reviewed, status
+    // changed, property claimed/unlinked, password reset. Drives the CROIP portal's
+    // "Account Activity" card; deliberately not a synthetic/hardcoded narrative.
+    async getActivity(ratepayerId: string) {
+      const rp = await app.prisma.ratepayer.findFirst({
+        where: { OR: [{ id: ratepayerId }, { code: ratepayerId }] },
+        select: { id: true }
+      });
+      if (!rp) throw new NotFoundError('Ratepayer profile not found');
+
+      const records = await app.prisma.auditRecord.findMany({
+        where: { resourceType: 'Ratepayer', resourceId: rp.id },
+        orderBy: { occurredAt: 'desc' },
+        take: 100
+      });
+
+      return records.map((r) => ({
+        id: r.id,
+        occurredAt: r.occurredAt.toISOString(),
+        actorId: r.actorId,
+        actorType: r.actorType,
+        action: r.action,
+        outcome: r.outcome,
+        metadata: r.metadata
+      }));
     },
 
     // Step 1 of login: check the password, then issue a short-lived OTP instead of a
@@ -537,28 +643,35 @@ export function ratepayerService(app: FastifyInstance) {
 
       // Dispatch login OTP:
       // If user typed an email, dispatch to email (Mailpit); if user typed phone, dispatch to phone (Arkasel).
-      // Fallback to whichever destination is on file.
+      // Fallback to whichever destination is on file. White-label as the concession this
+      // ratepayer belongs to, never CROIP — see lib/notification-dispatcher.ts.
       const preferEmail = rawId.includes('@') && Boolean(ratepayer.email);
       let destination = ratepayer.phone || ratepayer.email || 'user';
+      let usedChannel: 'EMAIL' | 'SMS' | undefined;
+      const issuerName = (await resolveConcessionName(app, ratepayer.concessionId)) ?? undefined;
 
       if (preferEmail || (!ratepayer.phone && ratepayer.email)) {
         destination = ratepayer.email!;
+        usedChannel = 'EMAIL';
         await dispatchOtp({
           destination: ratepayer.email!,
           channel: 'EMAIL',
           code,
           ratepayerName: ratepayer.legalName || undefined,
-          purpose: 'Portal Sign-In',
+          purpose: 'Sign-In',
+          issuerName,
           log: app.log
         });
       } else if (ratepayer.phone) {
         destination = ratepayer.phone;
+        usedChannel = 'SMS';
         await dispatchOtp({
           destination: ratepayer.phone,
           channel: 'SMS',
           code,
           ratepayerName: ratepayer.legalName || undefined,
-          purpose: 'Portal Sign-In',
+          purpose: 'Sign-In',
+          issuerName,
           log: app.log
         });
       }
@@ -567,10 +680,11 @@ export function ratepayerService(app: FastifyInstance) {
         status: 'OTP_REQUIRED' as const,
         destination: maskPhone(destination),
         expiresInSeconds: OTP_TTL_MS / 1000,
-        // No SMS provider is configured in this environment — the real code is returned
-        // directly so the flow is testable end-to-end. A production deployment would send
-        // this via SMS and drop this field entirely.
-        devOtpCode: code
+        // Email OTPs land in a real, checkable inbox (Mailpit, http://localhost:8025), so
+        // echoing the code back here would just mask whether email delivery actually works.
+        // SMS has no provider wired up yet (Arkasel is stubbed) — until it is, this is the
+        // only way to test that path.
+        ...(usedChannel === 'SMS' ? { devOtpCode: code } : {})
       };
     },
 
@@ -625,6 +739,14 @@ export function ratepayerService(app: FastifyInstance) {
         app.config.RATEPAYER_JWT_SECRET
       );
 
+      await recordActivity(app.prisma, {
+        actorId: ratepayer.id,
+        actorType: 'RATEPAYER',
+        action: 'ratepayer.login',
+        resourceId: ratepayer.id,
+        metadata: { otpPurpose: otp.purpose }
+      });
+
       return {
         accessToken,
         tokenType: 'Bearer' as const,
@@ -633,13 +755,214 @@ export function ratepayerService(app: FastifyInstance) {
       };
     },
 
-    async updateProfile(ratepayerId: string, input: UpdateProfileInput) {
+    // Step 1 of password reset: same identifier lookup as login, but no password check —
+    // that's the whole point — and a distinct OTP purpose (PASSWORD_RESET) so a leftover
+    // login/registration code can never be replayed to reset a password, or vice versa.
+    // Deliberately returns the same OTP_REQUIRED shape whether or not the identifier is
+    // registered, so this endpoint can't be used to probe which phone numbers/emails have
+    // an account — only an existing account actually gets an OTP generated and dispatched.
+    async forgotPassword(input: ForgotPasswordInput) {
+      const rawId = (input.identifier || input.email || input.phone || input.number || '').trim();
+      if (!rawId) {
+        throw new BadRequestError('Email address or phone number is required to reset your password.');
+      }
+      const cleanEmail = rawId.toLowerCase();
+      const ratepayer = await app.prisma.ratepayer.findFirst({
+        where: {
+          OR: [
+            { phone: rawId },
+            { email: cleanEmail },
+            { email: rawId }
+          ]
+        }
+      });
+
+      const genericDestination = maskPhone(rawId);
+      if (!ratepayer || ratepayer.status !== 'ACTIVE') {
+        return {
+          status: 'OTP_REQUIRED' as const,
+          destination: genericDestination,
+          expiresInSeconds: OTP_TTL_MS / 1000
+        };
+      }
+
+      const code = generateOtpCode();
+      await app.prisma.ratepayerOtp.create({
+        data: {
+          ratepayerId: ratepayer.id,
+          purpose: 'PASSWORD_RESET',
+          codeHash: hashOtpCode(code),
+          expiresAt: new Date(Date.now() + OTP_TTL_MS)
+        }
+      });
+
+      const preferEmail = rawId.includes('@') && Boolean(ratepayer.email);
+      let destination = ratepayer.phone || ratepayer.email || 'user';
+      let usedChannel: 'EMAIL' | 'SMS' | undefined;
+      // White-label as the concession this ratepayer belongs to, never CROIP — see
+      // lib/notification-dispatcher.ts.
+      const issuerName = (await resolveConcessionName(app, ratepayer.concessionId)) ?? undefined;
+
+      if (preferEmail || (!ratepayer.phone && ratepayer.email)) {
+        destination = ratepayer.email!;
+        usedChannel = 'EMAIL';
+        await dispatchOtp({
+          destination: ratepayer.email!,
+          channel: 'EMAIL',
+          code,
+          ratepayerName: ratepayer.legalName || undefined,
+          purpose: 'Password Reset',
+          issuerName,
+          log: app.log
+        });
+      } else if (ratepayer.phone) {
+        destination = ratepayer.phone;
+        usedChannel = 'SMS';
+        await dispatchOtp({
+          destination: ratepayer.phone,
+          channel: 'SMS',
+          code,
+          ratepayerName: ratepayer.legalName || undefined,
+          purpose: 'Password Reset',
+          issuerName,
+          log: app.log
+        });
+      }
+
+      await recordActivity(app.prisma, {
+        actorId: ratepayer.id,
+        actorType: 'RATEPAYER',
+        action: 'ratepayer.password_reset_requested',
+        resourceId: ratepayer.id,
+        metadata: {}
+      });
+
+      return {
+        status: 'OTP_REQUIRED' as const,
+        destination: maskPhone(destination),
+        expiresInSeconds: OTP_TTL_MS / 1000,
+        // Email OTPs land in a real, checkable inbox (Mailpit) — no need to echo the code
+        // back. SMS has no provider wired up yet, so this is the only way to test that path
+        // until it is.
+        ...(usedChannel === 'SMS' ? { devOtpCode: code } : {})
+      };
+    },
+
+    // Step 2 of password reset: confirm the PASSWORD_RESET OTP and set the new password.
+    // Issues a fresh session token immediately — successfully completing this proves
+    // ownership of the account just as surely as a normal login OTP does.
+    async resetPassword(input: ResetPasswordInput) {
+      const rawId = (input.identifier || input.email || input.phone || input.number || '').trim();
+      if (!rawId) {
+        throw new BadRequestError('Email address or phone number is required to reset your password.');
+      }
+      if (input.confirmNewPassword && input.newPassword !== input.confirmNewPassword) {
+        throw new BadRequestError('Passwords do not match. Please verify and try again.');
+      }
+
+      const cleanEmail = rawId.toLowerCase();
+      const ratepayer = await app.prisma.ratepayer.findFirst({
+        where: {
+          OR: [
+            { phone: rawId },
+            { email: cleanEmail },
+            { email: rawId }
+          ]
+        }
+      });
+      if (!ratepayer) throw new UnauthorizedError('Incorrect phone/email or code');
+
+      const otp = await app.prisma.ratepayerOtp.findFirst({
+        where: {
+          ratepayerId: ratepayer.id,
+          purpose: 'PASSWORD_RESET',
+          consumedAt: null
+        },
+        orderBy: { createdAt: 'desc' }
+      });
+      if (!otp || otp.expiresAt < new Date()) {
+        throw new UnauthorizedError('No active code — request a new one');
+      }
+      if (otp.attempts >= OTP_MAX_ATTEMPTS) {
+        throw new UnauthorizedError('Too many incorrect attempts — request a new code');
+      }
+      if (otp.codeHash !== hashOtpCode(input.otpCode)) {
+        await app.prisma.ratepayerOtp.update({ where: { id: otp.id }, data: { attempts: { increment: 1 } } });
+        throw new UnauthorizedError('Incorrect code');
+      }
+
+      const passwordHash = await hashPassword(input.newPassword);
+      const updated = await app.prisma.$transaction(async (tx) => {
+        await tx.ratepayerOtp.update({ where: { id: otp.id }, data: { consumedAt: new Date() } });
+        const result = await tx.ratepayer.update({ where: { id: ratepayer.id }, data: { passwordHash } });
+        await recordActivity(tx, {
+          actorId: ratepayer.id,
+          actorType: 'RATEPAYER',
+          action: 'ratepayer.password_reset_completed',
+          resourceId: ratepayer.id,
+          metadata: {}
+        });
+        return result;
+      });
+
+      const accessToken = await issueRatepayerToken(
+        {
+          sub: updated.id,
+          code: updated.code,
+          phone: updated.phone || '',
+          assemblyId: updated.assemblyId || '00000000-0000-0000-0000-000000000000',
+          regionId: updated.regionId || '00000000-0000-0000-0000-000000000000',
+          actorType: 'RATEPAYER'
+        },
+        app.config.RATEPAYER_JWT_SECRET
+      );
+
+      return {
+        accessToken,
+        tokenType: 'Bearer' as const,
+        expiresInSeconds: 7 * 24 * 60 * 60,
+        ratepayer: updated
+      };
+    },
+
+    // Revokes just the one session token presented, not every token this ratepayer has —
+    // "log out this device", not "log out everywhere". The row is kept only until the
+    // token would have expired naturally anyway (claims.exp), so authenticateRatepayer's
+    // revocation check never has to scan an unbounded, ever-growing table.
+    async logout(claims: { sub: string; jti: string; exp: number }) {
+      // Idempotent — a retried or double-fired logout request for an already-revoked jti
+      // should still report success, not error.
+      await app.prisma.ratepayerRevokedToken.upsert({
+        where: { jti: claims.jti },
+        create: {
+          jti: claims.jti,
+          ratepayerId: claims.sub,
+          expiresAt: new Date(claims.exp * 1000)
+        },
+        update: {}
+      });
+
+      await recordActivity(app.prisma, {
+        actorId: claims.sub,
+        actorType: 'RATEPAYER',
+        action: 'ratepayer.logout',
+        resourceId: claims.sub,
+        metadata: {}
+      });
+
+      return { success: true, message: 'Signed out successfully' };
+    },
+
+    async updateProfile(ratepayerId: string, input: UpdateProfileInput, requireConcessionId?: string, actor?: ActorInfo) {
       const ratepayer = await app.prisma.ratepayer.findFirst({
         where: {
           OR: [{ id: ratepayerId }, { code: ratepayerId }]
         }
       });
       if (!ratepayer) throw new NotFoundError('Ratepayer profile not found');
+      if (requireConcessionId && ratepayer.concessionId !== requireConcessionId) {
+        throw new ForbiddenError('Ratepayer was not registered by this concession');
+      }
 
       const newEmail = input.email !== undefined ? input.email.toLowerCase().trim() : undefined;
       const newPhone = (input.phone !== undefined || input.number !== undefined)
@@ -698,6 +1021,7 @@ export function ratepayerService(app: FastifyInstance) {
         data: {
           ...namesUpdate,
           ...passwordHashUpdate,
+          ...(input.ratepayerType !== undefined ? { ratepayerType: input.ratepayerType } : {}),
           ...(newEmail !== undefined ? { email: newEmail } : {}),
           ...(newPhone !== undefined ? { phone: newPhone } : {}),
           ...(input.address !== undefined ? { address: input.address } : {}),
@@ -710,60 +1034,41 @@ export function ratepayerService(app: FastifyInstance) {
         include: { verifications: true, propertyLinks: true }
       });
 
+      await recordActivity(app.prisma, {
+        actorId: actor?.id ?? ratepayer.id,
+        actorType: actor?.type ?? 'RATEPAYER',
+        action: 'ratepayer.profile_updated',
+        resourceId: ratepayer.id,
+        metadata: {
+          via: actor?.type === 'SERVICE' ? 'concession' : actor?.type === 'USER' ? 'staff' : 'self-service',
+          updatedFields: Object.keys(input)
+        }
+      });
+
       const { passwordHash: _passwordHash, ...safe } = updated;
       const completion = computeProfileCompletion(updated);
       return { ...safe, completion };
     },
 
-    // Called by property-registry-service right after it creates a property on this
-    // ratepayer's own behalf (self-service registration — not the separate "claim an
-    // existing property" flow below, which is for properties someone else already
-    // registered). The ratepayer already proved ownership via the documents attached at
-    // creation time, so this is approved immediately rather than going through
-    // claimProperty's PENDING_VERIFICATION review queue.
-    async linkOwnProperty(ratepayerId: string, input: LinkOwnPropertyInput) {
-      const ratepayer = await app.prisma.ratepayer.findUnique({ where: { id: ratepayerId } });
-      if (!ratepayer) throw new NotFoundError('Ratepayer profile not found');
-
-      const rawOwnership = input.ownershipType?.trim().toUpperCase();
-      const normalizedOwnership = (rawOwnership === 'PART' || rawOwnership === 'PARTIAL' || rawOwnership === 'CO_OWNER')
-        ? 'PART'
-        : 'FULL';
-      const ownershipPercentage = input.ownershipPercentage ?? (normalizedOwnership === 'FULL' ? 100.0 : 50.0);
-
-      return app.prisma.$transaction(async (tx) => {
-        const link = await tx.propertyRatepayerLink.create({
-          data: {
-            ratepayerId,
-            propertyId: input.propertyId,
-            unitId: input.unitId,
-            ownershipType: normalizedOwnership,
-            ownershipPercentage,
-            isPrimaryBillingContact: true,
-            claimStatus: 'APPROVED',
-            effectiveFrom: new Date()
-          }
-        });
-
-        const evt = domainEvent({
-          eventType: 'PropertySelfRegisteredAndLinked',
-          eventVersion: 1,
-          producer: app.serviceInfo.name,
-          aggregateType: 'PropertyRatepayerLink',
-          aggregateId: link.id,
-          aggregateVersion: 1,
-          concessionId: '00000000-0000-0000-0000-000000000000',
-          assemblyId: ratepayer.assemblyId || '00000000-0000-0000-0000-000000000000',
-          correlationId: crypto.randomUUID(),
-          data: { linkId: link.id, propertyId: link.propertyId, unitId: link.unitId, ratepayerId: link.ratepayerId }
-        });
-        await appendOutboxEvent(tx, 'revenue.property.self_registered_and_linked.v1', evt);
-
-        return link;
-      });
+    // Self-service entry point for PATCH /ratepayers/me. Takes the raw request body
+    // (before it's narrowed to SelfUpdateProfileInput) specifically so it can check for
+    // immutable fields the client might have sent and reject them with a clear error —
+    // selfUpdateProfileBodySchema deliberately has no `additionalProperties: false`,
+    // because Fastify's AJV defaults would silently strip those fields instead of
+    // rejecting the request, which would let a caller believe an email or concession
+    // change went through when it was quietly dropped.
+    async updateOwnProfile(ratepayerId: string, rawInput: Record<string, unknown>) {
+      const immutableKeys = ['email', 'concessionId', 'code', 'id', 'status', 'createdAt', 'updatedAt', 'passwordHash'];
+      const attempted = immutableKeys.filter((key) => key in rawInput);
+      if (attempted.length > 0) {
+        throw new BadRequestError(
+          `Cannot change ${attempted.join(', ')} through self-service profile update — your email, the concession you registered with, and other account/registration fields are immutable here.`
+        );
+      }
+      return this.updateProfile(ratepayerId, rawInput as SelfUpdateProfileInput, undefined, { id: ratepayerId, type: 'RATEPAYER' });
     },
 
-    async claimProperty(input: ClaimPropertyInput) {
+    async claimProperty(input: ClaimPropertyInput, actor?: ActorInfo) {
       if (!input.propertyId || !String(input.propertyId).trim()) {
         throw new BadRequestError('Property ID is required when claiming a property.');
       }
@@ -869,6 +1174,14 @@ export function ratepayerService(app: FastifyInstance) {
 
         await appendOutboxEvent(tx, 'revenue.property.claimed.v1', evt);
 
+        await recordActivity(tx, {
+          actorId: actor?.id ?? ratepayerUuid,
+          actorType: actor?.type ?? 'RATEPAYER',
+          action: 'ratepayer.property_claimed',
+          resourceId: ratepayerUuid,
+          metadata: { linkId: link.id, propertyId: link.propertyId, ownershipType: link.ownershipType }
+        });
+
         return link;
       });
     },
@@ -923,7 +1236,7 @@ export function ratepayerService(app: FastifyInstance) {
     // Admin KYC review: an oversight official approves or rejects a ratepayer's pending
     // identity verification (e.g. Ghana Card check). Mirrors the agent/officer verification
     // split already built for properties in property-registry-service.
-    async reviewVerification(input: ReviewVerificationInput) {
+    async reviewVerification(input: ReviewVerificationInput, actor?: ActorInfo) {
       const verification = await app.prisma.ratepayerVerification.findFirst({
         where: { id: input.verificationId, ratepayerId: input.ratepayerId }
       });
@@ -952,6 +1265,14 @@ export function ratepayerService(app: FastifyInstance) {
         });
         await appendOutboxEvent(tx, 'revenue.ratepayer.verification_reviewed.v1', evt);
 
+        await recordActivity(tx, {
+          actorId: actor?.id ?? 'staff',
+          actorType: actor?.type ?? 'USER',
+          action: 'ratepayer.kyc_reviewed',
+          resourceId: input.ratepayerId,
+          metadata: { verificationId: reviewed.id, provider: reviewed.provider, verificationStatus: reviewed.verificationStatus }
+        });
+
         return reviewed;
       });
     },
@@ -959,7 +1280,7 @@ export function ratepayerService(app: FastifyInstance) {
     // KYC verification: Exactly 3 allowed providers (GHANA_CARD, PASSPORT, DRIVERS_LICENSE).
     // A ratepayer can only choose one provider.
     // Changing verification archives previous verifications to preserve the full audit trail.
-    async verifyKyc(ratepayerId: string, input: { provider?: string; providerReference?: string; autoVerify?: boolean }) {
+    async verifyKyc(ratepayerId: string, input: { provider?: string; providerReference?: string; autoVerify?: boolean }, actor?: ActorInfo) {
       const ratepayer = await app.prisma.ratepayer.findFirst({
         where: {
           OR: [{ id: ratepayerId }, { code: ratepayerId }]
@@ -1010,18 +1331,29 @@ export function ratepayerService(app: FastifyInstance) {
           await appendOutboxEvent(tx, 'revenue.ratepayer.verification_reviewed.v1', evt);
         }
 
+        await recordActivity(tx, {
+          actorId: actor?.id ?? ratepayer.id,
+          actorType: actor?.type ?? 'RATEPAYER',
+          action: 'ratepayer.kyc_submitted',
+          resourceId: ratepayer.id,
+          metadata: { provider: canonicalProvider, verificationStatus: verification.verificationStatus, autoVerified: isAuto }
+        });
+
         return verification;
       });
     },
 
     // Deletes an individual ratepayer profile.
     // Business rule: you CANNOT delete a ratepayer who has linked properties.
-    async deleteRatepayer(id: string) {
+    async deleteRatepayer(id: string, requireConcessionId?: string, actor?: ActorInfo) {
       const ratepayer = await app.prisma.ratepayer.findUnique({
         where: { id },
         include: { propertyLinks: true }
       });
       if (!ratepayer) throw new NotFoundError('Ratepayer profile not found');
+      if (requireConcessionId && ratepayer.concessionId !== requireConcessionId) {
+        throw new ForbiddenError('Ratepayer was not registered by this concession');
+      }
 
       if (ratepayer.propertyLinks && ratepayer.propertyLinks.length > 0) {
         throw new BadRequestError(`Cannot delete ratepayer ${ratepayer.code}: they currently have ${ratepayer.propertyLinks.length} linked property parcel(s). Sever all property links before deleting this ratepayer.`);
@@ -1046,12 +1378,20 @@ export function ratepayerService(app: FastifyInstance) {
         });
         await appendOutboxEvent(tx, 'revenue.ratepayer.deleted.v1', evt);
 
+        await recordActivity(tx, {
+          actorId: actor?.id ?? (requireConcessionId ?? 'staff'),
+          actorType: actor?.type ?? (requireConcessionId ? 'SERVICE' : 'USER'),
+          action: 'ratepayer.deleted',
+          resourceId: id,
+          metadata: { code: ratepayer.code }
+        });
+
         return { success: true, message: `Ratepayer ${ratepayer.code} deleted successfully` };
       });
     },
 
     // Severs a single property link for a ratepayer.
-    async severPropertyLink(ratepayerId: string, propertyId: string) {
+    async severPropertyLink(ratepayerId: string, propertyId: string, actor?: ActorInfo) {
       const link = await app.prisma.propertyRatepayerLink.findFirst({
         where: { ratepayerId, propertyId }
       });
@@ -1075,6 +1415,14 @@ export function ratepayerService(app: FastifyInstance) {
         });
         await appendOutboxEvent(tx, 'revenue.property.link_severed.v1', evt);
 
+        await recordActivity(tx, {
+          actorId: actor?.id ?? ratepayerId,
+          actorType: actor?.type ?? 'RATEPAYER',
+          action: 'ratepayer.property_link_severed',
+          resourceId: ratepayerId,
+          metadata: { linkId: link.id, propertyId }
+        });
+
         return { success: true, message: 'Property link severed successfully' };
       });
     },
@@ -1092,14 +1440,24 @@ export function ratepayerService(app: FastifyInstance) {
       });
     },
 
-    async updateStatus(id: string, status: string) {
+    async updateStatus(id: string, status: string, actor?: ActorInfo) {
       const ratepayer = await app.prisma.ratepayer.findUnique({ where: { id } });
       if (!ratepayer) throw new NotFoundError('Ratepayer profile not found');
 
-      return app.prisma.ratepayer.update({
+      const updated = await app.prisma.ratepayer.update({
         where: { id },
         data: { status }
       });
+
+      await recordActivity(app.prisma, {
+        actorId: actor?.id ?? 'staff',
+        actorType: actor?.type ?? 'USER',
+        action: 'ratepayer.status_changed',
+        resourceId: id,
+        metadata: { from: ratepayer.status, to: status }
+      });
+
+      return updated;
     },
 
     async purgeRatepayers() {

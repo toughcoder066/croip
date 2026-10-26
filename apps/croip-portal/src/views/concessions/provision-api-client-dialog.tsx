@@ -32,23 +32,30 @@ interface ProvisionApiClientDialogProps {
   concessionId: string
   onProvisioned?: (credentials: ProvisionedCredentials) => void
 
+  /** True once this concession already has an active credential — rotating will revoke it. */
+  hasActiveClient?: boolean
+
   /** Render as a plain button inline instead of the default outlined one. */
   buttonLabel?: string
   buttonVariant?: 'default' | 'outline' | 'secondary'
 }
 
 /**
- * Button + one-time secret reveal dialog for provisioning a concession's API client.
+ * Button + one-time secret reveal dialog for rotating a concession's API client.
  *
- * The governance service returns `clientSecret` in plaintext exactly once — it is never
- * stored server-side and cannot be retrieved again. The reveal dialog therefore requires
- * the user to explicitly confirm they copied it before it can be closed, mirroring how
- * Stripe/AWS handle one-time credential reveal.
+ * A concession can only ever have one ACTIVE credential — onboarding already provisions
+ * the first one automatically, so this always rotates (revokes the current one at Zitadel,
+ * then issues a new one), never adds an additional one. The governance service returns
+ * `clientSecret` in plaintext exactly once — it is never stored server-side and cannot be
+ * retrieved again. The reveal dialog therefore requires the user to explicitly confirm they
+ * copied it before it can be closed, mirroring how Stripe/AWS handle one-time credential
+ * reveal.
  */
 export function ProvisionApiClientDialog({
   concessionId,
   onProvisioned,
-  buttonLabel = 'Provision New Client',
+  hasActiveClient = false,
+  buttonLabel = 'Rotate Credential',
   buttonVariant = 'default'
 }: ProvisionApiClientDialogProps) {
   const [provisioning, setProvisioning] = useState(false)
@@ -57,10 +64,18 @@ export function ProvisionApiClientDialog({
   const [confirmedCopied, setConfirmedCopied] = useState(false)
 
   const handleProvision = async () => {
+    if (hasActiveClient && !confirm('This revokes the current active credential immediately and issues a new one. Continue?')) {
+      return
+    }
+
     setProvisioning(true)
 
     try {
-      const res = await fetch(`/api/concessions/${concessionId}/api-clients`, { method: 'POST' })
+      const res = await fetch(`/api/concessions/${concessionId}/api-clients`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'rotate' })
+      })
       const data = await res.json()
 
       if (data.success) {
@@ -70,13 +85,13 @@ export function ProvisionApiClientDialog({
         setConfirmedCopied(false)
         setRevealOpen(true)
 
-        toast.success('API client provisioned')
+        toast.success('API credential rotated')
         onProvisioned?.(creds)
       } else {
-        toast.error(data.error || 'Failed to provision API client')
+        toast.error(data.error || 'Failed to rotate API client')
       }
     } catch {
-      toast.error('Network error provisioning API client')
+      toast.error('Network error rotating API client')
     } finally {
       setProvisioning(false)
     }
@@ -113,7 +128,7 @@ export function ProvisionApiClientDialog({
           <DialogHeader>
             <DialogTitle className="text-base font-semibold flex items-center gap-2">
               <KeyRoundIcon className="size-4 text-primary" />
-              API Client Provisioned
+              API Credential Rotated
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
               Machine-to-machine credentials for this concessionaire&apos;s backend integration.
@@ -125,7 +140,8 @@ export function ProvisionApiClientDialog({
             <AlertTitle className="text-xs font-semibold">Copy this secret now — you won&apos;t see it again</AlertTitle>
             <AlertDescription className="text-[11px]">
               The client secret is shown here exactly once and is never stored in retrievable form.
-              If it is lost, the only recourse is to provision a brand new client.
+              If it is lost, the only recourse is to rotate again — the credential just replaced is
+              already revoked.
             </AlertDescription>
           </Alert>
 

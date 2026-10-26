@@ -16,7 +16,10 @@ import {
   PauseCircleIcon,
   XCircleIcon,
   InfoIcon,
-  PhoneIcon
+  PhoneIcon,
+  UserIcon,
+  FileTextIcon,
+  ReceiptIcon
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -49,6 +52,10 @@ interface ConcessionDetail {
   id: string
   code: string
   name: string
+  businessRegistrationNumber: string
+  tin: string
+  contactName: string
+  contactPhone: string
   contactEmail: string
   status: string
   createdAt: string
@@ -66,7 +73,9 @@ interface ApiClientRecord {
   id: string
   clientId: string
   status: string
+  issuedVia: string
   expiresAt: string
+  revokedAt: string | null
 }
 
 interface PersonnelRecord {
@@ -128,6 +137,7 @@ export function ConcessionDetailView({ concessionId }: ConcessionDetailViewProps
 
   const [apiClients, setApiClients] = useState<ApiClientRecord[]>([])
   const [loadingApiClients, setLoadingApiClients] = useState(true)
+  const [revoking, setRevoking] = useState(false)
 
   const [deactivating, setDeactivating] = useState(false)
 
@@ -193,6 +203,28 @@ export function ConcessionDetailView({ concessionId }: ConcessionDetailViewProps
       .catch(() => toast.error('Failed to load API clients'))
       .finally(() => setLoadingApiClients(false))
   }, [concessionId])
+
+  const handleRevoke = useCallback(() => {
+    if (!confirm('Revoke the active API credential without issuing a replacement? The concessionaire will lose access until a new one is rotated.')) return
+
+    setRevoking(true)
+    fetch(`/api/concessions/${concessionId}/api-clients`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'revoke' })
+    })
+      .then(res => res.json())
+      .then(res => {
+        if (res.success) {
+          toast.success('API credential revoked')
+          fetchApiClients()
+        } else {
+          toast.error(res.error || 'Failed to revoke API credential')
+        }
+      })
+      .catch(() => toast.error('Failed to revoke API credential'))
+      .finally(() => setRevoking(false))
+  }, [concessionId, fetchApiClients])
 
   const handleDeactivate = useCallback(() => {
     if (!concession) return
@@ -295,19 +327,47 @@ export function ConcessionDetailView({ concessionId }: ConcessionDetailViewProps
                 </div>
               </div>
               <div className="flex items-start gap-2.5">
-                <MailIcon className="size-4 text-primary mt-0.5" />
-                <div>
-                  <p className="text-[11px] text-muted-foreground">Contact Email</p>
-                  <p className="text-xs font-semibold text-foreground">{concession.contactEmail}</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-2.5">
                 <CalendarIcon className="size-4 text-primary mt-0.5" />
                 <div>
                   <p className="text-[11px] text-muted-foreground">Onboarded</p>
                   <p className="text-xs font-semibold text-foreground">
                     {new Date(concession.createdAt).toLocaleDateString('en-GH', { year: 'numeric', month: 'long', day: 'numeric' })}
                   </p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <FileTextIcon className="size-4 text-primary mt-0.5" />
+                <div>
+                  <p className="text-[11px] text-muted-foreground">Business Registration No.</p>
+                  <p className="text-xs font-semibold text-foreground">{concession.businessRegistrationNumber}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <ReceiptIcon className="size-4 text-primary mt-0.5" />
+                <div>
+                  <p className="text-[11px] text-muted-foreground">TIN</p>
+                  <p className="text-xs font-semibold text-foreground">{concession.tin}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <UserIcon className="size-4 text-primary mt-0.5" />
+                <div>
+                  <p className="text-[11px] text-muted-foreground">Primary Contact</p>
+                  <p className="text-xs font-semibold text-foreground">{concession.contactName}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <PhoneIcon className="size-4 text-primary mt-0.5" />
+                <div>
+                  <p className="text-[11px] text-muted-foreground">Contact Phone</p>
+                  <p className="text-xs font-semibold text-foreground">{concession.contactPhone}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5">
+                <MailIcon className="size-4 text-primary mt-0.5" />
+                <div>
+                  <p className="text-[11px] text-muted-foreground">Contact Email</p>
+                  <p className="text-xs font-semibold text-foreground">{concession.contactEmail}</p>
                 </div>
               </div>
               <div className="flex items-start gap-2.5">
@@ -345,6 +405,7 @@ export function ConcessionDetailView({ concessionId }: ConcessionDetailViewProps
                   </DialogHeader>
                   <AssignAssemblyForm
                     concessionId={concessionId}
+                    excludeAssemblyIds={assignments.filter(a => a.status === 'ACTIVE').map(a => a.assemblyId)}
                     onCancel={() => setAssignDialogOpen(false)}
                     onAssigned={() => {
                       fetchAssignments()
@@ -506,7 +567,25 @@ export function ConcessionDetailView({ concessionId }: ConcessionDetailViewProps
                   Machine-to-machine credentials for this concessionaire&apos;s backend integration.
                 </CardDescription>
               </div>
-              <ProvisionApiClientDialog concessionId={concessionId} onProvisioned={() => fetchApiClients()} />
+              <div className="flex items-center gap-2">
+                {apiClients.some(c => c.status === 'ACTIVE') && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="text-xs text-destructive hover:text-destructive"
+                    disabled={revoking}
+                    onClick={handleRevoke}
+                  >
+                    {revoking ? <Spinner className="size-3 mr-1.5" /> : null}
+                    Revoke
+                  </Button>
+                )}
+                <ProvisionApiClientDialog
+                  concessionId={concessionId}
+                  hasActiveClient={apiClients.some(c => c.status === 'ACTIVE')}
+                  onProvisioned={() => fetchApiClients()}
+                />
+              </div>
             </div>
 
             <div className="px-6 pt-4">
@@ -525,13 +604,14 @@ export function ConcessionDetailView({ concessionId }: ConcessionDetailViewProps
                   <TableRow className="bg-muted/40 hover:bg-muted/40">
                     <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-6">Client ID</TableHead>
                     <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</TableHead>
+                    <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Issued Via</TableHead>
                     <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pr-6">Expires</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loadingApiClients ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="h-32 text-center">
+                      <TableCell colSpan={4} className="h-32 text-center">
                         <div className="flex flex-col items-center justify-center gap-3">
                           <Spinner className="size-6 text-primary" />
                           <p className="text-xs text-muted-foreground">Loading API clients...</p>
@@ -540,7 +620,7 @@ export function ConcessionDetailView({ concessionId }: ConcessionDetailViewProps
                     </TableRow>
                   ) : apiClients.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={3} className="h-32 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={4} className="h-32 text-center text-sm text-muted-foreground">
                         No API clients issued for this concession yet.
                       </TableCell>
                     </TableRow>
@@ -555,6 +635,9 @@ export function ConcessionDetailView({ concessionId }: ConcessionDetailViewProps
                         </TableCell>
                         <TableCell>
                           <StatusBadge status={c.status} />
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {c.issuedVia === 'zitadel' ? 'Zitadel' : 'Stub (no Management API configured)'}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground pr-6">
                           {new Date(c.expiresAt).toLocaleDateString('en-GH', { year: 'numeric', month: 'short', day: 'numeric' })}

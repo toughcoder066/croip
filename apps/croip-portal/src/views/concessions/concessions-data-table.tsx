@@ -75,7 +75,9 @@ export function ConcessionsDataTable({ data, loading = false, onRefresh }: Conce
   const [isDeletingBatch, setIsDeletingBatch] = useState(false)
 
   const [search, setSearch] = useState('')
-  const [filterStatus, setFilterStatus] = useState<string>('all')
+  // Defaults to hiding offboarded concessionaires — otherwise the "Offboard" action looks
+  // like it did nothing, since the row stayed put with only a badge color change.
+  const [filterStatus, setFilterStatus] = useState<string>('ACTIVE')
   const [currentPage, setCurrentPage] = useState(1)
   const rowsPerPage = 5
 
@@ -184,11 +186,25 @@ export function ConcessionsDataTable({ data, loading = false, onRefresh }: Conce
     toast.success(`${label} copied to clipboard`)
   }
 
-  const handleDelete = (item: ConcessionRecord) => {
-    if (confirm(`Offboard concessionaire "${item.name}"?`)) {
-      // Platform Governance does not expose a DELETE /v1/concessions/:id endpoint —
-      // offboarding a concessionaire is not yet supported by the backend.
-      toast.error('Offboarding concessionaires is not yet supported by the Platform Governance API.')
+  const handleDelete = async (item: ConcessionRecord) => {
+    if (!confirm(`Offboard "${item.name}"? Its status will be set to INACTIVE. History is kept, nothing is deleted.`)) return
+
+    try {
+      const res = await fetch(`/api/concessions/${item.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deactivate' })
+      })
+      const json = await res.json().catch(() => ({}))
+
+      if (res.ok && json.success) {
+        toast.success(`"${item.name}" offboarded`)
+        onRefresh?.()
+      } else {
+        toast.error(json.error || 'Failed to offboard concessionaire')
+      }
+    } catch {
+      toast.error('Failed to offboard concessionaire')
     }
   }
 
@@ -277,14 +293,19 @@ export function ConcessionsDataTable({ data, loading = false, onRefresh }: Conce
                 }}
               >
                 <SelectTrigger id="filter-status" className="w-full">
-                  <SelectValue placeholder="All" />
+                  <SelectValue placeholder="All">
+                    {(value: string | null) => {
+                      const labels: Record<string, string> = { all: 'All', ACTIVE: 'Active', SUSPENDED: 'Suspended', INACTIVE: 'Offboarded' }
+                      return value ? labels[value] ?? value : 'All'
+                    }}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
                     <SelectItem value="all">All</SelectItem>
                     <SelectItem value="ACTIVE">Active</SelectItem>
                     <SelectItem value="SUSPENDED">Suspended</SelectItem>
-                    <SelectItem value="OFFBOARDED">Offboarded</SelectItem>
+                    <SelectItem value="INACTIVE">Offboarded</SelectItem>
                   </SelectGroup>
                 </SelectContent>
               </Select>

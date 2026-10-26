@@ -3,10 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24.0.0" },
+  "engines": {
+    "node": ">=24.0.0"
+  },
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "predev": "prisma generate",
     "build": "tsc -p tsconfig.json",
+    "prebuild": "prisma generate",
     "start": "node dist/server.js",
     "worker:outbox": "tsx src/workers/outbox.ts",
     "start:worker:outbox": "node dist/workers/outbox.js",
@@ -20,11 +24,12 @@
   "dependencies": {
     "@fastify/cors": "11.1.0",
     "@fastify/helmet": "13.0.2",
+    "@fastify/rate-limit": "10.3.0",
     "@fastify/sensible": "6.0.3",
     "@fastify/swagger": "9.9.1",
     "@fastify/swagger-ui": "6.1.2",
-    "@prometheus-io/client": "0.16.1",
     "@prisma/client": "6.19.3",
+    "@prometheus-io/client": "0.16.1",
     "amqplib": "2.2.0",
     "fastify": "5.12.5",
     "fastify-plugin": "5.1.0",

@@ -122,7 +122,8 @@ export default function ApiClientsAndKeysPage() {
           {provisionConcessionId && (
             <ProvisionApiClientDialog
               concessionId={provisionConcessionId}
-              buttonLabel="Provision New Client"
+              buttonLabel="Rotate Credential"
+              hasActiveClient={clients.some(c => c.concessionId === provisionConcessionId && c.status === 'ACTIVE')}
               onProvisioned={() => refreshClients(concessions)}
             />
           )}

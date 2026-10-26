@@ -26,7 +26,7 @@ export async function GET(request: Request) {
   // issued access token's audience — without it, Zitadel's own Auth API (used by the
   // Connections tab to read real linked-IDP status) rejects the token with 401
   // Errors.Token.Invalid, even though it's perfectly valid for calling our own backend.
-  // `urn:zitadel:iam:org:project:id:395706197476376592:roles` explicitly requests this
+  // `urn:zitadel:iam:org:project:id:396579532015927301:roles` explicitly requests this
   // project's (central-platform's) granted roles be included in the token — enabling
   // "Add user roles to the access token" on the app alone wasn't sufficient.
   // The second `:...:aud` scope (same project ID) additionally puts the project ID
@@ -41,8 +41,8 @@ export async function GET(request: Request) {
     'scope',
     'openid profile email offline_access ' +
       'urn:zitadel:iam:org:project:id:zitadel:aud ' +
-      'urn:zitadel:iam:org:project:id:395706197476376592:roles ' +
-      'urn:zitadel:iam:org:project:id:395706197476376592:aud'
+      'urn:zitadel:iam:org:project:id:396579532015927301:roles ' +
+      'urn:zitadel:iam:org:project:id:396579532015927301:aud'
   )
   authorizeUrl.searchParams.set('state', state)
   authorizeUrl.searchParams.set('code_challenge', challenge)

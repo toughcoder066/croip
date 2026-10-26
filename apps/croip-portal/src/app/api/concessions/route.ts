@@ -22,18 +22,25 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { code, name, contactEmail } = body
+    const { code, name, businessRegistrationNumber, tin, contactName, contactPhone, contactEmail } = body
 
-    if (!code || !name || !contactEmail) {
+    if (!name || !businessRegistrationNumber || !tin || !contactName || !contactPhone || !contactEmail) {
       return NextResponse.json(
-        { success: false, error: 'Code, name, and contact email are required' },
+        {
+          success: false,
+          error: 'Company name, business registration number, TIN, contact name, contact phone, and contact email are required'
+        },
         { status: 400 }
       )
     }
 
     const payload = {
-      code: String(code).trim().toUpperCase(),
+      ...(code ? { code: String(code).trim().toUpperCase() } : {}),
       name: String(name).trim(),
+      businessRegistrationNumber: String(businessRegistrationNumber).trim(),
+      tin: String(tin).trim(),
+      contactName: String(contactName).trim(),
+      contactPhone: String(contactPhone).trim(),
       contactEmail: String(contactEmail).trim().toLowerCase()
     }
 

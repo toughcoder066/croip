@@ -2,20 +2,19 @@
 
 import { useEffect, useState } from 'react'
 
+import { useRouter } from 'next/navigation'
 import { PlusIcon } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
 import { PageLoader } from '@/components/ui/spinner'
-import { PurgeConfirmDialog } from '@/components/admin/purge-confirm-dialog'
 
 import { ConcessionsDataTable, type ConcessionRecord } from '@/views/concessions/concessions-data-table'
-import { CreateConcessionWizard } from '@/views/concessions/create-concession-wizard'
 
 export default function ConcessionsRegistryPage() {
+  const router = useRouter()
   const [concessions, setConcessions] = useState<ConcessionRecord[]>([])
   const [loading, setLoading] = useState(true)
-  const [wizardOpen, setWizardOpen] = useState(false)
 
   const fetchConcessions = () => {
     setLoading(true)
@@ -52,25 +51,14 @@ export default function ConcessionsRegistryPage() {
         </div>
 
         <div className="flex items-center gap-2 self-stretch sm:self-auto">
-          <PurgeConfirmDialog
-            target="concessions"
-            onSuccess={fetchConcessions}
-          />
-          <Button size="sm" className="text-xs" onClick={() => setWizardOpen(true)}>
+          <Button size="sm" className="text-xs" onClick={() => router.push('/concessions/onboard')}>
             <PlusIcon className="size-3.5 mr-1.5" />
             Onboard Concession
           </Button>
         </div>
       </div>
 
-
       <ConcessionsDataTable data={concessions} loading={loading} onRefresh={fetchConcessions} />
-
-      <CreateConcessionWizard
-        open={wizardOpen}
-        onOpenChange={setWizardOpen}
-        onComplete={fetchConcessions}
-      />
     </div>
   )
 }

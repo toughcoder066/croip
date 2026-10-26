@@ -70,6 +70,16 @@ interface RatepayerVerification {
   createdAt: string
 }
 
+interface ActivityRecord {
+  id: string
+  occurredAt: string
+  actorId: string
+  actorType: string
+  action: string
+  outcome: string
+  metadata?: Record<string, any>
+}
+
 export interface RatepayerCompletion {
   completionPercentage: number
   isProfileComplete: boolean
@@ -89,6 +99,7 @@ interface RatepayerDetail {
   phone: string
   email?: string | null
   address?: string | null
+  concessionId?: string | null
   regionId: string
   assemblyId: string
   status: string
@@ -160,6 +171,79 @@ const formatDateTime = (value?: string | null) => {
     return format(new Date(value), 'dd MMM yyyy, HH:mm')
   } catch {
     return '—'
+  }
+}
+
+const ACTIVITY_DOT_CLASS: Record<string, string> = {
+  'ratepayer.registered': 'bg-primary/20 border-primary',
+  'ratepayer.login': 'bg-sky-500/20 border-sky-500',
+  'ratepayer.logout': 'bg-slate-500/20 border-slate-500',
+  'ratepayer.profile_updated': 'bg-blue-500/20 border-blue-500',
+  'ratepayer.kyc_submitted': 'bg-amber-500/20 border-amber-500',
+  'ratepayer.kyc_reviewed': 'bg-emerald-500/20 border-emerald-500',
+  'ratepayer.status_changed': 'bg-rose-500/20 border-rose-500',
+  'ratepayer.property_claimed': 'bg-emerald-500/20 border-emerald-500',
+  'ratepayer.property_link_severed': 'bg-rose-500/20 border-rose-500',
+  'ratepayer.password_reset_requested': 'bg-amber-500/20 border-amber-500',
+  'ratepayer.password_reset_completed': 'bg-emerald-500/20 border-emerald-500',
+  'ratepayer.deleted': 'bg-rose-500/20 border-rose-500'
+}
+
+function describeActor(record: ActivityRecord): string {
+  if (record.actorType === 'RATEPAYER') return 'by the ratepayer'
+  if (record.actorType === 'SERVICE') return 'by the registering concession'
+  return 'by a CROIP officer'
+}
+
+// Turns one raw audit-record action into the title + sentence the timeline renders —
+// deliberately driven by real metadata (updatedFields, provider, from/to, etc.) rather
+// than a canned description, so the card reflects what actually happened.
+function describeActivity(record: ActivityRecord): { title: string; description: string } {
+  const meta = record.metadata ?? {}
+  switch (record.action) {
+    case 'ratepayer.registered':
+      return {
+        title: 'Account Registered',
+        description: `Citizen profile registered (${meta.via === 'concession' ? 'via concession walk-in' : meta.via === 'staff' ? 'via staff walk-in' : 'self-registered'}). Ratepayer code ${meta.code ?? ''} issued.`
+      }
+    case 'ratepayer.login':
+      return { title: 'Signed In', description: 'Ratepayer completed OTP verification and started a new session.' }
+    case 'ratepayer.logout':
+      return { title: 'Signed Out', description: 'Ratepayer ended that session; the session token was revoked.' }
+    case 'ratepayer.profile_updated': {
+      const fields = Array.isArray(meta.updatedFields) ? meta.updatedFields.join(', ') : 'profile fields'
+      return {
+        title: 'Profile Updated',
+        description: `${describeActor(record)}, via ${meta.via ?? 'unknown'}. Changed: ${fields}.`
+      }
+    }
+    case 'ratepayer.kyc_submitted':
+      return {
+        title: `${humanize(meta.provider)} Verification Submitted`,
+        description: `Identity verification recorded with status ${humanize(meta.verificationStatus)}${meta.autoVerified === false ? ' — pending officer review' : ''}.`
+      }
+    case 'ratepayer.kyc_reviewed':
+      return {
+        title: `${humanize(meta.provider)} Verification Reviewed`,
+        description: `Verification ${describeActor(record)}, outcome: ${humanize(meta.verificationStatus)}.`
+      }
+    case 'ratepayer.status_changed':
+      return {
+        title: 'Account Status Changed',
+        description: `Status changed from ${humanize(meta.from)} to ${humanize(meta.to)} ${describeActor(record)}.`
+      }
+    case 'ratepayer.property_claimed':
+      return { title: 'Property Claimed', description: `Ownership/tenancy claim submitted ${describeActor(record)}.` }
+    case 'ratepayer.property_link_severed':
+      return { title: 'Property Link Severed', description: `A property link was removed from this account ${describeActor(record)}.` }
+    case 'ratepayer.password_reset_requested':
+      return { title: 'Password Reset Requested', description: 'A one-time code was dispatched to confirm this request.' }
+    case 'ratepayer.password_reset_completed':
+      return { title: 'Password Reset Completed', description: 'Password was changed and a new session was issued.' }
+    case 'ratepayer.deleted':
+      return { title: 'Account Deleted', description: `Profile removed ${describeActor(record)}.` }
+    default:
+      return { title: humanize(record.action), description: `Outcome: ${humanize(record.outcome)}.` }
   }
 }
 
@@ -269,13 +353,17 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
   const [properties, setProperties] = useState<PropertyLink[]>([])
   const [payments, setPayments] = useState<RatepayerPayment[]>([])
   const [disputes, setDisputes] = useState<RatepayerDispute[]>([])
+  const [activity, setActivity] = useState<ActivityRecord[]>([])
   const [assemblyName, setAssemblyName] = useState<string>('Accra Metropolitan Assembly (AMA)')
   const [regionName, setRegionName] = useState<string>('Greater Accra Region (GAR)')
+  const [concessionInfo, setConcessionInfo] = useState<{ name: string; code: string } | null>(null)
+  const [concessionResolved, setConcessionResolved] = useState(false)
 
   const [loading, setLoading] = useState(true)
   const [propertiesLoading, setPropertiesLoading] = useState(true)
   const [paymentsLoading, setPaymentsLoading] = useState(true)
   const [disputesLoading, setDisputesLoading] = useState(true)
+  const [activityLoading, setActivityLoading] = useState(true)
 
   // Status Action Dialog
   const [statusDialogOpen, setStatusDialogOpen] = useState(false)
@@ -377,6 +465,21 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
       .finally(() => setDisputesLoading(false))
   }, [ratepayerId])
 
+  const fetchActivity = useCallback(() => {
+    setActivityLoading(true)
+    return fetch(`/api/ratepayers/${ratepayerId}/activity`)
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && Array.isArray(res.data)) {
+          setActivity(res.data)
+        }
+      })
+      .catch(err => {
+        console.error('Failed to load ratepayer account activity:', err)
+      })
+      .finally(() => setActivityLoading(false))
+  }, [ratepayerId])
+
   // Resolve Assembly & Region Jurisdictions
   useEffect(() => {
     if (!ratepayer) return
@@ -402,12 +505,37 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
       .catch(() => {})
   }, [ratepayer])
 
+  // Resolve the concession this ratepayer was registered under. Not every ratepayer has
+  // one tied to a real concessionaire — a staff walk-in registration carries the shared
+  // CROIP-admin placeholder id instead, which 404s here — so a failed lookup is treated as
+  // "no specific concession", not an error.
   useEffect(() => {
-    fetchRatepayer()
+    if (!ratepayer) return
+    setConcessionResolved(false)
+    if (!ratepayer.concessionId) {
+      setConcessionInfo(null)
+      setConcessionResolved(true)
+      return
+    }
+    fetch(`/api/concessions/${encodeURIComponent(ratepayer.concessionId)}`)
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && res.data) {
+          setConcessionInfo({ name: res.data.name, code: res.data.code })
+        } else {
+          setConcessionInfo(null)
+        }
+      })
+      .catch(() => setConcessionInfo(null))
+      .finally(() => setConcessionResolved(true))
+  }, [ratepayer])
+
+  useEffect(() => {
+    fetchRatepayer(); fetchActivity()
     fetchProperties()
     fetchPayments()
     fetchDisputes()
-  }, [fetchRatepayer, fetchProperties, fetchPayments, fetchDisputes])
+  }, [fetchRatepayer, fetchProperties, fetchPayments, fetchDisputes, fetchActivity])
 
   const openReview = (verification: RatepayerVerification, decision: 'VERIFIED' | 'REJECTED') => {
     setReviewTarget({
@@ -425,7 +553,7 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
 
   const handleReviewed = () => {
     closeReview()
-    fetchRatepayer()
+    fetchRatepayer(); fetchActivity()
   }
 
   const handleStatusChangeSubmit = async () => {
@@ -444,7 +572,7 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
         toast.success(`Ratepayer account marked as ${pendingStatus.toLowerCase()}`)
         setStatusDialogOpen(false)
         setPendingStatus(null)
-        fetchRatepayer()
+        fetchRatepayer(); fetchActivity()
       } else {
         toast.error(data.error || 'Failed to update account status')
       }
@@ -474,7 +602,7 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
       const data = await res.json()
       if (data.success) {
         toast.success(`KYC verified successfully (${data.data?.providerReference || 'Ghana Card NIA'})`)
-        fetchRatepayer()
+        fetchRatepayer(); fetchActivity()
       } else {
         toast.error(data.error || 'Failed to verify KYC')
       }
@@ -520,7 +648,7 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
         toast.success('Property link severed successfully')
         setSeverTarget(null)
         fetchProperties()
-        fetchRatepayer()
+        fetchRatepayer(); fetchActivity()
       } else {
         toast.error(data.error || 'Failed to sever property link')
       }
@@ -562,6 +690,17 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
   const pendingCount = verifications.filter(v => (v.verificationStatus || 'PENDING').toUpperCase() === 'PENDING').length
   const totalPaidSum = payments.reduce((acc, p) => acc + (Number(p.amount) || 0), 0)
   const openDisputesCount = disputes.filter(d => ['OPEN', 'UNDER_REVIEW'].includes(d.status.toUpperCase())).length
+
+  // How this profile came to exist — read from the account activity log's own
+  // ratepayer.registered entry rather than guessed from other fields, so it reflects
+  // exactly what happened (self-service, concession walk-in, or staff walk-in).
+  const registrationRecord = activity.find(a => a.action === 'ratepayer.registered')
+  const registrationVia = registrationRecord?.metadata?.via as string | undefined
+  const registrationMethodLabel =
+    registrationVia === 'concession' ? 'Concession Walk-In'
+      : registrationVia === 'staff' ? 'Staff Walk-In'
+      : registrationVia === 'self-service' ? 'Self-Registered'
+      : null
 
   return (
     <div className="space-y-6">
@@ -884,6 +1023,33 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
                       <span className="text-muted-foreground text-xs font-medium">Registration Date:</span>
                       <span className="text-xs text-muted-foreground">{formatDate(ratepayer.createdAt)}</span>
                     </div>
+
+                    {registrationMethodLabel && (
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <span className="text-muted-foreground text-xs font-medium">Registration Method:</span>
+                        <Badge variant="outline" className="text-[10px] font-medium bg-muted">
+                          {registrationMethodLabel}
+                        </Badge>
+                      </div>
+                    )}
+
+                    <div className="flex items-start justify-between gap-2 text-sm pt-1 border-t border-border/40">
+                      <span className="text-muted-foreground text-xs font-medium inline-flex items-center gap-1.5 shrink-0">
+                        <BriefcaseBusinessIcon className="size-3.5 text-muted-foreground" />
+                        Registered Via Concession:
+                      </span>
+                      <span className="text-xs text-right">
+                        {!concessionResolved ? (
+                          <span className="text-muted-foreground">Resolving…</span>
+                        ) : concessionInfo ? (
+                          <span className="font-semibold text-foreground">
+                            {concessionInfo.name} <span className="font-mono text-[11px] text-muted-foreground">({concessionInfo.code})</span>
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground italic">CROIP staff (no specific concession)</span>
+                        )}
+                      </span>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -1146,62 +1312,42 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
                 </div>
               </Card>
 
-              {/* Account Lifecycle & Verification Timeline */}
+              {/* Account Activity */}
               <Card>
                 <CardHeader className="pb-3 border-b border-border/40">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <ClockIcon className="size-4 text-primary" />
-                    Account Lifecycle & Verification Timeline
+                    Account Activity
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-4 space-y-4">
-                  <div className="relative pl-6 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-border/60">
-                    {/* Event 1 */}
-                    <div className="relative">
-                      <div className="absolute -left-6 top-1 size-4 rounded-full bg-primary/20 border-2 border-primary flex items-center justify-center" />
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-foreground">Ratepayer Profile Registered</span>
-                          <span className="text-muted-foreground">{formatDate(ratepayer.createdAt)}</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Citizen profile registered under jurisdiction {assemblyName}. Sovereign ratepayer code {ratepayer.code} issued.
-                        </p>
-                      </div>
+                  {activityLoading ? (
+                    <div className="flex items-center justify-center gap-3 py-10">
+                      <Spinner className="size-5 text-primary" />
+                      <p className="text-xs text-muted-foreground">Loading account activity...</p>
                     </div>
-
-                    {/* Event 2 */}
-                    {verifications.map(v => (
-                      <div key={v.id} className="relative">
-                        <div className="absolute -left-6 top-1 size-4 rounded-full bg-emerald-500/20 border-2 border-emerald-500 flex items-center justify-center" />
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-semibold text-foreground">
-                              {humanize(v.provider)} Verification ({v.verificationStatus})
-                            </span>
-                            <span className="text-muted-foreground">{formatDate(v.verifiedAt || v.createdAt)}</span>
+                  ) : activity.length === 0 ? (
+                    <p className="text-xs text-muted-foreground text-center py-6">No recorded activity on this account yet.</p>
+                  ) : (
+                    <div className="relative pl-6 space-y-6 before:absolute before:left-2 before:top-2 before:bottom-2 before:w-0.5 before:bg-border/60">
+                      {activity.map(record => {
+                        const { title, description } = describeActivity(record)
+                        const dotClass = ACTIVITY_DOT_CLASS[record.action] ?? 'bg-muted border-muted-foreground/40'
+                        return (
+                          <div key={record.id} className="relative">
+                            <div className={`absolute -left-6 top-1 size-4 rounded-full border-2 flex items-center justify-center ${dotClass}`} />
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-semibold text-foreground">{title}</span>
+                                <span className="text-muted-foreground">{formatDateTime(record.occurredAt)}</span>
+                              </div>
+                              <p className="text-xs text-muted-foreground">{description}</p>
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            Identity document reference <span className="font-mono text-foreground">{v.providerReference}</span> recorded with compliance status {v.verificationStatus.toLowerCase()}.
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-
-                    {/* Event 3 */}
-                    <div className="relative">
-                      <div className="absolute -left-6 top-1 size-4 rounded-full bg-blue-500/20 border-2 border-blue-500 flex items-center justify-center" />
-                      <div className="space-y-1">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-semibold text-foreground">Act 843 Data Protection Compliance</span>
-                          <span className="text-muted-foreground">Active</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          Data collected in accordance with the Ghana Data Protection Act, 2012 (Act 843). Citizen consent retained.
-                        </p>
-                      </div>
+                        )
+                      })}
                     </div>
-                  </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
@@ -1805,7 +1951,7 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
                       toast.info('Initiating live verification refresh with Shared Services identity adapter...')
                       setTimeout(() => {
                         toast.success('Identity adapter check completed. All records synchronized.')
-                        fetchRatepayer()
+                        fetchRatepayer(); fetchActivity()
                       }, 1200)
                     }}
                   >
@@ -1927,7 +2073,7 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
         currentAddress={ratepayer.address}
         currentLocationGeo={ratepayer.locationGeo}
         onSuccess={() => {
-          fetchRatepayer()
+          fetchRatepayer(); fetchActivity()
         }}
       />
 
@@ -1940,7 +2086,7 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
         currentActiveProvider={activeVerification?.provider}
         currentActiveReference={activeVerification?.providerReference}
         onSuccess={() => {
-          fetchRatepayer()
+          fetchRatepayer(); fetchActivity()
         }}
       />
 
@@ -1950,7 +2096,7 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
         onOpenChange={setPropertyDialogOpen}
         ratepayer={ratepayer}
         onSuccess={() => {
-          fetchRatepayer()
+          fetchRatepayer(); fetchActivity()
           fetchProperties()
         }}
       />

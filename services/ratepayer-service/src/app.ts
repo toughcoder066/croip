@@ -1,11 +1,12 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
+import rateLimit from '@fastify/rate-limit';
 import sensible from '@fastify/sensible';
 import swagger from '@fastify/swagger';
 import swaggerUi from '@fastify/swagger-ui';
 import type { AppConfig } from './config.js';
-import { AppError } from './lib/errors.js';
+import { AppError, TooManyRequestsError } from './lib/errors.js';
 import { authPlugin } from './plugins/auth.js';
 import { metricsPlugin } from './plugins/metrics.js';
 import { prismaPlugin } from './plugins/prisma.js';
@@ -31,6 +32,19 @@ export async function buildApp(options: BuildOptions): Promise<FastifyInstance> 
     origin: config.corsOrigins.length ? config.corsOrigins : false,
     credentials: false,
     allowedHeaders: ['authorization', 'content-type', 'idempotency-key', 'x-request-id']
+  });
+  // global: false — this only limits the specific public, unauthenticated routes that
+  // opt in via their own `config.rateLimit` (self-register, login, verify-otp,
+  // forgot/reset-password; see routes.ts). Every other route here is already gated by a
+  // Zitadel/concession token or the ratepayer's own session token, so it doesn't need a
+  // second layer of per-IP throttling on top of that.
+  await app.register(rateLimit, {
+    global: false,
+    // @fastify/rate-limit throws whatever this returns (see its source — it's not simply
+    // sent as a response body), so it has to be a real Error — specifically an AppError —
+    // for the setErrorHandler below to format it the same way as every other error in this
+    // service, rather than falling through to a generic 500.
+    errorResponseBuilder: (_request, context) => new TooManyRequestsError(`Too many requests — try again in ${context.after}`)
   });
   await app.register(swagger, {
     openapi: {
