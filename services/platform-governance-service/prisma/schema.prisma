@@ -138,6 +138,15 @@ model Concession {
   id           String   @id @default(uuid()) @db.Uuid
   code         String   @unique @db.VarChar(50)
   name         String   @db.VarChar(150)
+  // Legal identity — this is a government platform; a concession must tie back to a real
+  // registered entity, not just a name someone typed in. Both come from Ghana's Registrar
+  // General's Department / GRA, free-text here since we don't validate their formats.
+  businessRegistrationNumber String @map("business_registration_number") @db.VarChar(50)
+  tin                         String @map("tin") @db.VarChar(50)
+  // Named accountable contact, not just an inbox — someone who can actually be called and
+  // held responsible, separate from whatever address API credential emails land in.
+  contactName  String   @map("contact_name") @db.VarChar(150)
+  contactPhone String   @map("contact_phone") @db.VarChar(30)
   contactEmail String   @map("contact_email") @db.VarChar(255)
   status       String   @default("ACTIVE") @db.VarChar(20)
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -161,6 +170,14 @@ model ConcessionAssembly {
 
   concession Concession @relation(fields: [concessionId], references: [id], onDelete: Cascade)
 
+  // An MMDA belongs to exactly one concessionaire at a time (a concessionaire can hold many
+  // MMDAs). @@unique([concessionId, assemblyId]) only stops the same concession being
+  // assigned the same MMDA twice — it does not stop two different concessions both holding
+  // an active assignment for the same assemblyId. That second constraint is a partial unique
+  // index (assemblyId WHERE status = 'ACTIVE') applied by hand in migration.sql, mirroring
+  // ApiClient's one-active-per-concession index — `prisma db push` can't express a filtered
+  // unique index, so it must be (re-)applied manually after any `db push` that touches this
+  // table. See service.ts's assignAssembly for the matching application-level check.
   @@unique([concessionId, assemblyId])
   @@index([assemblyId, status])
   @@map("concession_assemblies")
@@ -183,13 +200,27 @@ model ConcessionPersonnel {
 }
 
 model ApiClient {
-  id               String    @id @default(uuid()) @db.Uuid
-  concessionId     String    @map("concession_id") @db.Uuid
-  clientId         String    @unique @map("client_id") @db.VarChar(100)
-  clientSecretHash String    @map("client_secret_hash") @db.VarChar(255)
-  status           String    @default("ACTIVE") @db.VarChar(20)
-  expiresAt        DateTime  @map("expires_at") @db.Timestamptz
-  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  id            String    @id @default(uuid()) @db.Uuid
+  concessionId  String    @map("concession_id") @db.Uuid
+  // The real Zitadel machine user backing this credential. The client secret is never
+  // stored here — Zitadel is the only holder of it after the one-time provisioning
+  // response (and the delivery email); this row is metadata only. See
+  // lib/zitadel-management.ts.
+  clientId      String    @unique @map("client_id") @db.VarChar(100)
+  zitadelUserId String?   @unique @map("zitadel_user_id") @db.VarChar(100)
+  // "zitadel" once real Management API credentials are configured, "stub" until then
+  // (see inviteUser's identical stub convention) — lets staff tell a working credential
+  // apart from a placeholder that was never actually usable.
+  issuedVia     String    @default("stub") @map("issued_via") @db.VarChar(20)
+  status        String    @default("ACTIVE") @db.VarChar(20)
+  expiresAt     DateTime  @map("expires_at") @db.Timestamptz
+  revokedAt     DateTime? @map("revoked_at") @db.Timestamptz
+  // The predecessor credential this one replaced, when created via rotation rather than
+  // first-time provisioning — gives a readable chain for audit.
+  rotatedFromId String?   @map("rotated_from_id") @db.Uuid
+  deliveredAt   DateTime? @map("delivered_at") @db.Timestamptz
+  deliveryError String?   @map("delivery_error") @db.VarChar(500)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz
 
   concession Concession @relation(fields: [concessionId], references: [id], onDelete: Cascade)
 

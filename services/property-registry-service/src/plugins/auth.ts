@@ -4,24 +4,10 @@ import fp from 'fastify-plugin';
 import { createLocalJWKSet, jwtVerify, type JWTPayload, type JSONWebKeySet } from 'jose';
 import type { AppConfig } from '../config.js';
 import { ForbiddenError } from '../lib/errors.js';
-import { verifyRatepayerToken } from '../lib/ratepayer-jwt.js';
-
-// Zitadel issues RS256 (asymmetric, JWKS-verified) tokens; ratepayer-service issues
-// HS256 (shared-secret) tokens. Peeking at the unverified header's `alg` is enough to
-// route to the right verifier — neither verifier trusts this value itself, it only
-// decides which one to try.
-function peekAlg(token: string): string | undefined {
-  try {
-    const headerJson = Buffer.from(token.split('.')[0] ?? '', 'base64url').toString('utf8');
-    return (JSON.parse(headerJson) as { alg?: string }).alg;
-  } catch {
-    return undefined;
-  }
-}
 
 export interface AuthContext {
   subject: string;
-  actorType: 'USER' | 'SERVICE' | 'RATEPAYER' | 'CONCESSION';
+  actorType: 'USER' | 'SERVICE' | 'CONCESSION';
   concessionId: string;
   assemblyId: string;
   permissions: string[];
@@ -81,6 +67,17 @@ function fetchJwks(jwksUri: string, hostHeader: string): Promise<JSONWebKeySet> 
 
 const JWKS_TTL_MS = 10 * 60 * 1000;
 
+// How long a resolved API-client context is trusted before being re-looked-up — bounds how
+// stale a revoked/rotated credential can appear, while sparing platform-governance-service
+// a round trip on every request.
+const SERVICE_CONTEXT_TTL_MS = 60 * 1000;
+
+interface ServiceContext {
+  concessionId: string;
+  assemblyId: string;
+  permissions: string[];
+}
+
 export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
   const { config } = options;
 
@@ -95,6 +92,35 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
       jwksFetchedAt = Date.now();
     }
     return jwks;
+  }
+
+  const serviceContextCache = new Map<string, { context: ServiceContext | null; fetchedAt: number }>();
+
+  // Resolves a concession's own API-client (client_credentials) token by calling back to
+  // platform-governance-service with the verified JWT's own client_id claim, instead of
+  // trusting a urn:idarms:context claim injected into the token itself — this Zitadel
+  // version does not reliably apply a Target's returned claims to client_credentials-issued
+  // tokens (confirmed empirically). A side benefit over the claim approach: this reflects
+  // revocation in real time (a revoked or rotated-away client_id simply isn't found, within
+  // the cache TTL), where a bare JWT signature check never could.
+  //
+  // Every token's client_id is checked here, human logins included — a human login's
+  // client_id is the OIDC app's own id, not a concession's, so this always (and cacheably)
+  // comes back null for them. That client_id never changes across a whole session, so it's
+  // one real lookup per idle officer per TTL window, not one per request.
+  async function resolveServiceContext(clientId: string): Promise<ServiceContext | null> {
+    const cached = serviceContextCache.get(clientId);
+    if (cached && Date.now() - cached.fetchedAt < SERVICE_CONTEXT_TTL_MS) return cached.context;
+
+    try {
+      const response = await fetch(`${config.PLATFORM_GOVERNANCE_URL}/v1/api-clients/${encodeURIComponent(clientId)}/context`);
+      const context = response.ok ? ((await response.json()) as ServiceContext) : null;
+      serviceContextCache.set(clientId, { context, fetchedAt: Date.now() });
+      return context;
+    } catch (error) {
+      app.log.warn({ err: error, clientId }, 'failed to resolve API-client context from platform-governance-service');
+      return null;
+    }
   }
 
   app.decorateRequest('auth');
@@ -118,28 +144,42 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
         issuer: config.ZITADEL_ISSUER!,
         audience: config.ZITADEL_AUDIENCE!
       });
-      const tenant = payload[config.IDARMS_CONTEXT_CLAIM];
-      if (!tenant || typeof tenant !== 'object') throw new Error('Missing iDARMS context claim');
-      const context = tenant as Record<string, unknown>;
-      if (typeof context.concessionId !== 'string' || typeof context.assemblyId !== 'string') {
-        throw new Error('Invalid iDARMS context claim');
+
+      // Every token carries a client_id — a human login's as much as a machine token's
+      // (it's the OIDC app's id for a human login, not distinctive on its own). So this
+      // can't branch on client_id's mere presence; it has to actually try the lookup and
+      // see whether it names one of our own concession API clients. Found: SERVICE actor.
+      // Not found: falls through to the human path below.
+      if (payload.client_id) {
+        const service = await resolveServiceContext(String(payload.client_id));
+        if (service) {
+          request.auth = {
+            subject: payload.sub ?? 'unknown',
+            actorType: 'SERVICE',
+            concessionId: service.concessionId,
+            assemblyId: service.assemblyId,
+            permissions: [...new Set([...stringArray(payload.scope), ...service.permissions])],
+            claims: payload
+          };
+          return;
+        }
       }
+
+      // Human (authorization_code) logins: permissions come from Zitadel's native
+      // project-role assertion. CROIP oversight staff aren't scoped to one concession the
+      // way a concession's own API client is, so a missing or unresolvable
+      // urn:idarms:context claim falls back to the same default pair every dev-header
+      // request already uses, rather than rejecting the login — see
+      // platform-governance-service's auth.ts for the same fix and why.
+      const tenant = payload[config.IDARMS_CONTEXT_CLAIM];
+      const context = tenant && typeof tenant === 'object' ? (tenant as Record<string, unknown>) : {};
       request.auth = {
         subject: payload.sub ?? 'unknown',
-        actorType: payload.client_id ? 'SERVICE' : 'USER',
-        concessionId: context.concessionId,
-        assemblyId: context.assemblyId,
-        // Zitadel's native project-role assertion only populates ZITADEL_ROLES_CLAIM for
-        // human (authorization_code) logins — client_credentials tokens never carry it,
-        // regardless of role grants or assertion settings. `urn:idarms:service-roles` is
-        // a Complement Token Action that reads the machine user's own `roles` metadata
-        // and injects an equivalent claim (see the `injectIdarmsContext` Zitadel Action).
+        actorType: 'USER',
+        concessionId: typeof context.concessionId === 'string' ? context.concessionId : '81fdc8f3-fcad-481a-b7fa-e916d5e97d9e',
+        assemblyId: typeof context.assemblyId === 'string' ? context.assemblyId : '01c23cab-b1b2-4dae-b99b-32ea574632d9',
         permissions: [
-          ...new Set([
-            ...stringArray(payload.scope),
-            ...stringArray(payload[config.ZITADEL_ROLES_CLAIM]),
-            ...stringArray(payload['urn:idarms:service-roles'])
-          ])
+          ...new Set([...stringArray(payload.scope), ...stringArray(payload[config.ZITADEL_ROLES_CLAIM])])
         ],
         claims: payload
       };
@@ -156,64 +196,58 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
     }
   });
 
-  // Property registration requires authentication:
-  // - A ratepayer authenticates with their Bearer session token (HS256) issued by ratepayer-service
-  // - A concessionaire authenticates with their staff or service Zitadel Bearer token (RS256)
-  // Anonymous / unauthenticated callers are rejected with 401 Unauthorized.
-  app.decorate('authenticateStaffOrRatepayer', (required: string[]) => async (request, reply) => {
+  // Properties are registered/managed by a concession's own API client, or administratively
+  // by CROIP oversight staff — ratepayers never authenticate directly against this service;
+  // they register/claim through ratepayer-service instead, which is itself
+  // concession-mediated. Anonymous / unauthenticated callers are rejected with 401.
+  app.decorate('authenticateConcession', (required: string[]) => async (request, reply) => {
     const authorization = request.headers.authorization;
 
     // 1. Check for Bearer token
     if (authorization?.startsWith('Bearer ')) {
       const token = authorization.slice(7);
-      const alg = peekAlg(token);
 
-      // HS256 indicates a ratepayer self-service session token issued by ratepayer-service
-      if (alg === 'HS256') {
-        try {
-          const claims = await verifyRatepayerToken(token, config.RATEPAYER_JWT_SECRET);
-          request.auth = {
-            subject: claims.sub,
-            actorType: 'RATEPAYER',
-            concessionId: '00000000-0000-0000-0000-000000000000',
-            assemblyId: claims.assemblyId,
-            permissions: ['properties:manage', 'properties:read'],
-            claims: {}
-          };
-          return;
-        } catch (error) {
-          request.log.warn({ err: error }, 'ratepayer access token rejected');
-          throw app.httpErrors.unauthorized('Invalid or expired access token');
-        }
-      }
-
-      // RS256 / Zitadel staff or machine token
       if (config.AUTH_MODE === 'zitadel') {
         try {
           const { payload } = await jwtVerify(token, await getJwks(), {
             issuer: config.ZITADEL_ISSUER!,
             audience: config.ZITADEL_AUDIENCE!
           });
-          const tenant = payload[config.IDARMS_CONTEXT_CLAIM];
-          if (!tenant || typeof tenant !== 'object') throw new Error('Missing iDARMS context claim');
-          const context = tenant as Record<string, unknown>;
-          if (typeof context.concessionId !== 'string' || typeof context.assemblyId !== 'string') {
-            throw new Error('Invalid iDARMS context claim');
+
+          // As in authenticate() above: every token carries a client_id, human logins
+          // included, so this has to actually try the lookup rather than branch on
+          // client_id's mere presence. Found: a concession's own API client. Not found
+          // (e.g. the portal's own OIDC app id): falls through to the human-staff path.
+          const clientId = payload.client_id ? String(payload.client_id) : null;
+          const service = clientId ? await resolveServiceContext(clientId) : null;
+
+          if (service) {
+            request.auth = {
+              subject: payload.sub ?? 'unknown',
+              actorType: 'CONCESSION',
+              concessionId: service.concessionId,
+              assemblyId: service.assemblyId,
+              permissions: [...new Set([...stringArray(payload.scope), ...service.permissions])],
+              claims: payload
+            };
+          } else {
+            // Human (authorization_code) logins: CROIP oversight staff administratively
+            // managing properties. Permissions come from Zitadel's native project-role
+            // assertion; concessionId/assemblyId fall back to the same default every
+            // dev-header request already uses — see authenticate() above for why.
+            const tenant = payload[config.IDARMS_CONTEXT_CLAIM];
+            const context = tenant && typeof tenant === 'object' ? (tenant as Record<string, unknown>) : {};
+            request.auth = {
+              subject: payload.sub ?? 'unknown',
+              actorType: 'USER',
+              concessionId: typeof context.concessionId === 'string' ? context.concessionId : '81fdc8f3-fcad-481a-b7fa-e916d5e97d9e',
+              assemblyId: typeof context.assemblyId === 'string' ? context.assemblyId : '01c23cab-b1b2-4dae-b99b-32ea574632d9',
+              permissions: [
+                ...new Set([...stringArray(payload.scope), ...stringArray(payload[config.ZITADEL_ROLES_CLAIM])])
+              ],
+              claims: payload
+            };
           }
-          request.auth = {
-            subject: payload.sub ?? 'unknown',
-            actorType: 'CONCESSION',
-            concessionId: context.concessionId,
-            assemblyId: context.assemblyId,
-            permissions: [
-              ...new Set([
-                ...stringArray(payload.scope),
-                ...stringArray(payload[config.ZITADEL_ROLES_CLAIM]),
-                ...stringArray(payload['urn:idarms:service-roles'])
-              ])
-            ],
-            claims: payload
-          };
 
           if (!required.every((permission) => request.auth.permissions.includes(permission))) {
             throw new ForbiddenError(`Required permissions: ${required.join(', ')}`);
@@ -229,23 +263,10 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
 
     // 2. In local dev mode (AUTH_MODE=disabled), permit explicit developer headers
     if (config.AUTH_MODE === 'disabled') {
-      const devActorType = request.headers['x-dev-actor-type'] as string | undefined;
       const devSubject = request.headers['x-dev-subject'] as string | undefined;
       const devConcessionId = request.headers['x-dev-concession-id'] as string | undefined;
 
-      if (devActorType === 'RATEPAYER' || (!devConcessionId && devSubject?.startsWith('ratepayer'))) {
-        request.auth = {
-          subject: String(devSubject ?? '00000000-0000-0000-0000-000000000001'),
-          actorType: 'RATEPAYER',
-          concessionId: '00000000-0000-0000-0000-000000000000',
-          assemblyId: String(request.headers['x-dev-assembly-id'] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9'),
-          permissions: ['properties:manage'],
-          claims: {}
-        };
-        return;
-      }
-
-      if (devActorType === 'CONCESSION' || devConcessionId || devSubject) {
+      if (devConcessionId || devSubject) {
         request.auth = {
           subject: String(devSubject ?? 'local-developer'),
           actorType: 'CONCESSION',

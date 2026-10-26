@@ -17,11 +17,11 @@ import {
 export const propertyRoutes: FastifyPluginAsync = async (app) => {
   const service = propertyService(app);
 
-  app.post<{ Body: Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType'> & { assemblyId?: string } }>('/properties', {
-    preHandler: app.authenticateStaffOrRatepayer(['properties:manage']),
+  app.post<{ Body: Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType'> }>('/properties', {
+    preHandler: app.authenticateConcession(['properties:manage']),
     schema: {
       tags: ['Property Registry'],
-      summary: 'Register landed property parcel into national cadastre — concession action (restricted to assigned MMDA) or ratepayer self-service with bearer token',
+      summary: 'Register landed property parcel into national cadastre — concession action, restricted to assigned MMDA. Ratepayers cannot register their own properties; see ratepayer-service for claiming an unclaimed one.',
       body: createPropertyBodySchema,
       response: {
         201: propertyResponseSchema,
@@ -33,58 +33,20 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       }
     }
   }, async (request, reply) => {
-    const isRatepayer = request.auth.actorType === 'RATEPAYER';
     const created = await service.createProperty({
       ...request.body,
-      // A ratepayer can only ever register a property as themselves — the body's own
-      // createdByRatepayerId/registrationSource are ignored for this actor type so one
-      // ratepayer can't claim to be registering on another's behalf.
-      ...(isRatepayer ? { createdByRatepayerId: request.auth.subject, registrationSource: 'RATEPAYER' as const } : { registrationSource: 'CONCESSION' as const }),
+      registrationSource: 'CONCESSION',
       concessionId: request.auth.concessionId,
-      assemblyId: request.body.assemblyId || request.auth.assemblyId,
+      assemblyId: request.auth.assemblyId,
       actorId: request.auth.subject,
       actorType: request.auth.actorType
     });
-
-    if (isRatepayer) {
-      // Best-effort: the property is already correctly attributed in this service's own
-      // database (createdByRatepayerId above) regardless of whether this call succeeds —
-      // this just propagates the link to ratepayer-service's own relationship table so
-      // the ratepayer sees it under "my properties". Forwards the same ratepayer bearer
-      // token the caller used for this request, so ratepayer-service's authenticateRatepayer
-      // resolves the ratepayer id itself rather than trusting a body field.
-      try {
-        const rawOwnership = request.body.ownershipType?.trim().toUpperCase();
-        const normalizedOwnership = (rawOwnership === 'PART' || rawOwnership === 'PARTIAL' || rawOwnership === 'CO_OWNER') ? 'PART' : 'FULL';
-        const ownershipPercentage = request.body.ownershipPercentage ?? (normalizedOwnership === 'FULL' ? 100.0 : 50.0);
-
-        const response = await fetch(`${app.config.RATEPAYER_SERVICE_URL}/v1/ratepayers/me/properties/link`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(request.headers.authorization ? { Authorization: request.headers.authorization } : {})
-          },
-          body: JSON.stringify({
-            propertyId: created.id,
-            unitId: created.defaultUnitId,
-            ownershipType: normalizedOwnership,
-            ownershipPercentage
-          }),
-          signal: AbortSignal.timeout(5000)
-        });
-        if (!response.ok) {
-          request.log.error({ status: response.status, body: await response.text() }, 'Failed to link self-registered property to ratepayer profile');
-        }
-      } catch (err) {
-        request.log.error({ err }, 'Failed to reach ratepayer-service to link self-registered property');
-      }
-    }
 
     return reply.code(201).send(created);
   });
 
   app.post<{ Body: { properties: Array<Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType'>> } }>('/properties/batch', {
-    preHandler: app.authenticateStaffOrRatepayer(['properties:manage']),
+    preHandler: app.authenticateConcession(['properties:manage']),
     schema: {
       tags: ['Property Registry'],
       summary: 'Concession registers a batch of landed properties within their assigned MMDA territory',
@@ -99,10 +61,6 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       }
     }
   }, async (request, reply) => {
-    if (request.auth.actorType === 'RATEPAYER') {
-      throw app.httpErrors.forbidden('Batch property registration is only available to concessionaires. Ratepayers can register individual properties.');
-    }
-
     const createdList = await service.createBatchProperties({
       properties: request.body.properties,
       concessionId: request.auth.concessionId,
@@ -130,7 +88,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.get<{ Params: { id: string } }>('/properties/:id', {
-    preHandler: app.authenticateStaffOrRatepayer(['properties:read']),
+    preHandler: app.authenticateConcession(['properties:read']),
     schema: {
       tags: ['Property Registry'],
       summary: 'Retrieve property parcel details, units, and valuation roll status',
@@ -142,7 +100,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.patch<{ Params: { id: string }; Body: UpdatePropertyInput }>('/properties/:id', {
-    preHandler: app.authenticateStaffOrRatepayer(['properties:manage']),
+    preHandler: app.authenticateConcession(['properties:manage']),
     schema: {
       tags: ['Property Registry'],
       summary: 'Update property details. If actual property characteristics (use, floors, boundaries, area, structure) are changed, marks property UNASSESSED, unverified, and decouples active valuations.',
@@ -267,6 +225,11 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.delete<{ Params: { id: string } }>('/properties/:id', {
+    // Was missing a preHandler entirely — every other mutation on this resource requires
+    // authenticateConcession(['properties:manage']) (a concession's own token, or CROIP
+    // staff administratively), but deletion had no auth check at all, meaning an
+    // unauthenticated caller could delete any property. Matched to the sibling endpoints.
+    preHandler: app.authenticateConcession(['properties:manage']),
     schema: {
       tags: ['Property Registry'],
       summary: 'Delete individual property parcel and sever all ratepayer links (rejected if property has paid bills)',
@@ -274,7 +237,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: { type: 'object', additionalProperties: true }, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
     }
   }, async (request) => {
-    return service.deleteProperty(request.params.id, request.auth?.subject ?? 'portal-admin');
+    return service.deleteProperty(request.params.id, request.auth.subject);
   });
 
   app.post('/properties/purge', {

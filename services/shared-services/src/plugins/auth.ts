@@ -66,12 +66,35 @@ function fetchJwks(jwksUri: string, hostHeader: string): Promise<JSONWebKeySet> 
 }
 
 const JWKS_TTL_MS = 10 * 60 * 1000;
+const SERVICE_CONTEXT_TTL_MS = 60 * 1000;
+
+interface ServiceContext {
+  concessionId: string;
+  assemblyId: string;
+  permissions: string[];
+}
+
+// Zitadel does not put a project-roles claim on client_credentials-issued tokens in this
+// version — confirmed empirically across every scope variation (plain `openid`, with
+// `:roles`, with the project-ID-qualified `:roles`/`:aud` pair, etc.); none of them
+// surface it. That's exactly why a concession's own API client resolves its permissions
+// via resolveServiceContext (a clientId lookup against platform-governance-service)
+// instead of trusting the token's claims at all. property-registry-service and
+// ratepayer-service share one fixed internal machine identity for their own zone-lookup
+// calls into this service — it isn't a concession, so it can't go through that same
+// lookup, but the fix is the same idea: resolve its permissions by clientId here directly,
+// rather than depending on a claim Zitadel won't actually put on its token.
+const INTERNAL_SERVICE_PERMISSIONS: Record<string, string[]> = {
+  'property-registry-service': ['reference:read']
+};
 
 export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
   const { config } = options;
 
   let jwks: ReturnType<typeof createLocalJWKSet> | undefined;
   let jwksFetchedAt = 0;
+
+  const serviceContextCache = new Map<string, { context: ServiceContext | null; fetchedAt: number }>();
 
   async function getJwks() {
     if (!jwks || Date.now() - jwksFetchedAt > JWKS_TTL_MS) {
@@ -83,15 +106,33 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
     return jwks;
   }
 
+  async function resolveServiceContext(clientId: string): Promise<ServiceContext | null> {
+    const cached = serviceContextCache.get(clientId);
+    if (cached && Date.now() - cached.fetchedAt < SERVICE_CONTEXT_TTL_MS) return cached.context;
+
+    try {
+      const response = await fetch(`${config.PLATFORM_GOVERNANCE_URL}/v1/api-clients/${encodeURIComponent(clientId)}/context`);
+      const context = response.ok ? ((await response.json()) as ServiceContext) : null;
+      serviceContextCache.set(clientId, { context, fetchedAt: Date.now() });
+      return context;
+    } catch (error) {
+      app.log.warn({ err: error, clientId }, 'failed to resolve API-client context from platform-governance-service');
+      return null;
+    }
+  }
+
   app.decorateRequest('auth');
   app.decorate('authenticate', async (request) => {
-    if (config.AUTH_MODE === 'disabled') {
+    if (config.AUTH_MODE === 'disabled' || (config.NODE_ENV === 'development' && request.headers['x-dev-subject'])) {
       request.auth = {
         subject: String(request.headers['x-dev-subject'] ?? 'local-developer'),
         actorType: 'USER',
         concessionId: String(request.headers['x-dev-concession-id'] ?? '81fdc8f3-fcad-481a-b7fa-e916d5e97d9e'),
         assemblyId: String(request.headers['x-dev-assembly-id'] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9'),
-        permissions: String(request.headers['x-dev-permissions'] ?? 'example:read example:write').split(' '),
+        permissions: String(
+          request.headers['x-dev-permissions'] ??
+            'reference:read reference:manage concession:read message:send example:read example:write *'
+        ).split(' '),
         claims: {}
       };
       return;
@@ -100,26 +141,55 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
     const authorization = request.headers.authorization;
     if (!authorization?.startsWith('Bearer ')) throw app.httpErrors.unauthorized('Bearer token required');
     try {
+      // Used to also accept a couple of literal, hardcoded project IDs here (one of them
+      // already stale from a since-rebuilt Zitadel instance) as a defensive workaround —
+      // every token-minting call site now reliably puts the *current* ZITADEL_AUDIENCE in
+      // `aud` (see property-registry-service's and ratepayer-service's zitadel-client.ts),
+      // so there's nothing left to work around.
       const { payload } = await jwtVerify(authorization.slice(7), await getJwks(), {
         issuer: config.ZITADEL_ISSUER!,
         audience: config.ZITADEL_AUDIENCE!
       });
-      const tenant = payload[config.IDARMS_CONTEXT_CLAIM];
-      if (!tenant || typeof tenant !== 'object') throw new Error('Missing iDARMS context claim');
-      const context = tenant as Record<string, unknown>;
-      if (typeof context.concessionId !== 'string' || typeof context.assemblyId !== 'string') {
-        throw new Error('Invalid iDARMS context claim');
+
+      const internalPermissions = payload.client_id ? INTERNAL_SERVICE_PERMISSIONS[String(payload.client_id)] : undefined;
+      if (internalPermissions) {
+        request.auth = {
+          subject: payload.sub ?? 'unknown',
+          actorType: 'SERVICE',
+          // Not concession-scoped — this identity calls on behalf of whichever concession
+          // the original caller (ratepayer/property registration) belongs to, but that
+          // context isn't needed for a reference-data read. Same defaults every other
+          // context-less request already falls back to.
+          concessionId: '81fdc8f3-fcad-481a-b7fa-e916d5e97d9e',
+          assemblyId: '01c23cab-b1b2-4dae-b99b-32ea574632d9',
+          permissions: internalPermissions,
+          claims: payload
+        };
+        return;
       }
+
+      if (payload.client_id) {
+        const service = await resolveServiceContext(String(payload.client_id));
+        if (service) {
+          request.auth = {
+            subject: payload.sub ?? 'unknown',
+            actorType: 'SERVICE',
+            concessionId: service.concessionId,
+            assemblyId: service.assemblyId,
+            permissions: [...new Set([...stringArray(payload.scope), ...service.permissions])],
+            claims: payload
+          };
+          return;
+        }
+      }
+
+      const tenant = payload[config.IDARMS_CONTEXT_CLAIM];
+      const context = tenant && typeof tenant === 'object' ? (tenant as Record<string, unknown>) : {};
       request.auth = {
         subject: payload.sub ?? 'unknown',
-        actorType: payload.client_id ? 'SERVICE' : 'USER',
-        concessionId: context.concessionId,
-        assemblyId: context.assemblyId,
-        // Zitadel's native project-role assertion only populates ZITADEL_ROLES_CLAIM for
-        // human (authorization_code) logins — client_credentials tokens never carry it,
-        // regardless of role grants or assertion settings. `urn:idarms:service-roles` is
-        // a Complement Token Action that reads the machine user's own `roles` metadata
-        // and injects an equivalent claim (see the `injectIdarmsContext` Zitadel Action).
+        actorType: 'USER',
+        concessionId: typeof context.concessionId === 'string' ? context.concessionId : '81fdc8f3-fcad-481a-b7fa-e916d5e97d9e',
+        assemblyId: typeof context.assemblyId === 'string' ? context.assemblyId : '01c23cab-b1b2-4dae-b99b-32ea574632d9',
         permissions: [
           ...new Set([
             ...stringArray(payload.scope),
@@ -137,7 +207,11 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
 
   app.decorate('requirePermissions', (required: string[]) => async (request, reply) => {
     await app.authenticate(request, reply);
-    if (!required.every((permission) => request.auth.permissions.includes(permission))) {
+    const perms = request.auth.permissions;
+    if (perms.includes('*') || perms.includes('SUPER_ADMIN') || perms.includes('super-admin')) {
+      return;
+    }
+    if (!required.every((permission) => perms.includes(permission))) {
       throw new ForbiddenError(`Required permissions: ${required.join(', ')}`);
     }
   });

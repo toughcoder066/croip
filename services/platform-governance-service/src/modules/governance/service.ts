@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { randomBytes, createHash } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { NotFoundError, ConflictError } from '../../lib/errors.js';
-import { inviteUser } from '../../lib/zitadel-management.js';
+import { inviteUser, provisionMachineUser, deactivateMachineUser } from '../../lib/zitadel-management.js';
+import { dispatchApiCredentials } from '../../lib/notification-dispatcher.js';
 
 export interface CreateUserInput {
   code: string;
@@ -32,15 +33,21 @@ function toUserDto<T extends { userRoles: Array<{ scopeLevel: string; role: { id
 }
 
 export interface CreateConcessionInput {
-  code: string;
+  code?: string;
   name: string;
+  businessRegistrationNumber: string;
+  tin: string;
+  contactName: string;
+  contactPhone: string;
   contactEmail: string;
 }
 
 export interface AssignAssemblyInput {
   concessionId: string;
   assemblyId: string;
-  contractStart: string;
+  // No contractStart here — an assignment's contract always starts the moment it's made
+  // (see assignAssembly below), never a date the caller picks. Backdating or postdating a
+  // territory grant isn't a thing this platform supports.
   contractEnd: string;
 }
 
@@ -51,7 +58,127 @@ export interface RegisterPersonnelInput {
   phone: string;
 }
 
+// The literal permission string a concession's own API-client machine user is granted (via
+// Zitadel `roles` metadata, see provisionMachineUser) so it can rotate/revoke its own
+// credential through the self-service /concessions/me/api-clients endpoints. Deliberately
+// never granted to any CROIP staff role — the staff-facing /concessions/:id/api-clients
+// endpoints are gated on the separate `api_clients:manage` permission instead, so the two
+// capabilities (manage any concession's clients vs. manage only your own) can never be
+// confused by sharing a permission string.
+const SELF_SERVICE_API_CLIENT_ROLE = 'api_clients:self_manage';
+
+// What every concession's API client is authorized to do, platform-wide. Flat and global
+// for every concession today — the same set the old hardcoded dev-header defaults granted
+// (properties:manage/properties:read in property-registry-service,
+// ratepayers:manage in ratepayer-service), plus this service's own self-service grant.
+// If/when concessions need different permission sets from one another, this moves from a
+// constant to a column on Concession — nothing about the lookup contract below would need
+// to change for that.
+const CONCESSION_API_CLIENT_PERMISSIONS = [
+  SELF_SERVICE_API_CLIENT_ROLE,
+  'properties:manage',
+  'properties:read',
+  'ratepayers:manage',
+  // Lets a concession search/browse its own walk-in-registered ratepayers via
+  // GET /ratepayers/directory in ratepayer-service — the same shape of grant properties:read
+  // already gives it for GET /properties, so a concession can look its own citizens up
+  // without needing to already know a specific ratepayer's id.
+  'ratepayers:read'
+];
+
+// Same fallback the old hardcoded Zitadel Action used — every service's auth.ts keeps this
+// as the default assemblyId for a request that isn't itself zone-scoped (property
+// registration derives the real assembly from the submitted polygon via shared-services,
+// independent of this value). A concession can be contracted to multiple assemblies, so
+// there is no single "the" assemblyId to return here regardless.
+const DEFAULT_ASSEMBLY_ID = '01c23cab-b1b2-4dae-b99b-32ea574632d9';
+
 export function governanceService(app: FastifyInstance) {
+  // Mirrors property-registry-service's generatePropertyIdAndCode convention
+  // (PREFIX-YEAR-FIRST4-LAST4 from a fresh UUID) so concession codes are never
+  // user-entered — onboarding only asks for company name and contact email.
+  async function generateConcessionCode(tx: any): Promise<string> {
+    const year = new Date().getFullYear();
+    while (true) {
+      const id = crypto.randomUUID();
+      const first4 = id.slice(0, 4).toUpperCase();
+      const last4 = id.slice(-4).toUpperCase();
+      const code = `CONC-${year}-${first4}-${last4}`;
+      const existing = await tx.concession.findUnique({ where: { code }, select: { id: true } });
+      if (!existing) return code;
+    }
+  }
+
+  // Issues a fresh API client for a concession — used both for first-time onboarding and
+  // as the second half of a rotation (see rotateApiClient). Provisions the real Zitadel
+  // machine user, stores only metadata locally (never the secret), emails the credentials
+  // to the concession's contact address, and writes an audit record. The plaintext secret
+  // is returned here and nowhere else ever again.
+  async function issueApiClient(concession: { id: string; name: string; contactEmail: string }, actorId: string, rotatedFromId: string | null) {
+    // Suffixed, not just the concession id: rotating leaves the old Zitadel machine user
+    // deactivated, not deleted, and Zitadel usernames must be unique — a second
+    // provisioning for the same concession with the same username 409s otherwise.
+    const credentials = await provisionMachineUser({
+      userName: `concession-${concession.id}-${randomBytes(4).toString('hex')}`,
+      name: `${concession.name} API Client`,
+      concessionId: concession.id
+    });
+    const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+
+    const client = await app.prisma.apiClient.create({
+      data: {
+        concessionId: concession.id,
+        clientId: credentials.clientId,
+        zitadelUserId: credentials.issuedVia === 'zitadel' ? credentials.zitadelUserId : null,
+        issuedVia: credentials.issuedVia,
+        status: 'ACTIVE',
+        expiresAt,
+        rotatedFromId
+      }
+    });
+
+    const delivery = await dispatchApiCredentials({
+      to: concession.contactEmail,
+      concessionName: concession.name,
+      clientId: credentials.clientId,
+      clientSecret: credentials.clientSecret,
+      expiresAt: expiresAt.toISOString(),
+      log: app.log
+    });
+
+    const finalized = await app.prisma.apiClient.update({
+      where: { id: client.id },
+      data: delivery.success
+        ? { deliveredAt: new Date() }
+        : { deliveryError: delivery.error?.slice(0, 500) ?? 'Unknown delivery error' }
+    });
+
+    await app.prisma.auditRecord.create({
+      data: {
+        actorId,
+        actorType: 'USER',
+        concessionId: concession.id,
+        action: rotatedFromId ? 'api_client.rotate' : 'api_client.provision',
+        resourceType: 'ApiClient',
+        resourceId: client.id,
+        requestId: crypto.randomUUID(),
+        outcome: 'SUCCESS',
+        metadata: { clientId: credentials.clientId, issuedVia: credentials.issuedVia, rotatedFromId, emailDelivered: delivery.success }
+      }
+    });
+
+    return {
+      id: finalized.id,
+      concessionId: finalized.concessionId,
+      clientId: finalized.clientId,
+      clientSecret: credentials.clientSecret,
+      status: finalized.status,
+      issuedVia: finalized.issuedVia,
+      expiresAt: finalized.expiresAt.toISOString(),
+      emailDelivered: delivery.success
+    };
+  }
+
   return {
     // Onboarding an oversight official never involves CROIP admins setting a password —
     // they only supply profile details. This calls Zitadel's Management API to create the
@@ -219,12 +346,20 @@ export function governanceService(app: FastifyInstance) {
       return toUserDto(user);
     },
 
+    // Onboarding a concessionaire immediately issues its first API client too — CROIP does
+    // the initial provisioning; after this, the concessionaire's own backend uses that
+    // credential to self-service rotate or revoke it (see rotateApiClient/revokeApiClient).
     async createConcession(input: CreateConcessionInput, actorId: string) {
-      return app.prisma.$transaction(async (tx) => {
-        const concession = await tx.concession.create({
+      const concession = await app.prisma.$transaction(async (tx) => {
+        const code = input.code ? input.code.toUpperCase() : await generateConcessionCode(tx);
+        const created = await tx.concession.create({
           data: {
-            code: input.code.toUpperCase(),
+            code,
             name: input.name,
+            businessRegistrationNumber: input.businessRegistrationNumber,
+            tin: input.tin,
+            contactName: input.contactName,
+            contactPhone: input.contactPhone,
             contactEmail: input.contactEmail,
             status: 'ACTIVE'
           }
@@ -236,15 +371,19 @@ export function governanceService(app: FastifyInstance) {
             actorType: 'USER',
             action: 'concession.onboard',
             resourceType: 'Concession',
-            resourceId: concession.id,
+            resourceId: created.id,
             requestId: crypto.randomUUID(),
             outcome: 'SUCCESS',
-            metadata: { code: concession.code, name: concession.name }
+            metadata: { code: created.code, name: created.name }
           }
         });
 
-        return concession;
+        return created;
       });
+
+      const apiClient = await issueApiClient(concession, actorId, null);
+
+      return { ...concession, apiClient };
     },
 
     async listConcessions() {
@@ -255,6 +394,34 @@ export function governanceService(app: FastifyInstance) {
 
     async getConcession(id: string) {
       const concession = await app.prisma.concession.findUnique({ where: { id } });
+      if (!concession) throw new NotFoundError('Concession not found');
+      return concession;
+    },
+
+    // Public, no-auth lookup by the concession's own non-secret `code` — lets a
+    // concession's public ratepayer-facing app identify itself without ever holding its
+    // real API credential (clientId/secret), which must stay server-side only. Used by
+    // ratepayer-service's self-registration endpoint.
+    async getConcessionByCode(code: string) {
+      const concession = await app.prisma.concession.findFirst({
+        where: { code: code.toUpperCase() },
+        select: { id: true, code: true, name: true, status: true }
+      });
+      if (!concession) throw new NotFoundError('Unknown concession code');
+      return concession;
+    },
+
+    // Public, no-auth lookup by id — the by-code lookup's mirror image, for the one case
+    // that only ever has a stored concessionId in hand and no code: ratepayer-service
+    // resolving a concession's name for white-labeling an email (login/password-reset OTPs)
+    // long after registration, when the citizen never supplied a code in that request.
+    // Same minimal, non-sensitive field set as by-code — never contact info, TIN, or any
+    // API credential.
+    async getConcessionById(id: string) {
+      const concession = await app.prisma.concession.findUnique({
+        where: { id },
+        select: { id: true, code: true, name: true, status: true }
+      });
       if (!concession) throw new NotFoundError('Concession not found');
       return concession;
     },
@@ -283,13 +450,26 @@ export function governanceService(app: FastifyInstance) {
       });
     },
 
+    // An MMDA belongs to exactly one concessionaire at a time (a concessionaire can hold
+    // many MMDAs) — checked here for a clean 409 before hitting the database, and enforced
+    // for real by a partial unique index (assemblyId WHERE status = 'ACTIVE', applied by
+    // hand — see schema.prisma) so a race between two requests still can't double-assign.
     async assignAssembly(input: AssignAssemblyInput, actorId: string) {
+      const existingActive = await app.prisma.concessionAssembly.findFirst({
+        where: { assemblyId: input.assemblyId, status: 'ACTIVE' }
+      });
+      if (existingActive && existingActive.concessionId !== input.concessionId) {
+        throw new ConflictError('This MMDA is already actively assigned to another concessionaire');
+      }
+
+      const contractStart = new Date();
+
       return app.prisma.$transaction(async (tx) => {
         const assignment = await tx.concessionAssembly.create({
           data: {
             concessionId: input.concessionId,
             assemblyId: input.assemblyId,
-            contractStart: new Date(input.contractStart),
+            contractStart,
             contractEnd: new Date(input.contractEnd),
             status: 'ACTIVE'
           }
@@ -306,7 +486,7 @@ export function governanceService(app: FastifyInstance) {
             resourceId: assignment.id,
             requestId: crypto.randomUUID(),
             outcome: 'SUCCESS',
-            metadata: { contractStart: input.contractStart, contractEnd: input.contractEnd }
+            metadata: { contractStart: contractStart.toISOString(), contractEnd: input.contractEnd }
           }
         });
 
@@ -321,41 +501,101 @@ export function governanceService(app: FastifyInstance) {
       });
     },
 
-    async provisionApiClient(concessionId: string, actorId: string) {
-      const unhashedSecret = randomBytes(24).toString('hex');
-      const clientSecretHash = createHash('sha256').update(unhashedSecret).digest('hex');
-      const clientId = `croip_client_${randomBytes(8).toString('hex')}`;
-      const expiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
+    // Revokes the concession's current active credential (if any) at Zitadel first — that
+    // is the step that actually stops it working, since every service verifies the JWT
+    // directly against Zitadel and never re-checks this row — then issues and emails a
+    // replacement. A concession can never have two ACTIVE credentials at once (enforced by
+    // a partial unique index in the database too), so this is the only way to get a new one
+    // once the first has already been issued at onboarding.
+    async rotateApiClient(concessionId: string, actorId: string) {
+      const concession = await app.prisma.concession.findUnique({ where: { id: concessionId } });
+      if (!concession) throw new NotFoundError('Concession not found');
 
-      const client = await app.prisma.apiClient.create({
+      const current = await app.prisma.apiClient.findFirst({ where: { concessionId, status: 'ACTIVE' } });
+
+      if (current?.zitadelUserId) {
+        await deactivateMachineUser(current.zitadelUserId);
+      }
+      if (current) {
+        await app.prisma.apiClient.update({ where: { id: current.id }, data: { status: 'REVOKED', revokedAt: new Date() } });
+      }
+
+      return issueApiClient(concession, actorId, current?.id ?? null);
+    },
+
+    // Revokes the concession's current active credential without issuing a replacement —
+    // for shutting off access outright (e.g. the concessionaire is being offboarded, or
+    // they want access dead now and will request a new one separately).
+    async revokeApiClient(concessionId: string, actorId: string) {
+      const current = await app.prisma.apiClient.findFirst({ where: { concessionId, status: 'ACTIVE' } });
+      if (!current) throw new ConflictError('No active API client to revoke for this concession');
+
+      if (current.zitadelUserId) {
+        await deactivateMachineUser(current.zitadelUserId);
+      }
+
+      const revoked = await app.prisma.apiClient.update({
+        where: { id: current.id },
+        data: { status: 'REVOKED', revokedAt: new Date() }
+      });
+
+      await app.prisma.auditRecord.create({
         data: {
+          actorId,
+          actorType: 'USER',
           concessionId,
-          clientId,
-          clientSecretHash,
-          status: 'ACTIVE',
-          expiresAt
+          action: 'api_client.revoke',
+          resourceType: 'ApiClient',
+          resourceId: current.id,
+          requestId: crypto.randomUUID(),
+          outcome: 'SUCCESS',
+          metadata: { clientId: current.clientId }
         }
       });
 
       return {
-        id: client.id,
-        concessionId: client.concessionId,
-        clientId: client.clientId,
-        clientSecret: unhashedSecret,
-        status: client.status,
-        expiresAt: client.expiresAt.toISOString()
+        id: revoked.id,
+        concessionId: revoked.concessionId,
+        clientId: revoked.clientId,
+        status: revoked.status,
+        revokedAt: revoked.revokedAt?.toISOString() ?? null
       };
     },
 
-    // Never includes clientSecretHash — the plaintext secret is shown exactly once, at
-    // provisioning time, in provisionApiClient's own response, and never again.
+    // Never includes the secret — it is shown exactly once, at issuance time, in
+    // issueApiClient's own response (via createConcession or rotateApiClient), and never
+    // again.
     async listApiClients(concessionId: string) {
       const clients = await app.prisma.apiClient.findMany({
         where: { concessionId },
-        orderBy: { expiresAt: 'desc' },
-        select: { id: true, concessionId: true, clientId: true, status: true, expiresAt: true }
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, concessionId: true, clientId: true, status: true, issuedVia: true,
+          expiresAt: true, revokedAt: true, rotatedFromId: true, deliveredAt: true, deliveryError: true, createdAt: true
+        }
       });
       return clients;
+    },
+
+    // Called by every other CROIP service's auth.ts to resolve a concession API client's
+    // context — concessionId, assemblyId and permissions — from its JWT's own `client_id`
+    // claim. Replaces trusting a urn:idarms:context claim injected by a Zitadel Action,
+    // which this Zitadel version does not reliably apply to client_credentials-issued
+    // tokens (confirmed empirically, not just undocumented). A side benefit over the claim
+    // approach: this reflects revocation in real time (a revoked or rotated-away client_id
+    // simply isn't found), where a bare JWT signature check never could.
+    async getApiClientContext(clientId: string) {
+      const client = await app.prisma.apiClient.findUnique({
+        where: { clientId },
+        select: { status: true, concession: { select: { id: true, status: true } } }
+      });
+      if (!client || client.status !== 'ACTIVE' || client.concession.status !== 'ACTIVE') return null;
+
+      return {
+        concessionId: client.concession.id,
+        assemblyId: DEFAULT_ASSEMBLY_ID,
+        permissions: CONCESSION_API_CLIENT_PERMISSIONS
+      };
     },
 
     async registerPersonnel(input: RegisterPersonnelInput, actorId: string) {

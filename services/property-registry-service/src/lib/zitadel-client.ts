@@ -55,13 +55,17 @@ export async function getServiceAccessToken(config: AppConfig): Promise<string> 
   }
 
   const issuerHost = new URL(config.ZITADEL_ISSUER!).host;
+  const projectId = config.ZITADEL_AUDIENCE!;
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
     // `:roles` carries this machine user's granted project roles (reference:read);
     // `:aud` puts the project ID itself into `aud`, matching every service's
     // ZITADEL_AUDIENCE — without it the default audience is just this client's own
-    // ID, which Shared Services would reject.
-    scope: 'openid urn:zitadel:iam:org:project:id:395706197476376592:roles urn:zitadel:iam:org:project:id:395706197476376592:aud'
+    // ID, which Shared Services would reject. This used to be a literal, hardcoded
+    // project ID here — which silently went stale when the Zitadel instance was
+    // rebuilt with a new project. ZITADEL_AUDIENCE already *is* that same project ID
+    // on every service by convention, so there's nothing to keep in sync by hand now.
+    scope: `openid urn:zitadel:iam:org:project:id:${projectId}:roles urn:zitadel:iam:org:project:id:${projectId}:aud`
   }).toString();
 
   const { status, body: responseBody } = await postForm(config.ZITADEL_TOKEN_URL!, issuerHost, {
