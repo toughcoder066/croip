@@ -12,7 +12,8 @@ import {
   submitVerificationBodySchema,
   reviewVerificationBodySchema,
   verificationResponseSchema,
-  updatePropertyBodySchema
+  updatePropertyBodySchema,
+  renamePropertyBodySchema
 } from './schemas.js';
 
 export const propertyRoutes: FastifyPluginAsync = async (app) => {
@@ -103,7 +104,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: { type: 'array', items: propertyResponseSchema }, 401: problemSchema, 403: problemSchema }
     }
   }, async (request) => {
-    return service.listProperties(request.query?.assemblyId);
+    return service.listProperties(request.auth.actorType, request.query?.assemblyId);
   });
 
   app.get<{ Params: { id: string } }>('/properties/:id', {
@@ -115,7 +116,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema, 404: problemSchema }
     }
   }, async (request) => {
-    return service.getProperty(request.params.id);
+    return service.getProperty(request.params.id, request.auth.actorType);
   });
 
   app.patch<{ Params: { id: string }; Body: UpdatePropertyInput }>('/properties/:id', {
@@ -140,6 +141,30 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       concessionId: request.auth.concessionId,
       assemblyIds: request.auth.assemblyIds
     });
+  });
+
+  // The one ratepayer-facing write on this service — a ratepayer who owns a property
+  // (claimed or, for legacy data, created it) can give it their own private label.
+  // Deliberately a separate route from the concession-facing PATCH above, not a shared one
+  // with conditional fields: different auth scheme (ratepayer HS256 token, not Zitadel),
+  // different authorization model (ownership, not MMDA scope), and a single field.
+  app.patch<{ Params: { id: string }; Body: { propertyName: string } }>('/properties/:id/name', {
+    preHandler: app.authenticateRatepayer,
+    schema: {
+      tags: ['Property Registry'],
+      summary: 'Ratepayer renames a property they own — their own private label, never visible to the concession/MMDA',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+      body: renamePropertyBodySchema,
+      response: {
+        200: { type: 'object', additionalProperties: true },
+        400: problemSchema,
+        401: problemSchema,
+        403: problemSchema,
+        404: problemSchema
+      }
+    }
+  }, async (request) => {
+    return service.renamePropertyAsRatepayer(request.params.id, request.body.propertyName, request.ratepayerAuth.sub);
   });
 
   app.post<{ Params: { id: string }; Body: { unitIdentifier: string; unitType?: string; floorLevel?: number } }>('/properties/:id/units', {

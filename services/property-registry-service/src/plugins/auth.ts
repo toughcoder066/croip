@@ -17,6 +17,15 @@ export interface AuthContext {
   claims: JWTPayload;
 }
 
+// Mirrors ratepayer-service's own RatepayerTokenClaims (lib/ratepayer-jwt.ts) — same HS256
+// token, verified here directly rather than proxied through ratepayer-service. Only `sub`
+// (the ratepayer's own id) is actually used downstream, for the ownership check on
+// renaming a property.
+export interface RatepayerTokenClaims {
+  sub: string;
+  jti: string;
+}
+
 function stringArray(value: unknown): string[] {
   if (Array.isArray(value)) return value.filter((item): item is string => typeof item === 'string');
   if (typeof value === 'string') return value.split(/[ ,]+/).filter(Boolean);
@@ -127,6 +136,7 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
   }
 
   app.decorateRequest('auth');
+  app.decorateRequest('ratepayerAuth');
   app.decorate('authenticate', async (request) => {
     if (config.AUTH_MODE === 'disabled') {
       request.auth = {
@@ -200,9 +210,12 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
   });
 
   // Properties are registered/managed by a concession's own API client, or administratively
-  // by CROIP oversight staff — ratepayers never authenticate directly against this service;
-  // they register/claim through ratepayer-service instead, which is itself
-  // concession-mediated. Anonymous / unauthenticated callers are rejected with 401.
+  // by CROIP oversight staff — ratepayers never register or claim through this service
+  // directly (that happens via ratepayer-service, itself concession-mediated). The one
+  // exception is authenticateRatepayer below: a ratepayer who already owns a property (by
+  // claim or self-registration) can rename it, which needs their own identity verified
+  // here directly rather than proxied. Anonymous / unauthenticated callers are rejected
+  // with 401.
   app.decorate('authenticateConcession', (required: string[]) => async (request, reply) => {
     const authorization = request.headers.authorization;
 
@@ -287,5 +300,33 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
 
     // 3. Reject unauthenticated requests
     throw app.httpErrors.unauthorized('Bearer token required to register properties');
+  });
+
+  // Ratepayer self-service sessions are HS256 tokens issued by ratepayer-service's own
+  // login flow (see its lib/ratepayer-jwt.ts) — a different scheme from the Zitadel-issued
+  // staff/concession tokens every other decorator here verifies. Deliberately a pure
+  // signature/expiry check, same limitation ratepayer-service's own lib/ratepayer-jwt.ts
+  // documents: it does NOT consult ratepayer-service's revocation table (that's a
+  // different service's database), so a token logged out there stays valid here until it
+  // naturally expires. Acceptable for the one capability this grants — renaming a property
+  // the ratepayer already owns, not anything higher-stakes.
+  app.decorate('authenticateRatepayer', async (request) => {
+    const authorization = request.headers.authorization;
+    if (!authorization?.startsWith('Bearer ')) throw app.httpErrors.unauthorized('Bearer token required');
+    try {
+      const key = new TextEncoder().encode(config.RATEPAYER_JWT_SECRET);
+      const { payload } = await jwtVerify(authorization.slice(7), key, {
+        issuer: 'croip-ratepayer-service',
+        audience: 'croip-platform',
+        algorithms: ['HS256']
+      });
+      if (!payload.sub || !payload.jti) {
+        throw new Error('Token is missing required sub/jti claims');
+      }
+      request.ratepayerAuth = { sub: payload.sub, jti: String(payload.jti) };
+    } catch (error) {
+      request.log.warn({ err: error }, 'ratepayer access token rejected');
+      throw app.httpErrors.unauthorized('Invalid or expired access token');
+    }
   });
 }, { name: 'auth' });

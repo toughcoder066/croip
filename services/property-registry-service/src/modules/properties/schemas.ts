@@ -92,7 +92,6 @@ export const createPropertyBodySchema = {
   properties: {
     code: { type: 'string', maxLength: 50 },
     accountNumber: { type: 'string', maxLength: 50 },
-    propertyName: { type: 'string', maxLength: 150 },
     propertyClass: { type: 'string' },
     buildingStatus: { type: 'string' },
     propertyStatus: { type: 'string' },
@@ -250,11 +249,12 @@ export const verificationResponseSchema = {
   }
 };
 
+// propertyName deliberately excluded — only the owning ratepayer can rename a property,
+// never a concession or staff via this endpoint (see renamePropertyBodySchema below).
 export const updatePropertyBodySchema = {
   type: 'object',
   required: ['staffRef'],
   properties: {
-    propertyName: { type: 'string', maxLength: 150 },
     accountNumber: { type: 'string', maxLength: 50 },
     propertyUse: { type: 'string' },
     structureType: { type: 'string' },
@@ -267,5 +267,13 @@ export const updatePropertyBodySchema = {
     polygonGeoJson: { type: 'object' },
     ghanaPostGps: { type: 'string', maxLength: 50 },
     staffRef: staffRefSchema
+  }
+};
+
+export const renamePropertyBodySchema = {
+  type: 'object',
+  required: ['propertyName'],
+  properties: {
+    propertyName: { type: 'string', minLength: 1, maxLength: 150 }
   }
 };

@@ -25,7 +25,10 @@ export interface PropertyDocumentInput {
 export interface CreatePropertyInput {
   code?: string;
   accountNumber?: string;
-  propertyName?: string;
+  // No propertyName here — a property starts unnamed. Only the ratepayer who later owns
+  // it (claims or self-registers) can give it one, via renamePropertyAsRatepayer; a
+  // concession could never see it again afterward anyway (hidePropertyNameFromConcession),
+  // so letting one be set at registration would just be a write nobody can read back.
   propertyClass?: string;
   buildingStatus?: string;
   propertyStatus?: string;
@@ -102,7 +105,11 @@ export interface UploadPremisesDocumentInput {
 }
 
 export interface UpdatePropertyInput {
-  propertyName?: string;
+  // propertyName is deliberately NOT here — only the owning ratepayer can rename a
+  // property (see renamePropertyAsRatepayer), never a concession or staff via this
+  // generic update. A property's name is also never shown back to a concession/SERVICE
+  // actor in any response (see hidePropertyNameFromConcession) — it's the ratepayer's own
+  // private label, not cadastre data the MMDA needs.
   accountNumber?: string;
   propertyUse?: string;
   structureType?: string;
@@ -223,7 +230,6 @@ async function assertNoConflictingOverlap(
     select: {
       id: true,
       code: true,
-      propertyName: true,
       propertyUse: true,
       propertyClass: true,
       polygonGeoJson: true
@@ -241,12 +247,11 @@ async function assertNoConflictingOverlap(
       const isResidentialConflict = candidateUse === 'RESIDENTIAL' || existingUse === 'RESIDENTIAL';
 
       if (hasMatchingUse || isResidentialConflict) {
-        const propDesc = existing.propertyName
-          ? `"${existing.propertyName}" (${existing.code})`
-          : `property ${existing.code}`;
-
+        // Deliberately never includes propertyName here — this message can surface to a
+        // concession registering an unrelated property, and propertyName is the owning
+        // ratepayer's private label, not something to leak through an error string.
         throw new ConflictError(
-          `Property boundary conflict: The specified polygon overlaps with or is within the boundary of existing registered ${propDesc} with matching use "${existing.propertyUse}". Properties of matching use cannot share or overlap the same parcel footprint.`
+          `Property boundary conflict: The specified polygon overlaps with or is within the boundary of existing registered property ${existing.code} with matching use "${existing.propertyUse}". Properties of matching use cannot share or overlap the same parcel footprint.`
         );
       }
     }
@@ -286,6 +291,22 @@ async function generatePropertyIdAndCode(
       return { id, code };
     }
   }
+}
+
+// A concession's own API client resolves to actorType CONCESSION via authenticateConcession
+// but to SERVICE via the generic authenticate()/requirePermissions() — same underlying
+// identity, two different decorators (see auth.ts). Both must be treated the same for this
+// rule, or a concession could read propertyName just by hitting a requirePermissions-gated
+// route (e.g. GET /properties) instead of an authenticateConcession-gated one.
+const CONCESSION_FACING_ACTOR_TYPES = new Set(['CONCESSION', 'SERVICE']);
+
+// propertyName is the ratepayer's own private label for a property they own — never a
+// concession or CROIP-oversight-managed field, and never shown back to the concession/MMDA
+// side regardless of who set it or when. CROIP staff (actorType USER) still see it; the
+// boundary here is specifically ratepayer-vs-concession, not ratepayer-vs-everyone.
+function hidePropertyNameFromConcession<T extends { propertyName?: string | null }>(property: T, actorType: string): T {
+  if (!CONCESSION_FACING_ACTOR_TYPES.has(actorType)) return property;
+  return { ...property, propertyName: null };
 }
 
 export function propertyService(app: FastifyInstance) {
@@ -338,7 +359,7 @@ export function propertyService(app: FastifyInstance) {
               ghanaPostGps: input.ghanaPostGps?.trim() || null,
               createdBy: input.createdBy || (input.actorId ?? 'CONCESSION_STAFF'),
               accountNumber: input.accountNumber ?? null,
-              propertyName: input.propertyName ?? null,
+              propertyName: null,
               assemblyId: effectiveAssemblyId,
               propertyClass: input.propertyClass ?? null,
               buildingStatus: input.buildingStatus ?? null,
@@ -434,7 +455,7 @@ export function propertyService(app: FastifyInstance) {
 
           await appendOutboxEvent(tx, 'revenue.property.created.v1', evt);
 
-          return { ...property, defaultUnitId: defaultUnit.id };
+          return hidePropertyNameFromConcession({ ...property, defaultUnitId: defaultUnit.id }, input.actorType ?? 'CONCESSION');
         });
       } catch (err: any) {
         if (err?.code === 'P2002') {
@@ -530,7 +551,7 @@ export function propertyService(app: FastifyInstance) {
                 ghanaPostGps: item.ghanaPostGps?.trim() || null,
                 createdBy: item.createdBy || input.actorId || 'CONCESSION_STAFF',
                 accountNumber: item.accountNumber ?? null,
-                propertyName: item.propertyName ?? null,
+                propertyName: null,
                 assemblyId: assembly.id,
                 propertyClass: item.propertyClass!,
                 buildingStatus: item.buildingStatus!,
@@ -604,7 +625,7 @@ export function propertyService(app: FastifyInstance) {
               }
             });
 
-            createdList.push({ ...property, defaultUnitId: defaultUnit.id });
+            createdList.push(hidePropertyNameFromConcession({ ...property, defaultUnitId: defaultUnit.id }, input.actorType ?? 'CONCESSION'));
           }
 
           await tx.auditRecord.create({
@@ -643,8 +664,8 @@ export function propertyService(app: FastifyInstance) {
     // assembly assignment in the data model yet) and several OTHER services hard-filter
     // on it as a real UUID with no wildcard support — changing what it contains would
     // silently break those, so this fix stays local to how these two routes query.
-    async listProperties(assemblyId?: string) {
-      return app.prisma.property.findMany({
+    async listProperties(actorType: string, assemblyId?: string) {
+      const properties = await app.prisma.property.findMany({
         where: assemblyId && assemblyId !== '*' ? { assemblyId } : {},
         include: {
           documents: true,
@@ -656,9 +677,10 @@ export function propertyService(app: FastifyInstance) {
         orderBy: { createdAt: 'desc' },
         take: 50
       });
+      return properties.map((p) => hidePropertyNameFromConcession(p, actorType));
     },
 
-    async getProperty(id: string, assemblyId?: string) {
+    async getProperty(id: string, actorType: string, assemblyId?: string) {
       const prop = await app.prisma.property.findFirst({
         where: assemblyId && assemblyId !== '*' ? { id, assemblyId } : { id },
         include: {
@@ -669,7 +691,7 @@ export function propertyService(app: FastifyInstance) {
         }
       });
       if (!prop) throw new NotFoundError('Property not found');
-      return prop;
+      return hidePropertyNameFromConcession(prop, actorType);
     },
 
     async updateProperty(
@@ -727,7 +749,7 @@ export function propertyService(app: FastifyInstance) {
       // Object.keys(input) — the request body can carry fields this endpoint no longer
       // recognizes (e.g. a stale client still sending verifiedBy), and those must never
       // show up in a property's own history as something that was "changed".
-      const metadataFields = ['propertyName', 'accountNumber', 'ghanaPostGps'] as const;
+      const metadataFields = ['accountNumber', 'ghanaPostGps'] as const;
       const changedMetadataFields: string[] = [];
       for (const field of metadataFields) {
         if (input[field] !== undefined && input[field] !== (existing as any)[field]) {
@@ -763,7 +785,6 @@ export function propertyService(app: FastifyInstance) {
       return app.prisma.$transaction(async (tx) => {
         const updateData: any = {
           version: { increment: 1 },
-          ...(input.propertyName !== undefined ? { propertyName: input.propertyName } : {}),
           ...(input.accountNumber !== undefined ? { accountNumber: input.accountNumber } : {}),
           ...(input.propertyUse !== undefined ? { propertyUse: input.propertyUse } : {}),
           ...(input.structureType !== undefined ? { structureType: input.structureType } : {}),
@@ -872,6 +893,58 @@ export function propertyService(app: FastifyInstance) {
           evt
         );
 
+        return hidePropertyNameFromConcession(updated, actor.actorType);
+      });
+    },
+
+    // The one ratepayer-facing write this service exposes directly (see
+    // authenticateRatepayer in plugins/auth.ts) — scoped to exactly one field, gated by
+    // real ownership (claimed or, for any legacy/seed data, created), never routed through
+    // updateProperty's concession-facing path at all.
+    async renamePropertyAsRatepayer(idOrCode: string, propertyName: string, ratepayerId: string) {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrCode);
+      const existing = await app.prisma.property.findFirst({
+        where: isUuid ? { OR: [{ id: idOrCode }, { code: idOrCode }] } : { code: idOrCode }
+      });
+      if (!existing) throw new NotFoundError(`Property '${idOrCode}' not found`);
+
+      const isOwner = existing.claimedByRatepayerId === ratepayerId || existing.createdByRatepayerId === ratepayerId;
+      if (!isOwner) {
+        throw new ForbiddenError('You can only rename a property you own.');
+      }
+
+      return app.prisma.$transaction(async (tx) => {
+        const updated = await tx.property.update({
+          where: { id: existing.id },
+          data: { propertyName, version: { increment: 1 } }
+        });
+
+        await tx.propertyUpdateHistory.create({
+          data: {
+            propertyId: existing.id,
+            performedByRef: ratepayerId,
+            action: 'METADATA_UPDATE',
+            changedFields: ['propertyName']
+          }
+        });
+
+        await tx.auditRecord.create({
+          data: {
+            actorId: ratepayerId,
+            actorType: 'RATEPAYER',
+            concessionId: existing.registeredByConcessionId,
+            assemblyId: existing.assemblyId,
+            action: 'PROPERTY_RENAMED',
+            resourceType: 'Property',
+            resourceId: existing.id,
+            requestId: crypto.randomUUID(),
+            outcome: 'SUCCESS',
+            metadata: { propertyCode: existing.code }
+          }
+        });
+
+        // No hidePropertyNameFromConcession here — the actor is the ratepayer who just
+        // set it, not a concession reading it back.
         return updated;
       });
     },
