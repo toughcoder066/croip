@@ -217,7 +217,7 @@ concession_rotate_own_item["event"] = [{"listen": "test", "script": {"exec": [
 concession_folder = folder("2. Concession", [
     folder("Properties", [
         item("Register a property", "POST", "property_registry_url", "/v1/properties", auth="concession", body={
-            "code": "GH0701-{{$randomInt}}", "propertyName": "Sample Commercial Block",
+            "propertyName": "Sample Commercial Block",
             "propertyClass": "COMMERCIAL_CLASS_1", "buildingStatus": "COMPLETED",
             "propertyStatus": "ASSESSED", "propertyUse": "COMMERCIAL",
             "tenureType": "FREEHOLD", "structureType": "CONCRETE",
@@ -226,14 +226,14 @@ concession_folder = folder("2. Concession", [
         item("Register batch properties", "POST", "property_registry_url", "/v1/properties/batch", auth="concession", body={
             "properties": [
                 {
-                    "code": "GH0701-B1-{{$randomInt}}", "propertyName": "Sample Commercial Block A",
+                    "propertyName": "Sample Commercial Block A",
                     "propertyClass": "COMMERCIAL_CLASS_1", "buildingStatus": "COMPLETED",
                     "propertyStatus": "ASSESSED", "propertyUse": "COMMERCIAL",
                     "tenureType": "FREEHOLD", "structureType": "CONCRETE",
                     "polygonGeoJson": {"type": "Polygon", "coordinates": [[[-0.2355, 5.5545], [-0.2355, 5.5555], [-0.2345, 5.5555], [-0.2345, 5.5545], [-0.2355, 5.5545]]]}
                 },
                 {
-                    "code": "GH0701-B2-{{$randomInt}}", "propertyName": "Sample Commercial Block B",
+                    "propertyName": "Sample Commercial Block B",
                     "propertyClass": "COMMERCIAL_CLASS_1", "buildingStatus": "COMPLETED",
                     "propertyStatus": "ASSESSED", "propertyUse": "COMMERCIAL",
                     "tenureType": "FREEHOLD", "structureType": "CONCRETE",
