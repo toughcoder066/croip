@@ -1523,7 +1523,12 @@
               "name": "Delete individual property parcel",
               "request": {
                 "method": "DELETE",
-                "header": [],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": {
                   "raw": "{{property_registry_url}}/v1/properties/{{property_id}}",
                   "host": [
@@ -1535,7 +1540,16 @@
                     "{{property_id}}"
                   ]
                 },
-                "description": "Use {{concession_access_token}}. Strictly rejected with 400 Bad Request if any bills on this property have been paid (in which case only ratepayer links can be severed). If eligible for deletion, automatically severs all ratepayer links in ratepayer-service and cascades units, valuations, documents, and photos.",
+                "description": "Use {{concession_access_token}}. Restricted to a property within the concession's own assigned MMDA(s) \u2014 rejected with 403 otherwise. Strictly rejected with 400 Bad Request if any bills on this property have been paid (in which case only ratepayer links can be severed). If eligible for deletion, automatically severs all ratepayer links in ratepayer-service and cascades units, valuations, documents, and photos. Required staffRef \u2014 a concession's shared API credential doesn't identify which staff member actually did this, so it's required here the same way it is on registration/update. Recorded durably on AuditRecord (not PropertyUpdateHistory, which is deleted along with the property itself) so 'who deleted this' stays answerable after the fact.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"staffRef\": \"REV-0045\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
                 "auth": {
                   "type": "bearer",
                   "bearer": [
@@ -3527,7 +3541,7 @@
                     "{{property_id}}"
                   ]
                 },
-                "description": "Administrative deletion of an individual property parcel. Blocked if paid bills exist; severs all ratepayer links if unbilled.",
+                "description": "Administrative deletion of an individual property parcel, unrestricted across every MMDA (unlike a concession's own token \u2014 see '2. Concession > Properties'). Blocked if paid bills exist; severs all ratepayer links if unbilled. No staffRef needed here \u2014 the officer's own login already identifies them; optional in the body if you want to record a different reference anyway.",
                 "auth": {
                   "type": "bearer",
                   "bearer": [

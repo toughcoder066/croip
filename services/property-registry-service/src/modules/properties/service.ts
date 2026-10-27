@@ -1189,11 +1189,36 @@ export function propertyService(app: FastifyInstance) {
     // Deletes an individual property parcel and severs all links to ratepayers.
     // Business rule: if that ratepayer (or any ratepayer) has paid bills on that property,
     // you CANNOT delete that property; you can only sever the link.
-    async deleteProperty(propertyId: string, actorId: string, actorType: string = 'USER') {
+    async deleteProperty(
+      propertyId: string,
+      actorId: string,
+      actorType: string = 'USER',
+      staffRef?: string,
+      assemblyIds: string[] = []
+    ) {
       const property = await app.prisma.property.findUnique({
         where: { id: propertyId }
       });
       if (!property) throw new NotFoundError('Property record not found');
+
+      // Was missing entirely — a concession's own token could delete ANY property
+      // platform-wide, not just ones within its own assigned MMDA(s). Same scoping rule
+      // updateProperty already enforces for CONCESSION actors; staff (USER) remain
+      // unrestricted, consistent with every other concession-vs-staff split in this service.
+      if (actorType === 'CONCESSION') {
+        if (!assemblyIds.includes('*') && !assemblyIds.includes(property.assemblyId)) {
+          throw new ForbiddenError(
+            `Concessionaire cannot delete property outside its assigned assembly scope (${property.assemblyId} vs ${assemblyIds.join(', ')})`
+          );
+        }
+        // A concession's own API credential is shared across all its field/admin staff, so
+        // unlike a staff officer's own Zitadel login (actorId already uniquely identifies
+        // them), there's no other way to know which individual actually did this —
+        // staffRef is how the concession's own app supplies that.
+        if (!staffRef?.trim()) {
+          throw new BadRequestError('staffRef is required when a concession deletes a property.');
+        }
+      }
 
       // Check with billing service if any bills have been paid on this property
       let hasPaidBills = false;
@@ -1247,6 +1272,11 @@ export function propertyService(app: FastifyInstance) {
         });
         await appendOutboxEvent(tx, 'revenue.property.deleted.v1', evt);
 
+        // Durable "who deleted this" record — deliberately AuditRecord, not
+        // PropertyUpdateHistory: that table FK-cascades away the instant the property row
+        // it's created in the same transaction gets deleted below, so it could never
+        // actually answer "who deleted X" after the fact. AuditRecord.resourceId is a
+        // loose reference (no FK to Property), so it's exactly the record that survives.
         await tx.auditRecord.create({
           data: {
             actorId,
@@ -1258,7 +1288,14 @@ export function propertyService(app: FastifyInstance) {
             resourceId: propertyId,
             requestId: crypto.randomUUID(),
             outcome: 'SUCCESS',
-            metadata: { propertyCode: property.code }
+            metadata: {
+              propertyCode: property.code,
+              propertyAssemblyId: property.assemblyId,
+              registeredByConcessionId: property.registeredByConcessionId,
+              // staffRef when a concession deleted it (required above); otherwise the
+              // staff officer's own id already uniquely identifies them.
+              performedByRef: staffRef?.trim() || actorId
+            }
           }
         });
 

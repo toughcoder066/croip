@@ -268,7 +268,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.delete<{ Params: { id: string } }>('/properties/:id', {
+  app.delete<{ Params: { id: string }; Body?: { staffRef?: string } }>('/properties/:id', {
     // Was missing a preHandler entirely — every other mutation on this resource requires
     // authenticateConcession(['properties:manage']) (a concession's own token, or CROIP
     // staff administratively), but deletion had no auth check at all, meaning an
@@ -276,12 +276,24 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
     preHandler: app.authenticateConcession(['properties:manage']),
     schema: {
       tags: ['Property Registry'],
-      summary: 'Delete individual property parcel and sever all ratepayer links (rejected if property has paid bills)',
+      summary: 'Delete individual property parcel and sever all ratepayer links (rejected if property has paid bills). Restricted to the concession\'s own assigned MMDA(s); staff can delete platform-wide.',
       params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+      // No `body` schema here deliberately — DELETE with a body is unusual enough that
+      // some callers (including this portal's own existing delete button) send none at
+      // all, and Fastify/AJV reject a declared object schema against a request with no
+      // body present. request.body ends up undefined in that case, handled below; actual
+      // enforcement (required for a concession, optional for staff) lives in
+      // deleteProperty itself.
       response: { 200: { type: 'object', additionalProperties: true }, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
     }
   }, async (request) => {
-    return service.deleteProperty(request.params.id, request.auth.subject, request.auth.actorType);
+    return service.deleteProperty(
+      request.params.id,
+      request.auth.subject,
+      request.auth.actorType,
+      request.body?.staffRef,
+      request.auth.assemblyIds
+    );
   });
 
   app.post('/properties/purge', {
