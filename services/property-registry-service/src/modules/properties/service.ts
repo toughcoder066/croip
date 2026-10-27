@@ -40,17 +40,13 @@ export interface CreatePropertyInput {
   createdBy?: string;
   verifiedBy?: string;
   polygonGeoJson: Record<string, unknown>;
-  registrationSource?: 'CONCESSION' | 'RATEPAYER';
-  createdByRatepayerId?: string;
   documents?: PropertyDocumentInput[];
   concessionId: string;
   // The concession's own real, currently-assigned MMDAs (from the caller's auth context) —
   // not a single value, since a concession can be contracted to more than one at once.
-  // Unused for ratepayer self-registration (isRatepayerCreation), which isn't bounded to a
-  // concession's territory at all.
   allowedAssemblyIds?: string[];
   actorId: string;
-  actorType?: 'RATEPAYER' | 'CONCESSION' | 'USER' | 'SERVICE';
+  actorType?: 'CONCESSION' | 'USER' | 'SERVICE';
 }
 
 export interface CreateBatchPropertyInput {
@@ -58,7 +54,7 @@ export interface CreateBatchPropertyInput {
   concessionId: string;
   allowedAssemblyIds: string[];
   actorId: string;
-  actorType?: 'RATEPAYER' | 'CONCESSION' | 'USER' | 'SERVICE';
+  actorType?: 'CONCESSION' | 'USER' | 'SERVICE';
 }
 
 export interface SubmitVerificationInput {
@@ -288,61 +284,25 @@ async function generatePropertyIdAndCode(
 export function propertyService(app: FastifyInstance) {
   return {
     async createProperty(input: CreatePropertyInput) {
-      const isRatepayerCreation =
-        input.actorType === 'RATEPAYER' ||
-        input.registrationSource === 'RATEPAYER' ||
-        Boolean(input.createdByRatepayerId);
+      // Business Rule: Concession registration requires all core classification fields
+      const missingFields: string[] = [];
+      if (!input.propertyClass?.trim()) missingFields.push('propertyClass');
+      if (!input.buildingStatus?.trim()) missingFields.push('buildingStatus');
+      if (!input.propertyStatus?.trim()) missingFields.push('propertyStatus');
+      if (!input.propertyUse?.trim()) missingFields.push('propertyUse');
+      if (!input.tenureType?.trim()) missingFields.push('tenureType');
+      if (!input.structureType?.trim()) missingFields.push('structureType');
 
-      if (isRatepayerCreation) {
-        // Business Rule: For authenticated ratepayer registration, exactly these 4 fields are required:
-        // 1. propertyName
-        // 2. polygonGeoJson
-        // 3. propertyUse
-        // 4. ownershipType ('FULL' or 'PART')
-        if (!input.propertyName || !input.propertyName.trim()) {
-          throw new BadRequestError('Property name is required when registering a property as a ratepayer.');
-        }
-
-        if (!input.polygonGeoJson || typeof input.polygonGeoJson !== 'object') {
-          throw new BadRequestError('A valid polygon GeoJSON boundary is required to register a property.');
-        }
-
-        if (!input.propertyUse || !input.propertyUse.trim()) {
-          throw new BadRequestError('Property use (e.g. RESIDENTIAL, COMMERCIAL, INDUSTRIAL, MIXED_USE) is required when registering a property.');
-        }
-
-        if (!input.ownershipType || !input.ownershipType.trim()) {
-          throw new BadRequestError('Ownership type is required when registering a property (either FULL or PART).');
-        }
-
-        const normalizedOwnership = input.ownershipType.trim().toUpperCase();
-        if (!['FULL', 'PART', 'PARTIAL', 'OWNER', 'CO_OWNER'].includes(normalizedOwnership)) {
-          throw new BadRequestError('Ownership type must be either FULL or PART.');
-        }
-      } else {
-        // Business Rule: Concession registration requires all core classification fields
-        const missingFields: string[] = [];
-        if (!input.propertyClass?.trim()) missingFields.push('propertyClass');
-        if (!input.buildingStatus?.trim()) missingFields.push('buildingStatus');
-        if (!input.propertyStatus?.trim()) missingFields.push('propertyStatus');
-        if (!input.propertyUse?.trim()) missingFields.push('propertyUse');
-        if (!input.tenureType?.trim()) missingFields.push('tenureType');
-        if (!input.structureType?.trim()) missingFields.push('structureType');
-
-        if (missingFields.length > 0) {
-          throw new BadRequestError(
-            `The following fields are required for concession property registration: ${missingFields.join(', ')}`
-          );
-        }
+      if (missingFields.length > 0) {
+        throw new BadRequestError(
+          `The following fields are required for concession property registration: ${missingFields.join(', ')}`
+        );
       }
 
-      let allowedAssemblyIds: string[] = [];
-      if (!isRatepayerCreation) {
-        allowedAssemblyIds = input.allowedAssemblyIds ?? [];
-      }
+      const allowedAssemblyIds = input.allowedAssemblyIds ?? [];
 
       const matchedAssembly = await assertZoneMembership(app, input.polygonGeoJson, {
-        isRatepayer: isRatepayerCreation,
+        isRatepayer: false,
         concessionId: input.concessionId,
         allowedAssemblyIds,
         propertyCode: input.code
@@ -362,7 +322,6 @@ export function propertyService(app: FastifyInstance) {
           const { id, code } = input.code?.trim()
             ? { id: crypto.randomUUID(), code: input.code.trim() }
             : await generatePropertyIdAndCode(tx);
-          const effectivePropertyStatus = isRatepayerCreation ? 'UNASSESSED' : (input.propertyStatus || 'UNASSESSED');
 
           const property = await tx.property.create({
             data: {
@@ -370,20 +329,20 @@ export function propertyService(app: FastifyInstance) {
               code,
               version: 1,
               ghanaPostGps: input.ghanaPostGps?.trim() || null,
-              createdBy: input.createdBy || (isRatepayerCreation ? (input.createdByRatepayerId ?? input.actorId) : (input.actorId ?? 'CONCESSION_STAFF')),
+              createdBy: input.createdBy || (input.actorId ?? 'CONCESSION_STAFF'),
               accountNumber: input.accountNumber ?? null,
               propertyName: input.propertyName ?? null,
               assemblyId: effectiveAssemblyId,
               propertyClass: input.propertyClass ?? null,
               buildingStatus: input.buildingStatus ?? null,
-              propertyStatus: effectivePropertyStatus,
+              propertyStatus: input.propertyStatus || 'UNASSESSED',
               propertyUse: input.propertyUse!,
               tenureType: input.tenureType ?? null,
               structureType: input.structureType ?? null,
               numberOfFloors: input.numberOfFloors ?? null,
-              registrationSource: isRatepayerCreation ? 'RATEPAYER' : 'CONCESSION',
-              registeredByConcessionId: isRatepayerCreation ? null : input.concessionId,
-              createdByRatepayerId: isRatepayerCreation ? (input.createdByRatepayerId ?? input.actorId) : null,
+              registrationSource: 'CONCESSION',
+              registeredByConcessionId: input.concessionId,
+              createdByRatepayerId: null,
               verificationStatus: 'PENDING',
               polygonGeoJson: input.polygonGeoJson as any
             }
@@ -412,14 +371,32 @@ export function propertyService(app: FastifyInstance) {
                   mediaUrl: doc.mediaUrl,
                   fileSizeBytes: doc.fileSizeBytes ?? null,
                   mimeType: doc.mimeType ?? 'application/pdf',
-                  uploadedByActorType: isRatepayerCreation ? 'RATEPAYER' : 'CONCESSION_STAFF',
+                  uploadedByActorType: 'CONCESSION_STAFF',
                   uploadedByActorId: input.actorId,
-                  ratepayerId: isRatepayerCreation ? (input.createdByRatepayerId ?? input.actorId) : null,
+                  ratepayerId: null,
                   verificationStatus: 'PENDING'
                 }
               });
             }
           }
+
+          await tx.auditRecord.create({
+            data: {
+              actorId: input.actorId,
+              actorType: input.actorType ?? 'CONCESSION',
+              concessionId: input.concessionId,
+              assemblyId: effectiveAssemblyId,
+              action: 'PROPERTY_REGISTERED',
+              resourceType: 'Property',
+              resourceId: property.id,
+              requestId: crypto.randomUUID(),
+              outcome: 'SUCCESS',
+              metadata: {
+                propertyCode: property.code,
+                documentCount: input.documents?.length ?? 0
+              }
+            }
+          });
 
           const evt = domainEvent({
             eventType: 'PropertyCreated',
@@ -442,10 +419,6 @@ export function propertyService(app: FastifyInstance) {
 
           await appendOutboxEvent(tx, 'revenue.property.created.v1', evt);
 
-          // defaultUnitId isn't part of the public response schema (fast-json-stringify
-          // strips anything not declared there) — it's only consumed internally, by the
-          // route, to link a self-registered property back to the ratepayer in
-          // ratepayer-service right after this transaction commits.
           return { ...property, defaultUnitId: defaultUnit.id };
         });
       } catch (err: any) {
@@ -457,9 +430,6 @@ export function propertyService(app: FastifyInstance) {
     },
 
     async createBatchProperties(input: CreateBatchPropertyInput) {
-      if (input.actorType === 'RATEPAYER') {
-        throw new ForbiddenError('Batch property registration is only available to concessionaires. Ratepayers can register individual properties.');
-      }
       if (!input.properties || input.properties.length === 0) {
         throw new BadRequestError('At least one property must be provided in the batch');
       }
@@ -613,6 +583,24 @@ export function propertyService(app: FastifyInstance) {
 
             createdList.push({ ...property, defaultUnitId: defaultUnit.id });
           }
+
+          await tx.auditRecord.create({
+            data: {
+              actorId: input.actorId,
+              actorType: input.actorType ?? 'CONCESSION',
+              concessionId: input.concessionId,
+              assemblyId: null,
+              action: 'PROPERTY_BATCH_REGISTERED',
+              resourceType: 'Property',
+              resourceId: input.concessionId,
+              requestId: crypto.randomUUID(),
+              outcome: 'SUCCESS',
+              metadata: {
+                count: createdList.length,
+                propertyCodes: createdList.map((p) => p.code)
+              }
+            }
+          });
 
           return createdList;
         });
@@ -1068,7 +1056,7 @@ export function propertyService(app: FastifyInstance) {
     // Deletes an individual property parcel and severs all links to ratepayers.
     // Business rule: if that ratepayer (or any ratepayer) has paid bills on that property,
     // you CANNOT delete that property; you can only sever the link.
-    async deleteProperty(propertyId: string, actorId: string) {
+    async deleteProperty(propertyId: string, actorId: string, actorType: string = 'USER') {
       const property = await app.prisma.property.findUnique({
         where: { id: propertyId }
       });
@@ -1125,6 +1113,21 @@ export function propertyService(app: FastifyInstance) {
           data: { propertyId, code: property.code, actorId }
         });
         await appendOutboxEvent(tx, 'revenue.property.deleted.v1', evt);
+
+        await tx.auditRecord.create({
+          data: {
+            actorId,
+            actorType,
+            concessionId: property.registeredByConcessionId,
+            assemblyId: property.assemblyId,
+            action: 'PROPERTY_DELETED',
+            resourceType: 'Property',
+            resourceId: propertyId,
+            requestId: crypto.randomUUID(),
+            outcome: 'SUCCESS',
+            metadata: { propertyCode: property.code }
+          }
+        });
 
         app.log.info({ propertyId, code: property.code, actorId }, 'Property deleted and ratepayer links severed');
 
