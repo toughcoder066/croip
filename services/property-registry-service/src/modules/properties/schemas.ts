@@ -82,24 +82,23 @@ export const createPropertyBodySchema = {
     numberOfFloors: { type: 'integer', minimum: 1 },
     ownershipType: { type: 'string', enum: ['FULL', 'PART', 'full', 'part', 'PARTIAL', 'partial', 'OWNER', 'CO_OWNER', 'TENANT'] },
     ownershipPercentage: { type: 'number', minimum: 0, maximum: 100 },
-    registrationSource: { type: 'string', enum: ['CONCESSION', 'RATEPAYER'], default: 'CONCESSION' },
-    createdByRatepayerId: { type: 'string', format: 'uuid' },
     version: { type: 'integer' },
     ghanaPostGps: { type: 'string', maxLength: 50 },
     createdBy: { type: 'string', maxLength: 150 },
-    assemblyId: {
-      type: 'string',
-      format: 'uuid',
-      description: 'Ratepayer self-service only — overrides the ratepayer\'s own registered assembly if the property is elsewhere. Ignored (and taken from the caller\'s own context) for staff/concession requests.'
-    },
     documents: {
       type: 'array',
       items: propertyDocumentInputSchema,
       description: 'Optional ownership verification documents'
     },
-    polygonGeoJson: { type: 'object' }
+    polygonGeoJson: { type: 'object' },
+    idempotencyKey: { type: 'string', minLength: 1, maxLength: 200 }
   }
 };
+
+// Field-agent offline sync: a concession's agent generates this once, locally, when the
+// property is first captured in the field — resending the same key on every sync retry
+// makes re-syncing after a connectivity gap safe to repeat. See lib/idempotency.ts.
+export const idempotencyKeySchema = { type: 'string', minLength: 1, maxLength: 200 };
 
 export const createBatchPropertiesBodySchema = {
   type: 'object',
@@ -110,7 +109,8 @@ export const createBatchPropertiesBodySchema = {
       minItems: 1,
       maxItems: 500,
       items: createPropertyBodySchema
-    }
+    },
+    idempotencyKey: idempotencyKeySchema
   }
 };
 

@@ -135,6 +135,11 @@ export function ConcessionDetailView({ concessionId }: ConcessionDetailViewProps
   const [loadingAssignments, setLoadingAssignments] = useState(true)
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
 
+  // concessionAssembly rows only carry assemblyId (platform-governance-service doesn't
+  // hold MMDA names — shared-services does), so names are resolved here client-side the
+  // same way AssignAssemblyForm already does for its picker.
+  const [assemblyLookup, setAssemblyLookup] = useState<Record<string, { code: string; name: string }>>({})
+
   const [apiClients, setApiClients] = useState<ApiClientRecord[]>([])
   const [loadingApiClients, setLoadingApiClients] = useState(true)
   const [revoking, setRevoking] = useState(false)
@@ -188,6 +193,22 @@ export function ConcessionDetailView({ concessionId }: ConcessionDetailViewProps
       .catch(() => toast.error('Failed to load assigned MMDAs'))
       .finally(() => setLoadingAssignments(false))
   }, [concessionId])
+
+  const fetchAssemblyLookup = useCallback(() => {
+    fetch('/api/geo/assemblies')
+      .then(res => res.json())
+      .then(res => {
+        if (res.success && Array.isArray(res.data)) {
+          const lookup: Record<string, { code: string; name: string }> = {}
+
+          for (const a of res.data) {
+            lookup[a.id] = { code: a.code, name: a.name }
+          }
+          setAssemblyLookup(lookup)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   const fetchApiClients = useCallback(() => {
     setLoadingApiClients(true)
@@ -253,8 +274,9 @@ export function ConcessionDetailView({ concessionId }: ConcessionDetailViewProps
     fetchConcession()
     fetchPersonnel()
     fetchAssignments()
+    fetchAssemblyLookup()
     fetchApiClients()
-  }, [fetchConcession, fetchPersonnel, fetchAssignments, fetchApiClients])
+  }, [fetchConcession, fetchPersonnel, fetchAssignments, fetchAssemblyLookup, fetchApiClients])
 
   if (loading) {
     return <PageLoader />
@@ -443,12 +465,15 @@ export function ConcessionDetailView({ concessionId }: ConcessionDetailViewProps
                       </TableCell>
                     </TableRow>
                   ) : (
-                    assignments.map(a => (
+                    assignments.map(a => {
+                      const assembly = assemblyLookup[a.assemblyId]
+
+                      return (
                       <TableRow key={a.id} className="hover:bg-muted/30 transition-colors">
                         <TableCell className="pl-6">
                           <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
                             <LandmarkIcon className="size-3.5 text-primary" />
-                            <span>Assigned MMDA</span>
+                            <span>{assembly ? `${assembly.code} — ${assembly.name}` : a.assemblyId}</span>
                           </div>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">
@@ -461,7 +486,8 @@ export function ConcessionDetailView({ concessionId }: ConcessionDetailViewProps
                           <StatusBadge status={a.status} />
                         </TableCell>
                       </TableRow>
-                    ))
+                      )
+                    })
                   )}
                 </TableBody>
               </Table>

@@ -217,30 +217,30 @@ concession_rotate_own_item["event"] = [{"listen": "test", "script": {"exec": [
 concession_folder = folder("2. Concession", [
     folder("Properties", [
         item("Register a property", "POST", "property_registry_url", "/v1/properties", auth="concession", body={
-            "code": "GH0701-{{$randomInt}}", "propertyName": "Sample Commercial Block",
+            "propertyName": "Sample Commercial Block",
             "propertyClass": "COMMERCIAL_CLASS_1", "buildingStatus": "COMPLETED",
             "propertyStatus": "ASSESSED", "propertyUse": "COMMERCIAL",
             "tenureType": "FREEHOLD", "structureType": "CONCRETE",
             "polygonGeoJson": {"type": "Polygon", "coordinates": [[[-0.2355, 5.5545], [-0.2355, 5.5555], [-0.2345, 5.5555], [-0.2345, 5.5545], [-0.2355, 5.5545]]]}
-        }, description="Use {{concession_access_token}} — this is the token minted from your client_id/client_secret (see 'Mint access token' above). The concession is identified from that token, not the request body. Concessions can only register properties whose polygon falls strictly within their assigned MMDA territory (enforced via Shared Services and Platform Governance). Spatial non-overlap restriction: polygons cannot overlap or contain another property parcel when property uses and ownership percentage match. Core classification fields are required; propertyName and documents are optional."),
+        }, description="Use {{concession_access_token}} — this is the token minted from your client_id/client_secret (see 'Mint access token' above). The concession is identified from that token, not the request body. Concessions can only register properties whose polygon falls strictly within their assigned MMDA territory (enforced via Shared Services and Platform Governance) — a concession can hold more than one assigned MMDA at once. Spatial non-overlap restriction: polygons cannot overlap or contain another property parcel when property uses and ownership percentage match. Core classification fields are required; propertyName and documents are optional. Optional idempotencyKey makes this safe to retry — e.g. a field agent registering a property with no signal, whose app generates the key once offline and resends the same request (same key, same body) once connectivity returns: a retry replays the original 201 response instead of creating a duplicate; the same key with a different body is rejected with 409."),
         item("Register batch properties", "POST", "property_registry_url", "/v1/properties/batch", auth="concession", body={
             "properties": [
                 {
-                    "code": "GH0701-B1-{{$randomInt}}", "propertyName": "Sample Commercial Block A",
+                    "propertyName": "Sample Commercial Block A",
                     "propertyClass": "COMMERCIAL_CLASS_1", "buildingStatus": "COMPLETED",
                     "propertyStatus": "ASSESSED", "propertyUse": "COMMERCIAL",
                     "tenureType": "FREEHOLD", "structureType": "CONCRETE",
                     "polygonGeoJson": {"type": "Polygon", "coordinates": [[[-0.2355, 5.5545], [-0.2355, 5.5555], [-0.2345, 5.5555], [-0.2345, 5.5545], [-0.2355, 5.5545]]]}
                 },
                 {
-                    "code": "GH0701-B2-{{$randomInt}}", "propertyName": "Sample Commercial Block B",
+                    "propertyName": "Sample Commercial Block B",
                     "propertyClass": "COMMERCIAL_CLASS_1", "buildingStatus": "COMPLETED",
                     "propertyStatus": "ASSESSED", "propertyUse": "COMMERCIAL",
                     "tenureType": "FREEHOLD", "structureType": "CONCRETE",
                     "polygonGeoJson": {"type": "Polygon", "coordinates": [[[-0.2345, 5.5545], [-0.2345, 5.5555], [-0.2335, 5.5555], [-0.2335, 5.5545], [-0.2345, 5.5545]]]}
                 }
             ]
-        }, description="Use {{concession_access_token}}. Batch registration (up to 500 properties). All properties must fall within the concession's assigned MMDA boundary. Core classification fields are required for each property; code is generated if omitted; propertyName and documents are optional."),
+        }, description="Use {{concession_access_token}}. Batch registration (up to 500 properties). Every property must fall within one of the concession's assigned MMDAs (it can hold more than one). Core classification fields are required for each property; code is generated if omitted; propertyName and documents are optional. Optional idempotencyKey (one key covers the whole batch) makes this safe to retry after a connectivity gap — a retry with the same key and body replays the original 201 response instead of creating duplicates; the same key with a different body is rejected with 409."),
         item("Search/list properties in own assembly", "GET", "property_registry_url", "/v1/properties", auth="concession"),
         item("Get property details", "GET", "property_registry_url", "/v1/properties/{{property_id}}", auth="concession"),
         item("Update property - metadata only (preserves valuation & status)", "PATCH", "property_registry_url", "/v1/properties/{{property_id}}", auth="concession", body={

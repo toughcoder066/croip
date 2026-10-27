@@ -1,5 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { propertyService, type CreatePropertyInput, type UploadPremisesDocumentInput, type SubmitVerificationInput, type ReviewVerificationInput, type UpdatePropertyInput } from './service.js';
+import { withIdempotency } from '../../lib/idempotency.js';
 import {
   problemSchema,
   propertyResponseSchema,
@@ -17,7 +18,12 @@ import {
 export const propertyRoutes: FastifyPluginAsync = async (app) => {
   const service = propertyService(app);
 
-  app.post<{ Body: Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType'> }>('/properties', {
+  // idempotencyKey (optional) is what makes this safe for a concession's field agent to
+  // sync from offline — the agent's app generates it once, locally, when the property is
+  // first captured, and resends the same key on every sync retry; a replayed request
+  // returns the original response instead of creating a second property. See
+  // lib/idempotency.ts for the full mechanism, including why it's race-safe.
+  app.post<{ Body: Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType'> & { idempotencyKey?: string } }>('/properties', {
     preHandler: app.authenticateConcession(['properties:manage']),
     schema: {
       tags: ['Property Registry'],
@@ -33,19 +39,26 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       }
     }
   }, async (request, reply) => {
-    const created = await service.createProperty({
-      ...request.body,
-      registrationSource: 'CONCESSION',
-      concessionId: request.auth.concessionId,
-      allowedAssemblyIds: request.auth.assemblyIds,
-      actorId: request.auth.subject,
-      actorType: request.auth.actorType
+    const { idempotencyKey, ...body } = request.body;
+    const concessionId = request.auth.concessionId;
+    const register = async () => ({
+      status: 201,
+      body: await service.createProperty({
+        ...body,
+        concessionId,
+        allowedAssemblyIds: request.auth.assemblyIds,
+        actorId: request.auth.subject,
+        actorType: request.auth.actorType
+      })
     });
 
-    return reply.code(201).send(created);
+    const result = idempotencyKey
+      ? await withIdempotency(app, { concessionId, idempotencyKey, requestBody: body }, register)
+      : await register();
+    return reply.code(result.status).send(result.body);
   });
 
-  app.post<{ Body: { properties: Array<Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType'>> } }>('/properties/batch', {
+  app.post<{ Body: { properties: Array<Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType'>>; idempotencyKey?: string } }>('/properties/batch', {
     preHandler: app.authenticateConcession(['properties:manage']),
     schema: {
       tags: ['Property Registry'],
@@ -61,19 +74,23 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       }
     }
   }, async (request, reply) => {
-    const createdList = await service.createBatchProperties({
-      properties: request.body.properties,
-      concessionId: request.auth.concessionId,
-      allowedAssemblyIds: request.auth.assemblyIds,
-      actorId: request.auth.subject,
-      actorType: request.auth.actorType
-    });
+    const { idempotencyKey, ...body } = request.body;
+    const concessionId = request.auth.concessionId;
+    const register = async () => {
+      const createdList = await service.createBatchProperties({
+        properties: body.properties,
+        concessionId,
+        allowedAssemblyIds: request.auth.assemblyIds,
+        actorId: request.auth.subject,
+        actorType: request.auth.actorType
+      });
+      return { status: 201, body: { success: true, count: createdList.length, properties: createdList } };
+    };
 
-    return reply.code(201).send({
-      success: true,
-      count: createdList.length,
-      properties: createdList
-    });
+    const result = idempotencyKey
+      ? await withIdempotency(app, { concessionId, idempotencyKey, requestBody: body }, register)
+      : await register();
+    return reply.code(result.status).send(result.body);
   });
 
   app.get<{ Querystring: { assemblyId?: string } }>('/properties', {
@@ -238,7 +255,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: { type: 'object', additionalProperties: true }, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
     }
   }, async (request) => {
-    return service.deleteProperty(request.params.id, request.auth.subject);
+    return service.deleteProperty(request.params.id, request.auth.subject, request.auth.actorType);
   });
 
   app.post('/properties/purge', {
