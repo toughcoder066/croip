@@ -42,11 +42,34 @@ model Property {
   documents     PropertyDocument[]
   valuations    PropertyValuation[]
   verifications PropertyVerification[]
+  updateHistory PropertyUpdateHistory[]
 
   @@index([assemblyId, verificationStatus])
   @@index([code])
   @@index([registrationSource])
   @@map("properties")
+}
+
+// Who-did-what-when trail for a property's own record, separate from AuditRecord (that
+// table is shared cross-resource platform audit infra, used for compliance/oversight
+// reporting; this one exists purely so property reads can cheaply show "last updated by
+// X at Y" without scanning AuditRecord). performedByRef is deliberately an opaque
+// reference string, not a foreign key or a name/phone — a concession's own personnel
+// records (ConcessionPersonnel.externalStaffRef, in platform-governance-service) are the
+// source of truth for who that ID actually is; this service only needs to prove someone
+// specific did it, never who.
+model PropertyUpdateHistory {
+  id              String   @id @default(uuid()) @db.Uuid
+  propertyId      String   @map("property_id") @db.Uuid
+  performedAt     DateTime @default(now()) @map("performed_at") @db.Timestamptz
+  performedByRef  String   @map("performed_by_ref") @db.VarChar(100)
+  action          String   @db.VarChar(20) // 'CREATED' | 'METADATA_UPDATE' | 'STRUCTURAL_UPDATE'
+  changedFields   Json?    @map("changed_fields")
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, performedAt])
+  @@map("property_update_history")
 }
 
 model PropertyDocumentType {

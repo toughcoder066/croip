@@ -4,7 +4,7 @@ import { withIdempotency } from '../../lib/idempotency.js';
 import {
   problemSchema,
   propertyResponseSchema,
-  createPropertyBodySchema,
+  createSinglePropertyBodySchema,
   createBatchPropertiesBodySchema,
   batchPropertiesResponseSchema,
   createUnitBodySchema,
@@ -28,7 +28,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: ['Property Registry'],
       summary: 'Register landed property parcel into national cadastre — concession action, restricted to assigned MMDA. Ratepayers cannot register their own properties; see ratepayer-service for claiming an unclaimed one.',
-      body: createPropertyBodySchema,
+      body: createSinglePropertyBodySchema,
       response: {
         201: propertyResponseSchema,
         400: problemSchema,
@@ -58,7 +58,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(result.status).send(result.body);
   });
 
-  app.post<{ Body: { properties: Array<Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType'>>; idempotencyKey?: string } }>('/properties/batch', {
+  app.post<{ Body: { properties: Array<Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType' | 'staffRef'>>; idempotencyKey?: string; staffRef: string } }>('/properties/batch', {
     preHandler: app.authenticateConcession(['properties:manage']),
     schema: {
       tags: ['Property Registry'],
@@ -82,7 +82,8 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
         concessionId,
         allowedAssemblyIds: request.auth.assemblyIds,
         actorId: request.auth.subject,
-        actorType: request.auth.actorType
+        actorType: request.auth.actorType,
+        staffRef: body.staffRef
       });
       return { status: 201, body: { success: true, count: createdList.length, properties: createdList } };
     };
