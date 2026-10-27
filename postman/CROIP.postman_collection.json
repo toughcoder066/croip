@@ -651,7 +651,7 @@
         },
         {
           "name": "My Properties",
-          "description": "ratepayer-service \u2014 ratepayers cannot register or update properties (concession-only); they can claim one a concession already registered that has no ratepayer linked.",
+          "description": "ratepayer-service \u2014 ratepayers cannot register or update most property fields (concession-only); they can claim an existing unclaimed property and rename one they own (the rename call itself goes directly to property-registry-service, not through ratepayer-service).",
           "item": [
             {
               "name": "Claim an existing property (authenticated)",
@@ -760,6 +760,51 @@
                   ]
                 },
                 "description": "",
+                "auth": {
+                  "type": "bearer",
+                  "bearer": [
+                    {
+                      "key": "token",
+                      "value": "{{ratepayer_access_token}}",
+                      "type": "string"
+                    }
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "Rename my property",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{property_registry_url}}/v1/properties/{{property_id}}/name",
+                  "host": [
+                    "{{property_registry_url}}"
+                  ],
+                  "path": [
+                    "v1",
+                    "properties",
+                    "{{property_id}}",
+                    "name"
+                  ]
+                },
+                "description": "The one property field a ratepayer can change directly, on property-registry-service itself rather than through ratepayer-service \u2014 a private label for a property they own (claimed, or \u2014 for legacy data \u2014 originally registered by them), never shown to the concession/MMDA managing it in any read. Rejected with 403 if the authenticated ratepayer doesn't actually own this property. Uses {{ratepayer_access_token}}, the same token ratepayer-service issues \u2014 property-registry-service verifies it directly with the shared signing secret rather than proxying through ratepayer-service.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"propertyName\": \"My Family Home\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
                 "auth": {
                   "type": "bearer",
                   "bearer": [
@@ -1063,10 +1108,10 @@
                     "properties"
                   ]
                 },
-                "description": "Use {{concession_access_token}} \u2014 this is the token minted from your client_id/client_secret (see 'Mint access token' above). The concession is identified from that token, not the request body. Concessions can only register properties whose polygon falls strictly within their assigned MMDA territory (enforced via Shared Services and Platform Governance) \u2014 a concession can hold more than one assigned MMDA at once. Spatial non-overlap restriction: polygons cannot overlap or contain another property parcel when property uses and ownership percentage match. Core classification fields are required; propertyName and documents are optional. Optional idempotencyKey makes this safe to retry \u2014 e.g. a field agent registering a property with no signal, whose app generates the key once offline and resends the same request (same key, same body) once connectivity returns: a retry replays the original 201 response instead of creating a duplicate; the same key with a different body is rejected with 409.",
+                "description": "Use {{concession_access_token}} \u2014 this is the token minted from your client_id/client_secret (see 'Mint access token' above). The concession is identified from that token, not the request body. Concessions can only register properties whose polygon falls strictly within their assigned MMDA territory (enforced via Shared Services and Platform Governance) \u2014 a concession can hold more than one assigned MMDA at once. Spatial non-overlap restriction: polygons cannot overlap or contain another property parcel when property uses and ownership percentage match. Core classification fields are required; documents are optional. There is no propertyName field \u2014 a property starts unnamed, and only the ratepayer who later owns it can name it (see '1. Ratepayer > Rename my property'); a concession could never see that name again anyway (it's the ratepayer's own private label, not cadastre data). Required staffRef is the concession's own reference for whoever actually did this (see ConcessionPersonnel.externalStaffRef) \u2014 CROIP never resolves it to an identity, it just records it so the property's update history is genuinely attributable. Optional idempotencyKey makes this safe to retry \u2014 e.g. a field agent registering a property with no signal, whose app generates the key once offline and resends the same request (same key, same body) once connectivity returns: a retry replays the original 201 response instead of creating a duplicate; the same key with a different body is rejected with 409.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"propertyName\": \"Sample Commercial Block\",\n  \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n  \"buildingStatus\": \"COMPLETED\",\n  \"propertyStatus\": \"ASSESSED\",\n  \"propertyUse\": \"COMMERCIAL\",\n  \"tenureType\": \"FREEHOLD\",\n  \"structureType\": \"CONCRETE\",\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -0.2355,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5545\n        ]\n      ]\n    ]\n  }\n}",
+                  "raw": "{\n  \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n  \"buildingStatus\": \"COMPLETED\",\n  \"propertyStatus\": \"ASSESSED\",\n  \"propertyUse\": \"COMMERCIAL\",\n  \"tenureType\": \"FREEHOLD\",\n  \"structureType\": \"CONCRETE\",\n  \"polygonGeoJson\": {\n    \"type\": \"Polygon\",\n    \"coordinates\": [\n      [\n        [\n          -0.2355,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5555\n        ],\n        [\n          -0.2345,\n          5.5545\n        ],\n        [\n          -0.2355,\n          5.5545\n        ]\n      ]\n    ]\n  },\n  \"staffRef\": \"REV-0045\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1107,10 +1152,10 @@
                     "batch"
                   ]
                 },
-                "description": "Use {{concession_access_token}}. Batch registration (up to 500 properties). Every property must fall within one of the concession's assigned MMDAs (it can hold more than one). Core classification fields are required for each property; code is generated if omitted; propertyName and documents are optional. Optional idempotencyKey (one key covers the whole batch) makes this safe to retry after a connectivity gap \u2014 a retry with the same key and body replays the original 201 response instead of creating duplicates; the same key with a different body is rejected with 409.",
+                "description": "Use {{concession_access_token}}. Batch registration (up to 500 properties). Every property must fall within one of the concession's assigned MMDAs (it can hold more than one). Core classification fields are required for each property; code is generated if omitted; documents are optional. No propertyName field \u2014 see 'Register a property' above. Required staffRef (one per batch, not per property) is the concession's own reference for whoever did the whole batch. Optional idempotencyKey (one key covers the whole batch) makes this safe to retry after a connectivity gap \u2014 a retry with the same key and body replays the original 201 response instead of creating duplicates; the same key with a different body is rejected with 409.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"properties\": [\n    {\n      \"propertyName\": \"Sample Commercial Block A\",\n      \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n      \"buildingStatus\": \"COMPLETED\",\n      \"propertyStatus\": \"ASSESSED\",\n      \"propertyUse\": \"COMMERCIAL\",\n      \"tenureType\": \"FREEHOLD\",\n      \"structureType\": \"CONCRETE\",\n      \"polygonGeoJson\": {\n        \"type\": \"Polygon\",\n        \"coordinates\": [\n          [\n            [\n              -0.2355,\n              5.5545\n            ],\n            [\n              -0.2355,\n              5.5555\n            ],\n            [\n              -0.2345,\n              5.5555\n            ],\n            [\n              -0.2345,\n              5.5545\n            ],\n            [\n              -0.2355,\n              5.5545\n            ]\n          ]\n        ]\n      }\n    },\n    {\n      \"propertyName\": \"Sample Commercial Block B\",\n      \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n      \"buildingStatus\": \"COMPLETED\",\n      \"propertyStatus\": \"ASSESSED\",\n      \"propertyUse\": \"COMMERCIAL\",\n      \"tenureType\": \"FREEHOLD\",\n      \"structureType\": \"CONCRETE\",\n      \"polygonGeoJson\": {\n        \"type\": \"Polygon\",\n        \"coordinates\": [\n          [\n            [\n              -0.2345,\n              5.5545\n            ],\n            [\n              -0.2345,\n              5.5555\n            ],\n            [\n              -0.2335,\n              5.5555\n            ],\n            [\n              -0.2335,\n              5.5545\n            ],\n            [\n              -0.2345,\n              5.5545\n            ]\n          ]\n        ]\n      }\n    }\n  ]\n}",
+                  "raw": "{\n  \"properties\": [\n    {\n      \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n      \"buildingStatus\": \"COMPLETED\",\n      \"propertyStatus\": \"ASSESSED\",\n      \"propertyUse\": \"COMMERCIAL\",\n      \"tenureType\": \"FREEHOLD\",\n      \"structureType\": \"CONCRETE\",\n      \"polygonGeoJson\": {\n        \"type\": \"Polygon\",\n        \"coordinates\": [\n          [\n            [\n              -0.2355,\n              5.5545\n            ],\n            [\n              -0.2355,\n              5.5555\n            ],\n            [\n              -0.2345,\n              5.5555\n            ],\n            [\n              -0.2345,\n              5.5545\n            ],\n            [\n              -0.2355,\n              5.5545\n            ]\n          ]\n        ]\n      }\n    },\n    {\n      \"propertyClass\": \"COMMERCIAL_CLASS_1\",\n      \"buildingStatus\": \"COMPLETED\",\n      \"propertyStatus\": \"ASSESSED\",\n      \"propertyUse\": \"COMMERCIAL\",\n      \"tenureType\": \"FREEHOLD\",\n      \"structureType\": \"CONCRETE\",\n      \"polygonGeoJson\": {\n        \"type\": \"Polygon\",\n        \"coordinates\": [\n          [\n            [\n              -0.2345,\n              5.5545\n            ],\n            [\n              -0.2345,\n              5.5555\n            ],\n            [\n              -0.2335,\n              5.5555\n            ],\n            [\n              -0.2335,\n              5.5545\n            ],\n            [\n              -0.2345,\n              5.5545\n            ]\n          ]\n        ]\n      }\n    }\n  ],\n  \"staffRef\": \"REV-0045\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1145,7 +1190,7 @@
                     "properties"
                   ]
                 },
-                "description": "",
+                "description": "propertyName is never included for a concession's own token \u2014 it's the owning ratepayer's private label, not cadastre data (see '1. Ratepayer > Rename my property').",
                 "auth": {
                   "type": "bearer",
                   "bearer": [
@@ -1175,7 +1220,7 @@
                     "{{property_id}}"
                   ]
                 },
-                "description": "",
+                "description": "propertyName is never included for a concession's own token \u2014 see 'Search/list properties' above.",
                 "auth": {
                   "type": "bearer",
                   "bearer": [
@@ -1210,10 +1255,10 @@
                     "{{property_id}}"
                   ]
                 },
-                "description": "Use {{concession_access_token}}. Non-structural updates preserve valuations and verification status.",
+                "description": "Use {{concession_access_token}}. Non-structural updates preserve valuations and verification status. Required staffRef \u2014 see 'Register a property' above; every update writes a row to this property's own update-history trail (visible in Get property details) recording who and when. propertyName, verifiedBy, claimedByRatepayerId and createdByRatepayerId are intentionally not accepted here \u2014 naming only happens through the ratepayer-only rename endpoint, verification only through the dedicated submit/review-verification endpoints, and ownership/provenance only through the claim flow; a plain update can never silently grant any of them.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"propertyName\": \"Accra Central Commercial Complex\"\n}",
+                  "raw": "{\n  \"accountNumber\": \"GA-0145-2026\",\n  \"staffRef\": \"REV-0045\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1254,10 +1299,10 @@
                     "{{property_id}}"
                   ]
                 },
-                "description": "Use {{concession_access_token}}. Updates physical structure or property use (e.g. building renovation, repurposing, adding floors). Automatically marks property UNASSESSED, resets verificationStatus to PENDING, and decouples active valuations pending re-assessment.",
+                "description": "Use {{concession_access_token}}. Updates physical structure or property use (e.g. building renovation, repurposing, adding floors). Automatically marks property UNASSESSED, resets verificationStatus to PENDING, and decouples active valuations pending re-assessment. If polygonGeoJson is included and moves the property into a different MMDA, that MMDA is re-detected and re-checked against the concession's assigned territory (same boundary enforcement as registering a new property) and assemblyId updates to match. Required staffRef \u2014 see 'Update property - metadata only' above.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"numberOfFloors\": 4,\n  \"propertyUse\": \"COMMERCIAL\",\n  \"structuralType\": \"MULTI_STOREY\"\n}",
+                  "raw": "{\n  \"numberOfFloors\": 4,\n  \"propertyUse\": \"COMMERCIAL\",\n  \"structuralType\": \"MULTI_STOREY\",\n  \"staffRef\": \"REV-0045\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -1478,7 +1523,12 @@
               "name": "Delete individual property parcel",
               "request": {
                 "method": "DELETE",
-                "header": [],
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
                 "url": {
                   "raw": "{{property_registry_url}}/v1/properties/{{property_id}}",
                   "host": [
@@ -1490,7 +1540,16 @@
                     "{{property_id}}"
                   ]
                 },
-                "description": "Use {{concession_access_token}}. Strictly rejected with 400 Bad Request if any bills on this property have been paid (in which case only ratepayer links can be severed). If eligible for deletion, automatically severs all ratepayer links in ratepayer-service and cascades units, valuations, documents, and photos.",
+                "description": "Use {{concession_access_token}}. Restricted to a property within the concession's own assigned MMDA(s) \u2014 rejected with 403 otherwise. Strictly rejected with 400 Bad Request if any bills on this property have been paid (in which case only ratepayer links can be severed). If eligible for deletion, automatically severs all ratepayer links in ratepayer-service and cascades units, valuations, documents, and photos. Required staffRef \u2014 a concession's shared API credential doesn't identify which staff member actually did this, so it's required here the same way it is on registration/update. Recorded durably on AuditRecord (not PropertyUpdateHistory, which is deleted along with the property itself) so 'who deleted this' stays answerable after the fact.",
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"staffRef\": \"REV-0045\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
                 "auth": {
                   "type": "bearer",
                   "bearer": [
@@ -3398,10 +3457,10 @@
                     "{{property_id}}"
                   ]
                 },
-                "description": "Administrative update of a property parcel. Updating structural/usage fields decouples active valuations and resets property status to UNASSESSED and verification to PENDING.",
+                "description": "Administrative update of a property parcel. Updating structural/usage fields decouples active valuations and resets property status to UNASSESSED and verification to PENDING. Required staffRef identifies whoever made this specific change \u2014 for a CROIP officer it can just be their own reference/username, same field a concession uses for its own personnel.",
                 "body": {
                   "mode": "raw",
-                  "raw": "{\n  \"numberOfFloors\": 2,\n  \"propertyUse\": \"MIXED_USE\"\n}",
+                  "raw": "{\n  \"numberOfFloors\": 2,\n  \"propertyUse\": \"MIXED_USE\",\n  \"staffRef\": \"CROIP-OVERSIGHT-001\"\n}",
                   "options": {
                     "raw": {
                       "language": "json"
@@ -3482,7 +3541,7 @@
                     "{{property_id}}"
                   ]
                 },
-                "description": "Administrative deletion of an individual property parcel. Blocked if paid bills exist; severs all ratepayer links if unbilled.",
+                "description": "Administrative deletion of an individual property parcel, unrestricted across every MMDA (unlike a concession's own token \u2014 see '2. Concession > Properties'). Blocked if paid bills exist; severs all ratepayer links if unbilled. No staffRef needed here \u2014 the officer's own login already identifies them; optional in the body if you want to record a different reference anyway.",
                 "auth": {
                   "type": "bearer",
                   "bearer": [

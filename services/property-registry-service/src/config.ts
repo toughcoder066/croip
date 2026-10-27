@@ -25,6 +25,12 @@ const schema = z.object({
   // Ratepayer-service owns property-ratepayer links; property deletion calls it to sever
   // any links on the deleted property (see deleteProperty in modules/properties/service.ts).
   RATEPAYER_SERVICE_URL: z.string().url().default('http://ratepayer-service:3030'),
+  // Ratepayer self-service auth (phone/email + password + OTP) is separate from staff
+  // Zitadel auth — this is the same HS256 secret ratepayer-service signs its session
+  // tokens with (see its own config.ts). Verified directly here (not proxied through
+  // ratepayer-service) for the one narrow ratepayer-facing capability this service
+  // exposes: renaming a property they own (see authenticateRatepayer in plugins/auth.ts).
+  RATEPAYER_JWT_SECRET: z.string().min(32).default('a1ad815520d1c65d7f6f262a37b891b4081ac164aa687d9277bfaa4990735893'),
   // Platform Governance Service provides concessionaire assignments and MMDA boundary authorizations
   PLATFORM_GOVERNANCE_URL: z.string().url().default('http://platform-governance-service:3010'),
   RABBITMQ_URL: z.string().min(1),

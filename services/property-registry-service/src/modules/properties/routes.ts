@@ -4,7 +4,7 @@ import { withIdempotency } from '../../lib/idempotency.js';
 import {
   problemSchema,
   propertyResponseSchema,
-  createPropertyBodySchema,
+  createSinglePropertyBodySchema,
   createBatchPropertiesBodySchema,
   batchPropertiesResponseSchema,
   createUnitBodySchema,
@@ -12,7 +12,8 @@ import {
   submitVerificationBodySchema,
   reviewVerificationBodySchema,
   verificationResponseSchema,
-  updatePropertyBodySchema
+  updatePropertyBodySchema,
+  renamePropertyBodySchema
 } from './schemas.js';
 
 export const propertyRoutes: FastifyPluginAsync = async (app) => {
@@ -28,7 +29,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
     schema: {
       tags: ['Property Registry'],
       summary: 'Register landed property parcel into national cadastre — concession action, restricted to assigned MMDA. Ratepayers cannot register their own properties; see ratepayer-service for claiming an unclaimed one.',
-      body: createPropertyBodySchema,
+      body: createSinglePropertyBodySchema,
       response: {
         201: propertyResponseSchema,
         400: problemSchema,
@@ -58,7 +59,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
     return reply.code(result.status).send(result.body);
   });
 
-  app.post<{ Body: { properties: Array<Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType'>>; idempotencyKey?: string } }>('/properties/batch', {
+  app.post<{ Body: { properties: Array<Omit<CreatePropertyInput, 'concessionId' | 'actorId' | 'actorType' | 'staffRef'>>; idempotencyKey?: string; staffRef: string } }>('/properties/batch', {
     preHandler: app.authenticateConcession(['properties:manage']),
     schema: {
       tags: ['Property Registry'],
@@ -82,7 +83,8 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
         concessionId,
         allowedAssemblyIds: request.auth.assemblyIds,
         actorId: request.auth.subject,
-        actorType: request.auth.actorType
+        actorType: request.auth.actorType,
+        staffRef: body.staffRef
       });
       return { status: 201, body: { success: true, count: createdList.length, properties: createdList } };
     };
@@ -102,7 +104,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: { type: 'array', items: propertyResponseSchema }, 401: problemSchema, 403: problemSchema }
     }
   }, async (request) => {
-    return service.listProperties(request.query?.assemblyId);
+    return service.listProperties(request.auth.actorType, request.query?.assemblyId);
   });
 
   app.get<{ Params: { id: string } }>('/properties/:id', {
@@ -114,7 +116,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: { type: 'object', additionalProperties: true }, 401: problemSchema, 403: problemSchema, 404: problemSchema }
     }
   }, async (request) => {
-    return service.getProperty(request.params.id);
+    return service.getProperty(request.params.id, request.auth.actorType);
   });
 
   app.patch<{ Params: { id: string }; Body: UpdatePropertyInput }>('/properties/:id', {
@@ -139,6 +141,30 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       concessionId: request.auth.concessionId,
       assemblyIds: request.auth.assemblyIds
     });
+  });
+
+  // The one ratepayer-facing write on this service — a ratepayer who owns a property
+  // (claimed or, for legacy data, created it) can give it their own private label.
+  // Deliberately a separate route from the concession-facing PATCH above, not a shared one
+  // with conditional fields: different auth scheme (ratepayer HS256 token, not Zitadel),
+  // different authorization model (ownership, not MMDA scope), and a single field.
+  app.patch<{ Params: { id: string }; Body: { propertyName: string } }>('/properties/:id/name', {
+    preHandler: app.authenticateRatepayer,
+    schema: {
+      tags: ['Property Registry'],
+      summary: 'Ratepayer renames a property they own — their own private label, never visible to the concession/MMDA',
+      params: { type: 'object', required: ['id'], properties: { id: { type: 'string' } } },
+      body: renamePropertyBodySchema,
+      response: {
+        200: { type: 'object', additionalProperties: true },
+        400: problemSchema,
+        401: problemSchema,
+        403: problemSchema,
+        404: problemSchema
+      }
+    }
+  }, async (request) => {
+    return service.renamePropertyAsRatepayer(request.params.id, request.body.propertyName, request.ratepayerAuth.sub);
   });
 
   app.post<{ Params: { id: string }; Body: { unitIdentifier: string; unitType?: string; floorLevel?: number } }>('/properties/:id/units', {
@@ -242,7 +268,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
     });
   });
 
-  app.delete<{ Params: { id: string } }>('/properties/:id', {
+  app.delete<{ Params: { id: string }; Body?: { staffRef?: string } }>('/properties/:id', {
     // Was missing a preHandler entirely — every other mutation on this resource requires
     // authenticateConcession(['properties:manage']) (a concession's own token, or CROIP
     // staff administratively), but deletion had no auth check at all, meaning an
@@ -250,12 +276,24 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
     preHandler: app.authenticateConcession(['properties:manage']),
     schema: {
       tags: ['Property Registry'],
-      summary: 'Delete individual property parcel and sever all ratepayer links (rejected if property has paid bills)',
+      summary: 'Delete individual property parcel and sever all ratepayer links (rejected if property has paid bills). Restricted to the concession\'s own assigned MMDA(s); staff can delete platform-wide.',
       params: { type: 'object', required: ['id'], properties: { id: { type: 'string', format: 'uuid' } } },
+      // No `body` schema here deliberately — DELETE with a body is unusual enough that
+      // some callers (including this portal's own existing delete button) send none at
+      // all, and Fastify/AJV reject a declared object schema against a request with no
+      // body present. request.body ends up undefined in that case, handled below; actual
+      // enforcement (required for a concession, optional for staff) lives in
+      // deleteProperty itself.
       response: { 200: { type: 'object', additionalProperties: true }, 400: problemSchema, 401: problemSchema, 403: problemSchema, 404: problemSchema }
     }
   }, async (request) => {
-    return service.deleteProperty(request.params.id, request.auth.subject, request.auth.actorType);
+    return service.deleteProperty(
+      request.params.id,
+      request.auth.subject,
+      request.auth.actorType,
+      request.body?.staffRef,
+      request.auth.assemblyIds
+    );
   });
 
   app.post('/properties/purge', {

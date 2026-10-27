@@ -64,6 +64,10 @@ export interface PropertyRecord {
   registrationSource?: string
   verificationStatus: string
   createdAt: string
+  // Most recent entry first; listProperties only sends the latest one (see
+  // property-registry-service). A property registered before this feature shipped may
+  // have an empty array — the cell below falls back to '—' in that case.
+  updateHistory?: Array<{ performedAt: string; performedByRef: string; action: string }>
 }
 
 export interface AssemblyLookup {
@@ -404,6 +408,9 @@ export function PropertiesDataTable({
               <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Registered
               </TableHead>
+              <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Last Updated
+              </TableHead>
               <TableHead className="text-center text-xs font-semibold uppercase tracking-wider text-muted-foreground pr-6">
                 Actions
               </TableHead>
@@ -413,7 +420,7 @@ export function PropertiesDataTable({
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-48 text-center">
+                <TableCell colSpan={9} className="h-48 text-center">
                   <div className="flex flex-col items-center justify-center gap-3">
                     <Spinner className="size-6 text-primary" />
                     <p className="text-xs text-muted-foreground">Loading properties...</p>
@@ -422,7 +429,7 @@ export function PropertiesDataTable({
               </TableRow>
             ) : paginatedData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-40 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={9} className="h-40 text-center text-sm text-muted-foreground">
                   No properties match your filters.
                 </TableCell>
               </TableRow>
@@ -510,6 +517,24 @@ export function PropertiesDataTable({
                           </span>
                         )}
                       </div>
+                    </TableCell>
+
+                    <TableCell>
+                      {row.updateHistory && row.updateHistory.length > 0 ? (
+                        <div className="flex flex-col">
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(row.updateHistory[0]!.performedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                          </span>
+                          <span
+                            className="text-[10px] text-muted-foreground/80 truncate max-w-[120px]"
+                            title={row.updateHistory[0]!.performedByRef}
+                          >
+                            by {row.updateHistory[0]!.performedByRef}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
                     </TableCell>
 
                     <TableCell className="text-center pr-6">

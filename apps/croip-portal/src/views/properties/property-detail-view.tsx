@@ -19,7 +19,10 @@ import {
   ShieldCheckIcon,
   ShieldAlertIcon,
   Trash2Icon,
-  ChevronDownIcon
+  ChevronDownIcon,
+  HistoryIcon,
+  PlusCircleIcon,
+  PencilIcon
 } from 'lucide-react'
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -103,6 +106,15 @@ interface PropertyDetail {
     isCurrent: boolean
     effectiveDate: string
     createdAt: string
+  }>
+  // Full trail, most recent first — unlike the properties list (which only gets the
+  // latest entry), the detail view shows everything.
+  updateHistory?: Array<{
+    id: string
+    performedAt: string
+    performedByRef: string
+    action: 'CREATED' | 'METADATA_UPDATE' | 'STRUCTURAL_UPDATE'
+    changedFields?: string[] | null
   }>
 }
 
@@ -398,6 +410,7 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
                 </Badge>
               )}
             </TabsTrigger>
+            <TabsTrigger value="history">History</TabsTrigger>
           </TabsList>
         </div>
 
@@ -807,6 +820,62 @@ export function PropertyDetailView({ propertyId }: { propertyId: string }) {
                         </TableRow>
                       )
                     })
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </Card>
+        </TabsContent>
+
+        {/* History */}
+        <TabsContent value="history">
+          <Card className="shadow-2xs overflow-hidden py-0 gap-0">
+            <div className="p-6 border-b">
+              <CardTitle className="text-base">Update History</CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Every change to this property&apos;s own record, most recent first. performedByRef is the
+                concession&apos;s own reference for whoever did it — CROIP records it but never resolves who that is.
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pl-6">Action</TableHead>
+                    <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Changed Fields</TableHead>
+                    <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Performed By</TableHead>
+                    <TableHead className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pr-6">When</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!property.updateHistory || property.updateHistory.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={4} className="h-32 text-center text-sm text-muted-foreground">
+                        No update history recorded for this property.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    property.updateHistory.map(entry => (
+                      <TableRow key={entry.id} className="hover:bg-muted/30 transition-colors">
+                        <TableCell className="pl-6">
+                          <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                            {entry.action === 'CREATED' ? (
+                              <PlusCircleIcon className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                            ) : entry.action === 'STRUCTURAL_UPDATE' ? (
+                              <HistoryIcon className="size-3.5 text-amber-600 dark:text-amber-400" />
+                            ) : (
+                              <PencilIcon className="size-3.5 text-primary" />
+                            )}
+                            <span>{humanize(entry.action)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {entry.changedFields && entry.changedFields.length > 0 ? entry.changedFields.join(', ') : '—'}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground font-mono">{entry.performedByRef}</TableCell>
+                        <TableCell className="text-xs text-muted-foreground pr-6">{formatDateTime(entry.performedAt)}</TableCell>
+                      </TableRow>
+                    ))
                   )}
                 </TableBody>
               </Table>

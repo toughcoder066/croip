@@ -11,6 +11,18 @@ export const problemSchema = {
   }
 };
 
+export const propertyUpdateHistoryEntrySchema = {
+  type: 'object',
+  required: ['id', 'performedAt', 'performedByRef', 'action'],
+  properties: {
+    id: { type: 'string', format: 'uuid' },
+    performedAt: { type: 'string', format: 'date-time' },
+    performedByRef: { type: 'string' },
+    action: { type: 'string', enum: ['CREATED', 'METADATA_UPDATE', 'STRUCTURAL_UPDATE'] },
+    changedFields: {}
+  }
+};
+
 export const propertyResponseSchema = {
   type: 'object',
   required: ['id', 'code', 'assemblyId', 'verificationStatus', 'createdAt'],
@@ -36,7 +48,10 @@ export const propertyResponseSchema = {
     verifiedBy: { type: ['string', 'null'] },
     verifiedAt: { type: ['string', 'null'], format: 'date-time' },
     polygonGeoJson: { type: 'object', additionalProperties: true },
-    createdAt: { type: 'string', format: 'date-time' }
+    createdAt: { type: 'string', format: 'date-time' },
+    // Most recent entry first. listProperties only returns the latest one (take: 1);
+    // getProperty returns the full trail.
+    updateHistory: { type: 'array', items: propertyUpdateHistoryEntrySchema }
   }
 };
 
@@ -66,13 +81,17 @@ export const propertyDocumentInputSchema = {
   }
 };
 
+// Opaque reference to the concession's own staff member who performed this action (see
+// ConcessionPersonnel.externalStaffRef in platform-governance-service) — not validated or
+// resolved here, just recorded, so every property has a genuinely attributable history.
+export const staffRefSchema = { type: 'string', minLength: 1, maxLength: 100 };
+
 export const createPropertyBodySchema = {
   type: 'object',
   required: ['polygonGeoJson'],
   properties: {
     code: { type: 'string', maxLength: 50 },
     accountNumber: { type: 'string', maxLength: 50 },
-    propertyName: { type: 'string', maxLength: 150 },
     propertyClass: { type: 'string' },
     buildingStatus: { type: 'string' },
     propertyStatus: { type: 'string' },
@@ -80,9 +99,6 @@ export const createPropertyBodySchema = {
     tenureType: { type: 'string' },
     structureType: { type: 'string' },
     numberOfFloors: { type: 'integer', minimum: 1 },
-    ownershipType: { type: 'string', enum: ['FULL', 'PART', 'full', 'part', 'PARTIAL', 'partial', 'OWNER', 'CO_OWNER', 'TENANT'] },
-    ownershipPercentage: { type: 'number', minimum: 0, maximum: 100 },
-    version: { type: 'integer' },
     ghanaPostGps: { type: 'string', maxLength: 50 },
     createdBy: { type: 'string', maxLength: 150 },
     documents: {
@@ -91,8 +107,18 @@ export const createPropertyBodySchema = {
       description: 'Optional ownership verification documents'
     },
     polygonGeoJson: { type: 'object' },
-    idempotencyKey: { type: 'string', minLength: 1, maxLength: 200 }
+    idempotencyKey: { type: 'string', minLength: 1, maxLength: 200 },
+    staffRef: staffRefSchema
   }
+};
+
+// Single-property registration requires staffRef on the request itself; a batch instead
+// requires one staffRef for the whole batch (see createBatchPropertiesBodySchema) — the
+// field is declared on the shared per-property shape above (also reused as each batch
+// item's shape) but only required here.
+export const createSinglePropertyBodySchema = {
+  ...createPropertyBodySchema,
+  required: [...createPropertyBodySchema.required, 'staffRef']
 };
 
 // Field-agent offline sync: a concession's agent generates this once, locally, when the
@@ -102,7 +128,7 @@ export const idempotencyKeySchema = { type: 'string', minLength: 1, maxLength: 2
 
 export const createBatchPropertiesBodySchema = {
   type: 'object',
-  required: ['properties'],
+  required: ['properties', 'staffRef'],
   properties: {
     properties: {
       type: 'array',
@@ -110,7 +136,8 @@ export const createBatchPropertiesBodySchema = {
       maxItems: 500,
       items: createPropertyBodySchema
     },
-    idempotencyKey: idempotencyKeySchema
+    idempotencyKey: idempotencyKeySchema,
+    staffRef: staffRefSchema
   }
 };
 
@@ -222,10 +249,12 @@ export const verificationResponseSchema = {
   }
 };
 
+// propertyName deliberately excluded — only the owning ratepayer can rename a property,
+// never a concession or staff via this endpoint (see renamePropertyBodySchema below).
 export const updatePropertyBodySchema = {
   type: 'object',
+  required: ['staffRef'],
   properties: {
-    propertyName: { type: 'string', maxLength: 150 },
     accountNumber: { type: 'string', maxLength: 50 },
     propertyUse: { type: 'string' },
     structureType: { type: 'string' },
@@ -237,8 +266,14 @@ export const updatePropertyBodySchema = {
     leaseDurationYears: { type: 'integer', minimum: 0 },
     polygonGeoJson: { type: 'object' },
     ghanaPostGps: { type: 'string', maxLength: 50 },
-    verifiedBy: { type: 'string', maxLength: 150 },
-    claimedByRatepayerId: { type: 'string', format: 'uuid' },
-    createdByRatepayerId: { type: 'string', format: 'uuid' }
+    staffRef: staffRefSchema
+  }
+};
+
+export const renamePropertyBodySchema = {
+  type: 'object',
+  required: ['propertyName'],
+  properties: {
+    propertyName: { type: 'string', minLength: 1, maxLength: 150 }
   }
 };
