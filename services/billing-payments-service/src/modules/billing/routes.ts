@@ -27,7 +27,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
     const bill = await service.issueBill({
       ...request.body,
       concessionId: request.auth.concessionId,
-      assemblyId: request.auth.assemblyId,
+      assemblyId: request.auth.assemblyIds[0] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9', // TODO: single-assembly limitation, same fix as property-registry-service's createProperty needed once this service goes live on real auth
       issuedByPersonnelId: request.auth.subject
     });
     return reply.code(201).send(bill);
@@ -80,7 +80,7 @@ export const billingRoutes: FastifyPluginAsync = async (app) => {
     const { payment, created } = await service.recordPayment({
       ...request.body,
       billNumber: request.params.billNumber,
-      assemblyId: request.auth.assemblyId
+      assemblyId: request.auth.assemblyIds[0] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9' // TODO: single-assembly limitation, see property-registry-service
     });
     return reply.code(created ? 201 : 200).send(payment);
   });

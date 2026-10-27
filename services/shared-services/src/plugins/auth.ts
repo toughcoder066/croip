@@ -9,7 +9,10 @@ export interface AuthContext {
   subject: string;
   actorType: 'USER' | 'SERVICE';
   concessionId: string;
-  assemblyId: string;
+  // A concession can be contracted to more than one MMDA at once — see
+  // property-registry-service's auth.ts, which is where this list is actually consumed
+  // for scoping decisions. Nothing in this service scopes by it today.
+  assemblyIds: string[];
   permissions: string[];
   claims: JWTPayload;
 }
@@ -70,7 +73,7 @@ const SERVICE_CONTEXT_TTL_MS = 60 * 1000;
 
 interface ServiceContext {
   concessionId: string;
-  assemblyId: string;
+  assemblyIds: string[];
   permissions: string[];
 }
 
@@ -128,7 +131,7 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
         subject: String(request.headers['x-dev-subject'] ?? 'local-developer'),
         actorType: 'USER',
         concessionId: String(request.headers['x-dev-concession-id'] ?? '81fdc8f3-fcad-481a-b7fa-e916d5e97d9e'),
-        assemblyId: String(request.headers['x-dev-assembly-id'] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9'),
+        assemblyIds: [String(request.headers['x-dev-assembly-id'] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9')],
         permissions: String(
           request.headers['x-dev-permissions'] ??
             'reference:read reference:manage concession:read message:send example:read example:write *'
@@ -161,7 +164,7 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
           // context isn't needed for a reference-data read. Same defaults every other
           // context-less request already falls back to.
           concessionId: '81fdc8f3-fcad-481a-b7fa-e916d5e97d9e',
-          assemblyId: '01c23cab-b1b2-4dae-b99b-32ea574632d9',
+          assemblyIds: ['01c23cab-b1b2-4dae-b99b-32ea574632d9'],
           permissions: internalPermissions,
           claims: payload
         };
@@ -175,7 +178,7 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
             subject: payload.sub ?? 'unknown',
             actorType: 'SERVICE',
             concessionId: service.concessionId,
-            assemblyId: service.assemblyId,
+            assemblyIds: service.assemblyIds,
             permissions: [...new Set([...stringArray(payload.scope), ...service.permissions])],
             claims: payload
           };
@@ -189,7 +192,7 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
         subject: payload.sub ?? 'unknown',
         actorType: 'USER',
         concessionId: typeof context.concessionId === 'string' ? context.concessionId : '81fdc8f3-fcad-481a-b7fa-e916d5e97d9e',
-        assemblyId: typeof context.assemblyId === 'string' ? context.assemblyId : '01c23cab-b1b2-4dae-b99b-32ea574632d9',
+        assemblyIds: [typeof context.assemblyId === 'string' ? context.assemblyId : '01c23cab-b1b2-4dae-b99b-32ea574632d9'],
         permissions: [
           ...new Set([
             ...stringArray(payload.scope),

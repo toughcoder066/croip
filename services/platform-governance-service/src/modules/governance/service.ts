@@ -86,13 +86,6 @@ const CONCESSION_API_CLIENT_PERMISSIONS = [
   'ratepayers:read'
 ];
 
-// Same fallback the old hardcoded Zitadel Action used — every service's auth.ts keeps this
-// as the default assemblyId for a request that isn't itself zone-scoped (property
-// registration derives the real assembly from the submitted polygon via shared-services,
-// independent of this value). A concession can be contracted to multiple assemblies, so
-// there is no single "the" assemblyId to return here regardless.
-const DEFAULT_ASSEMBLY_ID = '01c23cab-b1b2-4dae-b99b-32ea574632d9';
-
 export function governanceService(app: FastifyInstance) {
   // Mirrors property-registry-service's generatePropertyIdAndCode convention
   // (PREFIX-YEAR-FIRST4-LAST4 from a fresh UUID) so concession codes are never
@@ -591,9 +584,19 @@ export function governanceService(app: FastifyInstance) {
       });
       if (!client || client.status !== 'ACTIVE' || client.concession.status !== 'ACTIVE') return null;
 
+      const assigned = await app.prisma.concessionAssembly.findMany({
+        where: { concessionId: client.concession.id, status: 'ACTIVE' },
+        select: { assemblyId: true }
+      });
+
+      // A concession with no active MMDA assignment yet gets an empty list, not a
+      // hardcoded default — an empty list correctly authorizes it for nothing, instead of
+      // silently (and incorrectly) scoping it to a territory it was never actually
+      // assigned. (Each service's own auth.ts still falls back to a dev-default
+      // concessionId/assemblyId pair for human staff logins, which aren't resolved here.)
       return {
         concessionId: client.concession.id,
-        assemblyId: DEFAULT_ASSEMBLY_ID,
+        assemblyIds: assigned.map((a) => a.assemblyId),
         permissions: CONCESSION_API_CLIENT_PERMISSIONS
       };
     },

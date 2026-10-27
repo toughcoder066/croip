@@ -49,7 +49,7 @@ export const disputeRoutes: FastifyPluginAsync = async (app) => {
       ...request.body,
       raisedByRatepayerId: request.auth.subject,
       concessionId: request.auth.concessionId,
-      assemblyId: request.auth.assemblyId
+      assemblyId: request.auth.assemblyIds[0] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9' // TODO: single-assembly limitation, see property-registry-service
     });
     return reply.code(201).send(dispute);
   });
@@ -110,7 +110,7 @@ export const disputeRoutes: FastifyPluginAsync = async (app) => {
       ...request.body,
       code: request.params.code,
       concessionId: request.auth.concessionId,
-      assemblyId: request.auth.assemblyId
+      assemblyId: request.auth.assemblyIds[0] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9' // TODO: single-assembly limitation, see property-registry-service
     });
   });
 

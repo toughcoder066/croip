@@ -92,7 +92,9 @@ export const sharedRoutes: FastifyPluginAsync = async (app) => {
     const created = await service.requestMessage(
       request.body,
       request.auth.concessionId,
-      request.auth.assemblyId
+      // Attribution only, not a scoping check — a concession can have more than one
+      // assigned MMDA, so this just records the first as "the" assembly on the message.
+      request.auth.assemblyIds[0] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9'
     );
     return reply.code(202).send(created);
   });
