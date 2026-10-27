@@ -9,7 +9,7 @@ export interface AuthContext {
   subject: string;
   actorType: 'USER' | 'SERVICE';
   concessionId: string;
-  assemblyId: string;
+  assemblyIds: string[];
   permissions: string[];
   claims: JWTPayload;
 }
@@ -74,7 +74,7 @@ const SERVICE_CONTEXT_TTL_MS = 60 * 1000;
 
 interface ServiceContext {
   concessionId: string;
-  assemblyId: string;
+  assemblyIds: string[];
   permissions: string[];
 }
 
@@ -130,7 +130,7 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
         subject: String(request.headers['x-dev-subject'] ?? 'local-developer'),
         actorType: 'USER',
         concessionId: String(request.headers['x-dev-concession-id'] ?? '81fdc8f3-fcad-481a-b7fa-e916d5e97d9e'),
-        assemblyId: String(request.headers['x-dev-assembly-id'] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9'),
+        assemblyIds: [String(request.headers['x-dev-assembly-id'] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9')],
         permissions: String(request.headers['x-dev-permissions'] ?? 'example:read example:write').split(' '),
         claims: {}
       };
@@ -157,7 +157,7 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
             subject: payload.sub ?? 'unknown',
             actorType: 'SERVICE',
             concessionId: service.concessionId,
-            assemblyId: service.assemblyId,
+            assemblyIds: service.assemblyIds,
             permissions: [...new Set([...stringArray(payload.scope), ...service.permissions])],
             claims: payload
           };
@@ -177,7 +177,7 @@ export const authPlugin = fp<{ config: AppConfig }>(async (app, options) => {
         subject: payload.sub ?? 'unknown',
         actorType: 'USER',
         concessionId: typeof context.concessionId === 'string' ? context.concessionId : '81fdc8f3-fcad-481a-b7fa-e916d5e97d9e',
-        assemblyId: typeof context.assemblyId === 'string' ? context.assemblyId : '01c23cab-b1b2-4dae-b99b-32ea574632d9',
+        assemblyIds: [typeof context.assemblyId === 'string' ? context.assemblyId : '01c23cab-b1b2-4dae-b99b-32ea574632d9'],
         permissions: [
           ...new Set([...stringArray(payload.scope), ...stringArray(payload[config.ZITADEL_ROLES_CLAIM])])
         ],

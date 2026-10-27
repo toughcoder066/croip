@@ -23,9 +23,10 @@ export const ingestionRoutes: FastifyPluginAsync = async (app) => {
       }
     }
   }, async (request, reply) => {
+    // TODO: single-assembly limitation, see property-registry-service.
     const receipt = await service.ingestEvent(request.body, {
       concessionId: request.auth.concessionId,
-      assemblyId: request.auth.assemblyId,
+      assemblyId: request.auth.assemblyIds[0] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9',
       actorId: request.auth.subject,
       correlationId: request.id
     });
@@ -59,9 +60,10 @@ export const ingestionRoutes: FastifyPluginAsync = async (app) => {
   }, async (request, reply) => {
     const results = [];
     for (const evt of request.body.events) {
+      // TODO: single-assembly limitation, see property-registry-service.
       const res = await service.ingestEvent(evt, {
         concessionId: request.auth.concessionId,
-        assemblyId: request.auth.assemblyId,
+        assemblyId: request.auth.assemblyIds[0] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9',
         actorId: request.auth.subject,
         correlationId: request.id
       });
@@ -92,10 +94,11 @@ export const ingestionRoutes: FastifyPluginAsync = async (app) => {
       }
     }
   }, async (request) => {
+    // TODO: single-assembly limitation, see property-registry-service.
     return service.getIngestion(
       request.params.id,
       request.auth.concessionId,
-      request.auth.assemblyId
+      request.auth.assemblyIds[0] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9'
     );
   });
 };

@@ -37,7 +37,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       ...request.body,
       registrationSource: 'CONCESSION',
       concessionId: request.auth.concessionId,
-      assemblyId: request.auth.assemblyId,
+      allowedAssemblyIds: request.auth.assemblyIds,
       actorId: request.auth.subject,
       actorType: request.auth.actorType
     });
@@ -64,6 +64,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
     const createdList = await service.createBatchProperties({
       properties: request.body.properties,
       concessionId: request.auth.concessionId,
+      allowedAssemblyIds: request.auth.assemblyIds,
       actorId: request.auth.subject,
       actorType: request.auth.actorType
     });
@@ -119,7 +120,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       subject: request.auth.subject,
       actorType: request.auth.actorType,
       concessionId: request.auth.concessionId,
-      assemblyId: request.auth.assemblyId
+      assemblyIds: request.auth.assemblyIds
     });
   });
 
@@ -138,12 +139,12 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       request.body.unitIdentifier,
       request.body.unitType ?? 'WHOLE_BUILDING',
       request.body.floorLevel ?? 0,
-      request.auth.assemblyId
+      request.auth.assemblyIds
     );
     return reply.code(201).send(unit);
   });
 
-  app.post<{ Params: { code: string }; Body: Omit<UploadPremisesDocumentInput, 'propertyCode' | 'concessionId' | 'assemblyId' | 'actorId'> }>('/properties/:code/documents', {
+  app.post<{ Params: { code: string }; Body: Omit<UploadPremisesDocumentInput, 'propertyCode' | 'concessionId' | 'assemblyIds' | 'actorId'> }>('/properties/:code/documents', {
     preHandler: app.requirePermissions(['properties:manage']),
     schema: {
       tags: ['Property Registry'],
@@ -157,7 +158,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       ...request.body,
       propertyCode: request.params.code,
       concessionId: request.auth.concessionId,
-      assemblyId: request.auth.assemblyId,
+      assemblyIds: request.auth.assemblyIds,
       actorId: request.auth.subject
     });
     return reply.code(201).send(doc);
@@ -172,10 +173,10 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: { type: 'array', items: { type: 'object', additionalProperties: true } }, 401: problemSchema, 403: problemSchema, 404: problemSchema }
     }
   }, async (request) => {
-    return service.getPropertyDocuments(request.params.code, request.auth.assemblyId);
+    return service.getPropertyDocuments(request.params.code, request.auth.assemblyIds);
   });
 
-  app.post<{ Params: { id: string }; Body: Omit<SubmitVerificationInput, 'propertyId' | 'concessionId' | 'assemblyId'> }>('/properties/:id/verifications', {
+  app.post<{ Params: { id: string }; Body: Omit<SubmitVerificationInput, 'propertyId' | 'concessionId' | 'assemblyIds'> }>('/properties/:id/verifications', {
     preHandler: app.requirePermissions(['properties:verify']),
     schema: {
       tags: ['Property Registry'],
@@ -189,7 +190,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       ...request.body,
       propertyId: request.params.id,
       concessionId: request.auth.concessionId,
-      assemblyId: request.auth.assemblyId
+      assemblyIds: request.auth.assemblyIds
     });
     return reply.code(201).send(verification);
   });
@@ -203,10 +204,10 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       response: { 200: { type: 'array', items: verificationResponseSchema }, 401: problemSchema, 403: problemSchema, 404: problemSchema }
     }
   }, async (request) => {
-    return service.listVerifications(request.params.id, request.auth.assemblyId);
+    return service.listVerifications(request.params.id, request.auth.assemblyIds);
   });
 
-  app.patch<{ Params: { id: string }; Body: Omit<ReviewVerificationInput, 'verificationId' | 'concessionId' | 'assemblyId'> }>('/verifications/:id/review', {
+  app.patch<{ Params: { id: string }; Body: Omit<ReviewVerificationInput, 'verificationId' | 'concessionId' | 'assemblyIds'> }>('/verifications/:id/review', {
     preHandler: app.requirePermissions(['properties:verify:review']),
     schema: {
       tags: ['Property Registry'],
@@ -220,7 +221,7 @@ export const propertyRoutes: FastifyPluginAsync = async (app) => {
       ...request.body,
       verificationId: request.params.id,
       concessionId: request.auth.concessionId,
-      assemblyId: request.auth.assemblyId
+      assemblyIds: request.auth.assemblyIds
     });
   });
 

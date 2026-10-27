@@ -21,7 +21,8 @@ export const processingRoutes: FastifyPluginAsync = async (app) => {
       }
     }
   }, async (request) => {
-    return service.listQuarantine(request.auth.concessionId, request.auth.assemblyId);
+    // TODO: single-assembly limitation, same multi-MMDA fix as property-registry-service needed once this service goes live on real auth.
+    return service.listQuarantine(request.auth.concessionId, request.auth.assemblyIds[0] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9');
   });
 
   app.get<{ Params: IdParams }>('/quarantine/:id', {
@@ -38,7 +39,8 @@ export const processingRoutes: FastifyPluginAsync = async (app) => {
       }
     }
   }, async (request) => {
-    return service.getQuarantine(request.params.id, request.auth.concessionId, request.auth.assemblyId);
+    // TODO: single-assembly limitation, see property-registry-service.
+    return service.getQuarantine(request.params.id, request.auth.concessionId, request.auth.assemblyIds[0] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9');
   });
 
   app.post<{ Params: IdParams; Body: ResolveBody }>('/quarantine/:id/resolve', {
@@ -57,11 +59,12 @@ export const processingRoutes: FastifyPluginAsync = async (app) => {
       }
     }
   }, async (request) => {
+    // TODO: single-assembly limitation, see property-registry-service.
     return service.resolveQuarantine({
       quarantineId: request.params.id,
       resolutionNotes: request.body.resolutionNotes,
       actorId: request.auth.subject
-    }, request.auth.concessionId, request.auth.assemblyId);
+    }, request.auth.concessionId, request.auth.assemblyIds[0] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9');
   });
 
   app.get<{ Params: ViewParams }>('/operational-view/:aggregateType/:aggregateId', {
@@ -82,11 +85,12 @@ export const processingRoutes: FastifyPluginAsync = async (app) => {
       }
     }
   }, async (request) => {
+    // TODO: single-assembly limitation, see property-registry-service.
     return service.getOperationalView(
       request.params.aggregateType,
       request.params.aggregateId,
       request.auth.concessionId,
-      request.auth.assemblyId
+      request.auth.assemblyIds[0] ?? '01c23cab-b1b2-4dae-b99b-32ea574632d9'
     );
   });
 };

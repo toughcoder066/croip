@@ -44,14 +44,19 @@ export interface CreatePropertyInput {
   createdByRatepayerId?: string;
   documents?: PropertyDocumentInput[];
   concessionId: string;
-  assemblyId?: string;
+  // The concession's own real, currently-assigned MMDAs (from the caller's auth context) —
+  // not a single value, since a concession can be contracted to more than one at once.
+  // Unused for ratepayer self-registration (isRatepayerCreation), which isn't bounded to a
+  // concession's territory at all.
+  allowedAssemblyIds?: string[];
   actorId: string;
   actorType?: 'RATEPAYER' | 'CONCESSION' | 'USER' | 'SERVICE';
 }
 
 export interface CreateBatchPropertyInput {
-  properties: Array<Omit<CreatePropertyInput, 'concessionId' | 'assemblyId' | 'actorId' | 'actorType'>>;
+  properties: Array<Omit<CreatePropertyInput, 'concessionId' | 'allowedAssemblyIds' | 'actorId' | 'actorType'>>;
   concessionId: string;
+  allowedAssemblyIds: string[];
   actorId: string;
   actorType?: 'RATEPAYER' | 'CONCESSION' | 'USER' | 'SERVICE';
 }
@@ -66,7 +71,7 @@ export interface SubmitVerificationInput {
   outcome: 'VERIFIED' | 'DISPUTED_LOCATION' | 'NOT_FOUND' | 'ACCESS_DENIED';
   notes?: string;
   concessionId: string;
-  assemblyId: string;
+  assemblyIds: string[];
 }
 
 export interface ReviewVerificationInput {
@@ -75,7 +80,7 @@ export interface ReviewVerificationInput {
   reviewedByPersonnelId: string;
   reviewNotes?: string;
   concessionId: string;
-  assemblyId: string;
+  assemblyIds: string[];
 }
 
 export interface UploadPremisesDocumentInput {
@@ -94,7 +99,7 @@ export interface UploadPremisesDocumentInput {
     accuracyMeters?: number;
   };
   concessionId: string;
-  assemblyId: string;
+  assemblyIds: string[];
   actorId: string;
 }
 
@@ -115,61 +120,6 @@ export interface UpdatePropertyInput {
   polygonGeoJson?: Record<string, unknown>;
   claimedByRatepayerId?: string;
   createdByRatepayerId?: string;
-}
-
-const assignedAssembliesCache = new Map<string, { assemblies: string[]; expiresAt: number }>();
-
-/**
- * Fetches the active MMDAs assigned to a concession from Platform Governance Service (:3010).
- * Results are cached in-memory with a short TTL to keep boundary enforcement fast.
- */
-export async function getConcessionAssignedAssemblies(
-  app: FastifyInstance,
-  concessionId: string,
-  fallbackAssemblyId?: string
-): Promise<string[]> {
-  const cached = assignedAssembliesCache.get(concessionId);
-  if (cached && Date.now() < cached.expiresAt) {
-    return cached.assemblies;
-  }
-
-  const assemblies = new Set<string>();
-  if (fallbackAssemblyId && fallbackAssemblyId !== '00000000-0000-0000-0000-000000000000') {
-    assemblies.add(fallbackAssemblyId);
-  }
-
-  try {
-    const headers: Record<string, string> =
-      app.config.AUTH_MODE === 'zitadel'
-        ? { Authorization: `Bearer ${await getServiceAccessToken(app.config)}` }
-        : { 'x-dev-subject': 'property-registry-service', 'x-dev-permissions': 'concessionaires:read' };
-
-    const response = await fetch(`${app.config.PLATFORM_GOVERNANCE_URL}/v1/concessions/${concessionId}/assemblies`, {
-      method: 'GET',
-      headers,
-      signal: AbortSignal.timeout(3000)
-    });
-
-    if (response.ok) {
-      const list = (await response.json()) as Array<{ assemblyId: string; status?: string }>;
-      for (const item of list) {
-        if (!item.status || item.status === 'ACTIVE') {
-          assemblies.add(item.assemblyId);
-        }
-      }
-    }
-  } catch (err) {
-    app.log.warn({ err, concessionId }, 'Could not fetch assigned assemblies from Platform Governance Service');
-  }
-
-  const result = Array.from(assemblies);
-  if (result.length > 0) {
-    assignedAssembliesCache.set(concessionId, {
-      assemblies: result,
-      expiresAt: Date.now() + 60_000
-    });
-  }
-  return result;
 }
 
 interface ZoneValidationOptions {
@@ -232,10 +182,12 @@ async function assertZoneMembership(
     );
   }
 
-  // Concessions cannot create properties outside of their assigned MMDA
+  // Concessions cannot create properties outside of their assigned MMDA(s). An empty
+  // allowed list (no active MMDA assignment at all) must reject everything too — it must
+  // never be read as "unscoped", or a never-assigned concession could register anywhere.
   if (!options.isRatepayer) {
     const allowed = options.allowedAssemblyIds ?? [];
-    if (allowed.length > 0 && !allowed.includes(result.assembly.id)) {
+    if (!allowed.includes(result.assembly.id)) {
       throw new ForbiddenError(
         `${prefix}Concession is not authorized to register properties outside of its assigned MMDA. This property falls within ${result.assembly.name} (${result.assembly.code}), which is not assigned to concession ${options.concessionId ?? ''}.`
       );
@@ -386,7 +338,7 @@ export function propertyService(app: FastifyInstance) {
 
       let allowedAssemblyIds: string[] = [];
       if (!isRatepayerCreation) {
-        allowedAssemblyIds = await getConcessionAssignedAssemblies(app, input.concessionId, input.assemblyId);
+        allowedAssemblyIds = input.allowedAssemblyIds ?? [];
       }
 
       const matchedAssembly = await assertZoneMembership(app, input.polygonGeoJson, {
@@ -515,7 +467,7 @@ export function propertyService(app: FastifyInstance) {
         throw new BadRequestError('Batch size exceeds maximum limit of 500 properties');
       }
 
-      const allowedAssemblyIds = await getConcessionAssignedAssemblies(app, input.concessionId);
+      const allowedAssemblyIds = input.allowedAssemblyIds;
 
       // Pre-validate all items in the batch to ensure all boundaries fall inside assigned MMDA
       const validatedList: Array<{
@@ -705,7 +657,7 @@ export function propertyService(app: FastifyInstance) {
     async updateProperty(
       idOrCode: string,
       input: UpdatePropertyInput,
-      actor: { subject: string; actorType: string; concessionId?: string; assemblyId?: string }
+      actor: { subject: string; actorType: string; concessionId?: string; assemblyIds?: string[] }
     ) {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrCode);
       const existing = await app.prisma.property.findFirst({
@@ -723,9 +675,10 @@ export function propertyService(app: FastifyInstance) {
           throw new ForbiddenError('You are only authorized to update properties that belong to your ratepayer profile.');
         }
       } else if (actor.actorType === 'CONCESSION') {
-        if (actor.assemblyId && actor.assemblyId !== '*' && existing.assemblyId !== actor.assemblyId) {
+        const allowed = actor.assemblyIds ?? [];
+        if (!allowed.includes('*') && !allowed.includes(existing.assemblyId)) {
           throw new ForbiddenError(
-            `Concessionaire cannot update property outside its assigned assembly scope (${existing.assemblyId} vs ${actor.assemblyId})`
+            `Concessionaire cannot update property outside its assigned assembly scope (${existing.assemblyId} vs ${allowed.join(', ')})`
           );
         }
       }
@@ -875,10 +828,10 @@ export function propertyService(app: FastifyInstance) {
       });
     },
 
-    async addUnit(propertyId: string, unitIdentifier: string, unitType: string, floorLevel: number, assemblyId: string) {
-      const isScoped = assemblyId && assemblyId !== '*';
+    async addUnit(propertyId: string, unitIdentifier: string, unitType: string, floorLevel: number, assemblyIds: string[]) {
+      const isScoped = !assemblyIds.includes('*');
       const prop = await app.prisma.property.findFirst({
-        where: isScoped ? { id: propertyId, assemblyId } : { id: propertyId }
+        where: isScoped ? { id: propertyId, assemblyId: { in: assemblyIds } } : { id: propertyId }
       });
       if (!prop) throw new NotFoundError('Property not found');
 
@@ -905,9 +858,9 @@ export function propertyService(app: FastifyInstance) {
       }
 
       // Check concession assembly boundary
-      if (input.assemblyId && input.assemblyId !== '*' && property.assemblyId !== input.assemblyId) {
+      if (!input.assemblyIds.includes('*') && !input.assemblyIds.includes(property.assemblyId)) {
         throw new ForbiddenError(
-          `Concession cannot upload documents outside its assigned assembly scope (${property.assemblyId} vs ${input.assemblyId})`
+          `Concession cannot upload documents outside its assigned assembly scope (${property.assemblyId} vs ${input.assemblyIds.join(', ')})`
         );
       }
 
@@ -965,9 +918,9 @@ export function propertyService(app: FastifyInstance) {
     // Concessionaire agent submits a field verification; it does not move the property's
     // cached verificationStatus until a concessionaire officer reviews it (see reviewVerification).
     async submitVerification(input: SubmitVerificationInput) {
-      const isScoped = input.assemblyId && input.assemblyId !== '*';
+      const isScoped = !input.assemblyIds.includes('*');
       const property = await app.prisma.property.findFirst({
-        where: isScoped ? { id: input.propertyId, assemblyId: input.assemblyId } : { id: input.propertyId }
+        where: isScoped ? { id: input.propertyId, assemblyId: { in: input.assemblyIds } } : { id: input.propertyId }
       });
       if (!property) throw new NotFoundError('Property not found');
 
@@ -1019,7 +972,7 @@ export function propertyService(app: FastifyInstance) {
         include: { property: true }
       });
       if (!verification) throw new NotFoundError('Verification not found');
-      if (input.assemblyId !== '*' && verification.property.assemblyId !== input.assemblyId) {
+      if (!input.assemblyIds.includes('*') && !input.assemblyIds.includes(verification.property.assemblyId)) {
         throw new ForbiddenError('Concession cannot review verifications outside its assigned assembly scope');
       }
       if (verification.reviewStatus !== 'PENDING') {
@@ -1071,15 +1024,15 @@ export function propertyService(app: FastifyInstance) {
       });
     },
 
-    async listVerifications(propertyId: string, assemblyId: string) {
+    async listVerifications(propertyId: string, assemblyIds: string[]) {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propertyId);
-      const isScoped = assemblyId && assemblyId !== '*';
+      const isScoped = !assemblyIds.includes('*');
       const whereClause: Record<string, unknown> = isUuid
         ? { OR: [{ id: propertyId }, { code: propertyId }] }
         : { code: propertyId };
 
       if (isScoped) {
-        whereClause.assemblyId = assemblyId;
+        whereClause.assemblyId = { in: assemblyIds };
       }
 
       const property = await app.prisma.property.findFirst({ where: whereClause });
@@ -1091,14 +1044,14 @@ export function propertyService(app: FastifyInstance) {
       });
     },
 
-    async getPropertyDocuments(propertyCode: string, assemblyId: string) {
+    async getPropertyDocuments(propertyCode: string, assemblyIds: string[]) {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(propertyCode);
       const whereClause: Record<string, unknown> = isUuid
         ? { OR: [{ code: propertyCode }, { id: propertyCode }] }
         : { code: propertyCode };
 
-      if (assemblyId && assemblyId !== '*') {
-        whereClause.assemblyId = assemblyId;
+      if (!assemblyIds.includes('*')) {
+        whereClause.assemblyId = { in: assemblyIds };
       }
 
       const property = await app.prisma.property.findFirst({
