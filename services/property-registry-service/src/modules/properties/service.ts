@@ -939,7 +939,12 @@ export function propertyService(app: FastifyInstance) {
             resourceId: existing.id,
             requestId: crypto.randomUUID(),
             outcome: 'SUCCESS',
-            metadata: { propertyCode: existing.code }
+            metadata: {
+              propertyCode: existing.code,
+              propertyAssemblyId: existing.assemblyId,
+              registeredByConcessionId: existing.registeredByConcessionId,
+              performedByRef: ratepayerId
+            }
           }
         });
 
