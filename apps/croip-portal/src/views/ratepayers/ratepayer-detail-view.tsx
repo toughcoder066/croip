@@ -57,7 +57,6 @@ import {
   type PendingVerification
 } from '@/views/ratepayers/verification-review-dialog'
 import { AddressLocationDialog } from '@/views/ratepayers/address-location-dialog'
-import { RatepayerPropertyRegisterDialog } from '@/views/ratepayers/ratepayer-property-register-dialog'
 import { RatepayerKycDialog } from '@/views/ratepayers/ratepayer-kyc-dialog'
 
 interface RatepayerVerification {
@@ -379,9 +378,6 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
 
   // KYC Verification Dialog
   const [kycDialogOpen, setKycDialogOpen] = useState(false)
-
-  // Property Registration Dialog
-  const [propertyDialogOpen, setPropertyDialogOpen] = useState(false)
 
   const router = useRouter()
 
@@ -1395,22 +1391,6 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
             </Card>
           </div>
 
-          {/* Property Creation Gate Notice */}
-          {ratepayer.completion && !ratepayer.completion.isEligibleForPropertyCreation && (
-            <div className="p-3.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200 flex items-start gap-3 text-xs">
-              <ShieldAlertIcon className="size-4 shrink-0 text-amber-600 dark:text-amber-400 mt-0.5" />
-              <div className="space-y-1">
-                <p className="font-semibold">KYC Verification & Complete Profile Required to Register Properties</p>
-                <p className="text-[11px] text-muted-foreground">
-                  In accordance with CROIP revenue governance, properties cannot be created or registered for this ratepayer until profile completion is 100% and citizen identity (KYC) is verified.
-                  {ratepayer.completion.missingSections?.length > 0 && (
-                    <span className="block mt-0.5">Missing: {ratepayer.completion.missingSections.join(', ')}.</span>
-                  )}
-                </p>
-              </div>
-            </div>
-          )}
-
           {/* Properties Table */}
           <Card className="shadow-2xs overflow-hidden py-0 gap-0">
             <CardHeader className="border-b py-4">
@@ -1423,14 +1403,6 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
                   <span className="text-xs text-muted-foreground">
                     {properties.length} parcel{properties.length === 1 ? '' : 's'} linked
                   </span>
-                  <Button
-                    size="sm"
-                    className="gap-1.5 text-xs h-8"
-                    onClick={() => setPropertyDialogOpen(true)}
-                  >
-                    <Building2Icon className="size-3.5" />
-                    Register Property
-                  </Button>
                 </div>
               </div>
             </CardHeader>
@@ -2087,17 +2059,6 @@ export function RatepayerDetailView({ ratepayerId }: { ratepayerId: string }) {
         currentActiveReference={activeVerification?.providerReference}
         onSuccess={() => {
           fetchRatepayer(); fetchActivity()
-        }}
-      />
-
-      {/* Register Property Dialog */}
-      <RatepayerPropertyRegisterDialog
-        open={propertyDialogOpen}
-        onOpenChange={setPropertyDialogOpen}
-        ratepayer={ratepayer}
-        onSuccess={() => {
-          fetchRatepayer(); fetchActivity()
-          fetchProperties()
         }}
       />
 
