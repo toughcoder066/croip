@@ -261,18 +261,10 @@ export const croipApi = {
       fetchCroipService<any[]>(CROIP_SERVICES.PROPERTY_REGISTRY, '/v1/properties'),
     getProperty: (id: string) =>
       fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${id}`),
-    createProperty: (data: any, options?: RequestOptions) =>
-      fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, '/v1/properties', {
-        method: 'POST',
-        body: JSON.stringify(data),
-        ...options
-      }),
-    createPropertiesBatch: (properties: any[], options?: RequestOptions) =>
-      fetchCroipService<any>(CROIP_SERVICES.PROPERTY_REGISTRY, '/v1/properties/batch', {
-        method: 'POST',
-        body: JSON.stringify({ properties }),
-        ...options
-      }),
+    // No createProperty/createPropertiesBatch here, deliberately — CROIP is government
+    // oversight/monitoring, not a property registration channel. A property is only ever
+    // registered by the MMDA through its own concession, calling property-registry-service
+    // directly with its own concession credential, never through this portal.
     getPropertyDocuments: (code: string) =>
       fetchCroipService<any[]>(CROIP_SERVICES.PROPERTY_REGISTRY, `/v1/properties/${code}/documents`),
     listVerifications: (propertyId: string) =>
